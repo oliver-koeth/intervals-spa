@@ -35,7 +35,7 @@
               <select id="search-type">
                 <option value="">All types</option>
                 <option value="Run">Run</option>
-                <option value="VirtualRun">Virtual Run</option>
+                <option value="VirtualRun">VirtualRun</option>
               </select>
             </label>
             <label>Time target (mm:ss)
@@ -43,6 +43,13 @@
             </label>
             <label>Margin (mm:ss)
               <input id="search-margin" type="text" placeholder="e.g. 00:10" />
+            </label>
+            <label class="checkbox-label">
+              <span>&nbsp;</span>
+              <span class="checkbox-wrap">
+                <input id="search-exclude-recovery" type="checkbox" checked />
+                Exclude recovery intervals
+              </span>
             </label>
             <label>Date from
               <input id="search-from" type="date" />
@@ -75,7 +82,7 @@
               <select id="filter-type">
                 <option value="">All types</option>
                 <option value="Run">Run</option>
-                <option value="VirtualRun">Virtual Run</option>
+                <option value="VirtualRun">VirtualRun</option>
               </select>
             </label>
             <label>Time from (mm:ss)
@@ -176,6 +183,23 @@
             </div>
           </form>
           <p id="settings-status" class="muted" style="margin-top:.75rem"></p>
+
+          <hr class="settings-divider" />
+
+          <h2 style="margin:1rem 0 .25rem">HR Zone Model</h2>
+          <p class="muted" style="margin:0 0 .75rem">Select the zone model used for zone distribution and HR stream charts.</p>
+          <div class="form-grid" style="max-width:540px">
+            <label>Zone model
+              <select id="settings-zone-model">
+                <option value="">Default (Z1–Z5)</option>
+              </select>
+            </label>
+            <div class="form-actions">
+              <button type="button" id="load-zone-models" class="btn secondary">Load from intervals.icu</button>
+            </div>
+          </div>
+          <p id="zone-model-status" class="muted" style="margin:.5rem 0"></p>
+          <div id="zone-model-preview"></div>
         </div>
       </section>
 

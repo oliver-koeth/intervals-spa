@@ -1,5 +1,8 @@
 /* ─── Constants ────────────────────────────────────────────────────────── */
-const ZONE_COLORS = { 1:"#10b981", 2:"#06b6d4", 3:"#f59e0b", 4:"#f97316", 5:"#ef4444" };
+const ZONE_COLORS = {
+  1:"#10b981", 2:"#06b6d4", 3:"#f59e0b", 4:"#f97316", 5:"#ef4444",
+  6:"#8b5cf6", 7:"#ec4899",
+};
 const TOOLTIP_CSS = "background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.55);color:#f1f5f9;font-size:12px;max-width:260px";
 
 /* ─── State ─────────────────────────────────────────────────────────────── */
@@ -12,6 +15,9 @@ const state = {
   compareSource: [],
   pinnedInterval: null,
 };
+
+/** In-memory HR stream cache — keyed by activity_id, not persisted. */
+const hrStreamCache = {};
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 function parseMmSs(input) {
@@ -41,9 +47,22 @@ function intervalTooltip(item) {
     <div style="font-weight:700;font-size:13px;margin-bottom:2px">${item.date} · ${item.activity_type || ""}</div>
     <div style="color:#94a3b8;margin-bottom:4px">${name}</div>
     <div>Label: <b>${item.label || ""}</b></div>
+    <div>Start: <b>${formatSeconds(item.start_index || 0)}</b> elapsed</div>
     <div>Time: <b>${formatSeconds(item.moving_time_s)}</b> &nbsp; Zone: <b style="color:${zColor}">Z${z || "–"}</b></div>
     <div>HR: <b>${Math.round(item.avg_hr || 0)}</b> avg / <b>${Math.round(item.max_hr || 0)}</b> max bpm</div>
   </div>`;
+}
+
+function compareIntervalsChronologically(a, b) {
+  const aStart = String(a.activity_start_local || a.date || "");
+  const bStart = String(b.activity_start_local || b.date || "");
+  const byStart = aStart.localeCompare(bStart);
+  if (byStart !== 0) return byStart;
+  const byActivity = String(a.activity_id || "").localeCompare(String(b.activity_id || ""));
+  if (byActivity !== 0) return byActivity;
+  const byOffset = (Number(a.start_index) || 0) - (Number(b.start_index) || 0);
+  if (byOffset !== 0) return byOffset;
+  return (Number(a.interval_id) || 0) - (Number(b.interval_id) || 0);
 }
 
 /* ─── Navigation ─────────────────────────────────────────────────────────── */
@@ -61,17 +80,39 @@ function setScreen(name) {
 /* ─── Settings ───────────────────────────────────────────────────────────── */
 function getSettings() {
   return {
-    athleteId: (localStorage.getItem("intervals_athlete_id") || "").trim(),
-    apiKey: (localStorage.getItem("intervals_api_key") || "").trim(),
-    apiMode: localStorage.getItem("intervals_api_mode") || "auto",
+    athleteId:    (localStorage.getItem("intervals_athlete_id") || "").trim(),
+    apiKey:       (localStorage.getItem("intervals_api_key") || "").trim(),
+    apiMode:      localStorage.getItem("intervals_api_mode") || "auto",
+    zoneModelId:  localStorage.getItem("intervals_zone_model_id") || "",
+    zoneModels:   JSON.parse(localStorage.getItem("intervals_zone_models") || "[]"),
   };
 }
+
+function getSelectedZoneModel() {
+  const s = getSettings();
+  if (!s.zoneModels.length) return null;
+  const id = Number(s.zoneModelId);
+  return s.zoneModels.find((m) => m.id === id) || null;
+}
+
+/** Build zone display info: indices, label names, colors, upper-HR bounds. */
+function getZoneInfo() {
+  const model = getSelectedZoneModel();
+  const n = model ? model.hr_zones.length : 5;
+  const indices = Array.from({ length: n }, (_, i) => i + 1);
+  const names = model
+    ? model.hr_zone_names.slice(0, n)
+    : indices.map((z) => `Z${z}`);
+  return { indices, names, hrZones: model ? model.hr_zones : null };
+}
+
 
 function loadSettingsToForm() {
   const s = getSettings();
   document.getElementById("settings-athlete-id").value = s.athleteId;
   document.getElementById("settings-api-key").value = s.apiKey;
   document.getElementById("settings-api-mode").value = s.apiMode;
+  populateZoneModelSelect(s.zoneModels, s.zoneModelId);
 }
 
 function saveSettings(e) {
@@ -83,9 +124,113 @@ function saveSettings(e) {
 }
 
 function clearSettings() {
-  ["intervals_athlete_id","intervals_api_key","intervals_api_mode"].forEach((k) => localStorage.removeItem(k));
+  [
+    "intervals_athlete_id", "intervals_api_key", "intervals_api_mode",
+    "intervals_zone_model_id", "intervals_zone_models",
+  ].forEach((k) => localStorage.removeItem(k));
   loadSettingsToForm();
   document.getElementById("settings-status").textContent = "Cleared.";
+  document.getElementById("zone-model-status").textContent = "";
+  document.getElementById("zone-model-preview").innerHTML = "";
+}
+
+/* ─── Zone model UI ──────────────────────────────────────────────────────── */
+function zoneModelLabel(m) {
+  const names = m.hr_zone_names.join(" · ");
+  const lthr = m.lthr ? ` LTHR ${m.lthr}` : "";
+  const max = m.max_hr ? ` / Max ${m.max_hr}` : "";
+  return `${m.hr_zones.length} zones: ${names} (${lthr}${max})`;
+}
+
+function populateZoneModelSelect(models, selectedId) {
+  const sel = document.getElementById("settings-zone-model");
+  // Preserve the default option then replace model options
+  sel.innerHTML = '<option value="">Default (Z1–Z5)</option>';
+  models.forEach((m) => {
+    const opt = document.createElement("option");
+    opt.value = String(m.id);
+    opt.textContent = zoneModelLabel(m);
+    if (String(m.id) === String(selectedId)) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  renderZoneModelPreview(models.find((m) => String(m.id) === String(selectedId)) || null);
+}
+
+function renderZoneModelPreview(model) {
+  const el = document.getElementById("zone-model-preview");
+  if (!model) { el.innerHTML = ""; return; }
+  const rows = model.hr_zone_names.map((name, i) => {
+    const upper = model.hr_zones[i];
+    const lower = i === 0 ? 0 : model.hr_zones[i - 1] + 1;
+    const range = i === 0 ? `≤ ${upper} bpm` : `${lower} – ${upper} bpm`;
+    const color = ZONE_COLORS[i + 1] || "#94a3b8";
+    return `<tr>
+      <td><span class="zone-swatch" style="background:${color}"></span>Z${i+1}</td>
+      <td>${name}</td>
+      <td>${range}</td>
+    </tr>`;
+  }).join("");
+  el.innerHTML = `<table class="zone-model-table">
+    <thead><tr><th>Zone</th><th>Name</th><th>HR range</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+async function fetchZoneModels(settings) {
+  const mode = resolveApiMode(settings.apiMode);
+  let models;
+  if (mode === "proxy") {
+    const qs = new URLSearchParams({ athlete_id: settings.athleteId, api_key: settings.apiKey });
+    const res = await fetch(`./api/zone-models?${qs}`);
+    if (!res.ok) throw new Error(`Zone models proxy error (${res.status})`);
+    models = await res.json();
+  } else {
+    const auth = `Basic ${btoa(`API_KEY:${settings.apiKey}`)}`;
+    const res = await fetch(
+      `https://intervals.icu/api/v1/athlete/${encodeURIComponent(settings.athleteId)}/sport-settings`,
+      { headers: { Authorization: auth, Accept: "application/json" } }
+    );
+    if (!res.ok) throw new Error(`Sport settings request failed (${res.status})`);
+    const raw = await res.json();
+    const seen = new Set();
+    models = [];
+    for (const s of raw) {
+      if (!seen.has(s.id) && Array.isArray(s.hr_zones) && s.hr_zones.length) {
+        seen.add(s.id);
+        models.push({
+          id: s.id,
+          hr_zones: s.hr_zones,
+          hr_zone_names: s.hr_zone_names || s.hr_zones.map((_, i) => `Z${i + 1}`),
+          lthr: s.lthr || null,
+          max_hr: s.max_hr || null,
+        });
+      }
+    }
+  }
+  return models;
+}
+
+async function handleLoadZoneModels() {
+  const btn = document.getElementById("load-zone-models");
+  const statusEl = document.getElementById("zone-model-status");
+  const settings = getSettings();
+  if (!settings.athleteId || !settings.apiKey) {
+    statusEl.textContent = "Save athlete ID and API key first.";
+    return;
+  }
+  btn.disabled = true;
+  statusEl.textContent = "Loading…";
+  try {
+    const models = await fetchZoneModels(settings);
+    localStorage.setItem("intervals_zone_models", JSON.stringify(models));
+    const currentId = settings.zoneModelId;
+    populateZoneModelSelect(models, currentId);
+    statusEl.textContent = `${models.length} zone model(s) loaded.`;
+  } catch (err) {
+    statusEl.textContent = `Error: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 /* ─── Search status ──────────────────────────────────────────────────────── */
@@ -105,11 +250,14 @@ function mapInterval(activity, interval) {
   return {
     interval_id:    interval.id,
     activity_id:    activity.id,
+    activity_start_local: activity.start_date_local || "",
     date:           String(activity.start_date_local || "").slice(0, 10),
     activity_name:  activity.name || "",
     activity_type:  activity.type || "",
     label:          interval.label || "",
+    interval_type:  interval.type || "",
     moving_time_s:  interval.moving_time || 0,
+    start_index:    interval.start_index || 0,
     avg_watts:      interval.average_watts || 0,
     weighted_watts: interval.normalized_power || interval.weighted_average_watts || 0,
     avg_watts_kg:   interval.watts_kg || 0,
@@ -150,6 +298,7 @@ async function runDirectSearch(params, athleteId, apiKey) {
     const intervals = Array.isArray(iData.icu_intervals) ? iData.icu_intervals : [];
 
     intervals.forEach((interval) => {
+      if (params.excludeRecovery && interval.type === "RECOVERY") return;
       if (params.label && !String(interval.label || "").toLowerCase().includes(params.label.toLowerCase())) return;
       if (params.targetSeconds !== null) {
         const t = Number(interval.moving_time || 0);
@@ -176,6 +325,7 @@ async function runProxySearch(params, athleteId, apiKey) {
       end_date:     params.endDate,
       time_target_s: params.targetSeconds,
       time_margin_s: params.marginSeconds,
+    exclude_recovery: params.excludeRecovery,
     }),
   });
   if (!res.ok) throw new Error(`Proxy search failed (${res.status})`);
@@ -265,47 +415,193 @@ function mockHrStream(item) {
   return pts;
 }
 
-function renderRow2(item) {
-  const src    = item ? [item] : state.compareSource;
-  const single = !!item;
+/* ─── HR stream fetch (with cache) ──────────────────────────────────────── */
+async function fetchHrStream(activityId, settings) {
+  if (hrStreamCache[activityId]) return hrStreamCache[activityId];
 
-  const zones = [1,2,3,4,5].map((z) => ({
-    label: `Z${z}`, count: src.filter((x) => Number(x.zone) === z).length,
-  }));
-  const zChart = mkChart("zones");
-  zChart.setOption({
+  const mode = resolveApiMode(settings.apiMode);
+  let result;
+
+  if (mode === "proxy") {
+    const qs = new URLSearchParams({ activity_id: activityId, api_key: settings.apiKey });
+    const res = await fetch(`./api/streams?${qs}`);
+    if (!res.ok) throw new Error(`Streams proxy error (${res.status})`);
+    result = await res.json();
+  } else {
+    const auth = `Basic ${btoa(`API_KEY:${settings.apiKey}`)}`;
+    const res = await fetch(
+      `https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/streams?types=heartrate,time`,
+      { headers: { Authorization: auth, Accept: "application/json" } }
+    );
+    if (!res.ok) throw new Error(`Streams request failed (${res.status})`);
+    const raw = await res.json();
+    result = {
+      time:      (raw.find((s) => s.type === "time")?.data)      || [],
+      heartrate: (raw.find((s) => s.type === "heartrate")?.data) || [],
+    };
+  }
+
+  hrStreamCache[activityId] = result;
+  return result;
+}
+
+/** Extract the HR data points for a single interval from the full activity stream. */
+function sliceHrStream(stream, startIndex, movingTimeS) {
+  const endIndex = startIndex + movingTimeS;
+  const points = [];
+  for (let i = 0; i < stream.time.length; i++) {
+    const t = stream.time[i];
+    if (t >= startIndex && t < endIndex) {
+      points.push([(t - startIndex) / 60, stream.heartrate[i]]);
+    }
+  }
+  return points;
+}
+
+function renderHrStreamChart(points, item) {
+  const avg  = Math.round(item.avg_hr || 0);
+  const max  = Math.round(item.max_hr || 0);
+  const model = getSelectedZoneModel();
+  // Build visualMap pieces for HR zone colour bands
+  const pieces = model ? model.hr_zones.map((upper, i) => {
+    const lower = i === 0 ? 0 : model.hr_zones[i - 1];
+    return { gte: lower, lt: upper, color: ZONE_COLORS[i + 1] || "#94a3b8", label: model.hr_zone_names[i] || `Z${i+1}` };
+  }).concat([{
+    gte: model.hr_zones[model.hr_zones.length - 1],
+    color: ZONE_COLORS[model.hr_zones.length] || "#ef4444",
+    label: model.hr_zone_names[model.hr_zones.length - 1] || `Z${model.hr_zones.length}`,
+  }]) : null;
+
+  // Compute a sensible Y axis min: 10 bpm below the minimum HR value, rounded down to 10
+  const minHr = points.reduce((m, p) => Math.min(m, p[1]), Infinity);
+  const yMin = Math.max(60, Math.floor((isFinite(minHr) ? minHr - 10 : 60) / 10) * 10);
+
+  const c = mkChart("hr-stream");
+  c.setOption({
     title: {
-      text: single ? `Zone: ${item.date}` : "Zone distribution",
-      subtext: single ? (item.activity_name || "").slice(0, 36) : "",
+      text: `HR stream: ${item.date}`,
+      subtext: `${item.label || item.interval_type || ""} · avg ${avg} bpm · max ${max} bpm`,
       top: 6, textStyle: { fontSize: 12 }, subtextStyle: { fontSize: 10 },
     },
-    tooltip: { trigger: "axis" },
-    grid: { left: 36, right: 16, top: single ? 52 : 36, bottom: 28 },
-    xAxis: { type: "category", data: zones.map((x) => x.label) },
-    yAxis: { type: "value" },
-    series: [{ type: "bar", data: zones.map((x, i) => ({ value: x.count, itemStyle: { color: ZONE_COLORS[i+1] } })) }],
-  });
-
-  const si = item || state.compareSource[0] || { moving_time_s: 1500, avg_hr: 150, max_hr: 165 };
-  const sChart = mkChart("hr-stream");
-  sChart.setOption({
-    title: {
-      text: single ? `HR stream: ${item.date}` : "Mock HR stream (first interval)",
-      subtext: `Generated · avg ${Math.round(si.avg_hr||0)} bpm · max ${Math.round(si.max_hr||0)} bpm`,
-      top: 6, textStyle: { fontSize: 12 }, subtextStyle: { fontSize: 10 },
+    tooltip: {
+      trigger: "axis",
+      formatter: (p) => `${Number(p[0].value[0]).toFixed(1)} min · HR ${p[0].value[1]} bpm`,
     },
-    tooltip: { trigger: "axis", formatter: (p) => `${p[0].value[0].toFixed(1)} min · HR ${p[0].value[1]} bpm` },
+    ...(pieces ? { visualMap: { show: false, type: "piecewise", dimension: 1, seriesIndex: 0, pieces } } : {}),
     grid: { left: 42, right: 20, top: 52, bottom: 28 },
     xAxis: { type: "value", name: "min", nameLocation: "end" },
-    yAxis: { type: "value", name: "bpm" },
+    yAxis: { type: "value", name: "bpm", min: yMin },
     series: [{
       type: "line", smooth: true, showSymbol: false,
-      lineStyle: { color: "#06b6d4", width: 2 },
-      areaStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1,
-        colorStops: [{ offset: 0, color: "rgba(6,182,212,0.25)" }, { offset: 1, color: "rgba(6,182,212,0)" }] } },
-      data: mockHrStream(si),
+      lineStyle: { width: 2 },
+      areaStyle: { opacity: 0.18 },
+      data: points,
     }],
   });
+}
+
+/** Count HR stream points per zone. Returns array of second-counts, one per zone. */
+function computeZoneHistogram(points, model) {
+  const n = model.hr_zones.length;
+  const counts = new Array(n).fill(0);
+  for (const [, hr] of points) {
+    let placed = false;
+    for (let i = 0; i < n; i++) {
+      if (hr <= model.hr_zones[i]) { counts[i]++; placed = true; break; }
+    }
+    if (!placed) counts[n - 1]++;  // above last boundary → top zone
+  }
+  return counts;
+}
+
+function renderZoneHistogram(points, item, model) {
+  const counts = computeZoneHistogram(points, model);
+  const c = mkChart("zones");
+  c.setOption({
+    title: {
+      text: `Zone distribution: ${item.date}`,
+      subtext: (item.activity_name || "").slice(0, 36),
+      top: 6, textStyle: { fontSize: 12 }, subtextStyle: { fontSize: 10 },
+    },
+    tooltip: {
+      trigger: "axis",
+      formatter: (p) => `${p[0].name}: ${formatSeconds(p[0].value)}`,
+    },
+    grid: { left: 48, right: 16, top: 52, bottom: 28 },
+    xAxis: { type: "category", data: model.hr_zone_names.slice(0, model.hr_zones.length) },
+    yAxis: { type: "value", axisLabel: { formatter: (v) => formatSeconds(v) } },
+    series: [{ type: "bar", data: counts.map((v, i) => ({
+      value: v, itemStyle: { color: ZONE_COLORS[i + 1] || "#94a3b8" },
+    })) }],
+  });
+}
+
+function renderZoneFallback(item) {
+  // No zone model: show single-bar (the interval's assigned zone)
+  const z = item.zone;
+  const c = mkChart("zones");
+  c.setOption({
+    title: {
+      text: `Zone: ${item.date}`, subtext: "Load a zone model in Settings for HR histogram",
+      top: 6, textStyle: { fontSize: 12 }, subtextStyle: { fontSize: 10, color: "#94a3b8" },
+    },
+    grid: { left: 36, right: 16, top: 52, bottom: 28 },
+    xAxis: { type: "category", data: [1,2,3,4,5].map((v) => `Z${v}`) },
+    yAxis: { type: "value" },
+    series: [{ type: "bar", data: [1,2,3,4,5].map((v) => ({
+      value: v === z ? 1 : 0, itemStyle: { color: ZONE_COLORS[v] || "#94a3b8" },
+    })) }],
+  });
+}
+
+function renderRow2Empty() {
+  const placeholder = (id) => {
+    const c = mkChart(id);
+    c.setOption({ graphic: [{ type: "text", left: "center", top: "middle",
+      style: { text: "Click an interval above", fill: "#64748b", fontSize: 13 } }],
+      xAxis: { show: false }, yAxis: { show: false }, series: [] });
+  };
+  placeholder("zones");
+  placeholder("hr-stream");
+}
+
+async function renderRow2(item) {
+  if (!item) { renderRow2Empty(); return; }
+
+  // Show loading placeholders for both charts while stream is fetching
+  const loadPlaceholder = (id, title, sub) => {
+    const c = mkChart(id);
+    c.setOption({ title: { text: title, subtext: sub || "Loading…",
+      top: 6, textStyle: { fontSize: 12 }, subtextStyle: { fontSize: 10, color: "#94a3b8" } },
+      xAxis: { show: false }, yAxis: { show: false }, series: [] });
+  };
+  loadPlaceholder("zones",     `Zone distribution: ${item.date}`);
+  loadPlaceholder("hr-stream", `HR stream: ${item.date}`);
+
+  try {
+    const settings = getSettings();
+    const stream = await fetchHrStream(item.activity_id, settings);
+    const points = sliceHrStream(stream, item.start_index, item.moving_time_s);
+
+    // Zone chart — histogram from HR stream if model available, fallback otherwise
+    const model = getSelectedZoneModel();
+    if (model && points.length > 0) {
+      renderZoneHistogram(points, item, model);
+    } else {
+      renderZoneFallback(item);
+    }
+
+    // HR stream chart
+    if (points.length > 0) {
+      renderHrStreamChart(points, item);
+    } else {
+      loadPlaceholder("hr-stream", `HR stream: ${item.date}`, "No HR data in stream");
+    }
+  } catch (err) {
+    console.warn("HR stream fetch failed:", err);
+    renderZoneFallback(item);
+    loadPlaceholder("hr-stream", `HR stream: ${item.date}`, `Error: ${err.message}`);
+  }
 }
 
 function attachRow1Click(chartName, indexFn) {
@@ -321,7 +617,7 @@ function attachRow1Click(chartName, indexFn) {
 function renderCompare() {
   const sel = state.filtered.filter((x) => state.selected.has(String(x.interval_id)));
   const src = sel.length ? sel : state.filtered;
-  state.compareSource = [...src].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  state.compareSource = [...src].sort(compareIntervalsChronologically);
   state.pinnedInterval = null;
   document.getElementById("compare-summary").textContent =
     `${state.compareSource.length} interval(s) shown${sel.length ? " (selected)" : " (all filtered)"}`;
@@ -388,7 +684,7 @@ function renderCompare() {
   });
   attachRow1Click("scatter", (p) => p.dataIndex);
 
-  renderRow2(null);
+  renderRow2Empty();
 }
 
 /* ─── Theme ──────────────────────────────────────────────────────────────── */
@@ -418,12 +714,13 @@ async function handleSearchSubmit(e) {
   const targetSeconds = parseMmSs(document.getElementById("search-time").value);
   const marginSeconds = parseMmSs(document.getElementById("search-margin").value) ?? 10;
   const params = {
-    label:         document.getElementById("search-label").value.trim(),
-    activityType:  document.getElementById("search-type").value,
-    startDate:     document.getElementById("search-from").value,
-    endDate:       document.getElementById("search-to").value,
+    label:           document.getElementById("search-label").value.trim(),
+    activityType:    document.getElementById("search-type").value,
+    startDate:       document.getElementById("search-from").value,
+    endDate:         document.getElementById("search-to").value,
     targetSeconds,
     marginSeconds,
+    excludeRecovery: document.getElementById("search-exclude-recovery").checked,
   };
   const submit = document.getElementById("search-submit");
   submit.disabled = true;
@@ -433,7 +730,7 @@ async function handleSearchSubmit(e) {
     const results = mode === "proxy"
       ? await runProxySearch(params, settings.athleteId, settings.apiKey)
       : await runDirectSearch(params, settings.athleteId, settings.apiKey);
-    state.intervals = results.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    state.intervals = results.sort(compareIntervalsChronologically);
     state.filtered  = [...state.intervals];
     state.selected.clear();
     renderIntervals();
@@ -475,6 +772,12 @@ function init() {
   document.getElementById("search-form").addEventListener("submit", handleSearchSubmit);
   document.getElementById("settings-form").addEventListener("submit", saveSettings);
   document.getElementById("settings-clear").addEventListener("click", clearSettings);
+  document.getElementById("load-zone-models").addEventListener("click", handleLoadZoneModels);
+  document.getElementById("settings-zone-model").addEventListener("change", (e) => {
+    localStorage.setItem("intervals_zone_model_id", e.target.value);
+    const s = getSettings();
+    renderZoneModelPreview(s.zoneModels.find((m) => String(m.id) === e.target.value) || null);
+  });
   document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
   document.getElementById("back-to-list").addEventListener("click", () => setScreen("intervals"));
   document.getElementById("go-compare").addEventListener("click", () => setScreen("compare"));

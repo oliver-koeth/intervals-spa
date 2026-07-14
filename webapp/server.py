@@ -16,7 +16,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, urlparse
 from urllib.request import Request, urlopen
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -51,6 +51,38 @@ def _normalize_type(value: str) -> str:
     return "".join(value.split()).lower()
 
 
+def run_streams(activity_id: str, api_key: str) -> dict[str, list[int]]:
+    auth = "Basic " + base64.b64encode(f"API_KEY:{api_key}".encode("utf-8")).decode("ascii")
+    url = f"{API_BASE}/activity/{quote(activity_id)}/streams?types=heartrate,time"
+    raw = _api_get(url, auth)
+    return {
+        "time":      next((s["data"] for s in raw if s.get("type") == "time"),      []),
+        "heartrate": next((s["data"] for s in raw if s.get("type") == "heartrate"), []),
+    }
+
+
+def run_zone_models(athlete_id: str, api_key: str) -> list[dict[str, Any]]:
+    auth = "Basic " + base64.b64encode(f"API_KEY:{api_key}".encode("utf-8")).decode("ascii")
+    url = f"{API_BASE}/athlete/{quote(athlete_id)}/sport-settings"
+    raw = _api_get(url, auth)
+    seen: set[int] = set()
+    models: list[dict[str, Any]] = []
+    for s in raw:
+        sid = s.get("id")
+        hr_zones = s.get("hr_zones") or []
+        if sid and sid not in seen and hr_zones:
+            seen.add(sid)
+            names = s.get("hr_zone_names") or [f"Z{i+1}" for i in range(len(hr_zones))]
+            models.append({
+                "id":            sid,
+                "hr_zones":      hr_zones,
+                "hr_zone_names": names,
+                "lthr":          s.get("lthr"),
+                "max_hr":        s.get("max_hr"),
+            })
+    return models
+
+
 def run_search(payload: dict[str, Any]) -> list[dict[str, Any]]:
     athlete_id = str(payload.get("athlete_id", "")).strip()
     api_key = str(payload.get("api_key", "")).strip()
@@ -60,6 +92,7 @@ def run_search(payload: dict[str, Any]) -> list[dict[str, Any]]:
     end_date = str(payload.get("end_date", "")).strip()
     time_target_s = payload.get("time_target_s")
     time_margin_s = payload.get("time_margin_s")
+    exclude_recovery = bool(payload.get("exclude_recovery", False))
 
     if not athlete_id or not api_key or not start_date or not end_date:
         raise ValueError("athlete_id, api_key, start_date, and end_date are required")
@@ -88,6 +121,8 @@ def run_search(payload: dict[str, Any]) -> list[dict[str, Any]]:
             continue
 
         for interval in interval_data.get("icu_intervals", []):
+            if exclude_recovery and interval.get("type") == "RECOVERY":
+                continue
             interval_label = str(interval.get("label", "")).lower()
             if label and label not in interval_label:
                 continue
@@ -103,11 +138,14 @@ def run_search(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 {
                     "interval_id": interval.get("id"),
                     "activity_id": activity.get("id"),
+                    "activity_start_local": activity.get("start_date_local", ""),
                     "date": str(activity.get("start_date_local", ""))[:10],
                     "activity_name": activity.get("name", ""),
                     "activity_type": activity.get("type", ""),
                     "label": interval.get("label", ""),
+                    "interval_type": interval.get("type", ""),
                     "moving_time_s": moving_time_s,
+                    "start_index": int(interval.get("start_index") or 0),
                     "avg_hr": interval.get("average_heartrate", 0),
                     "max_hr": interval.get("max_heartrate", 0),
                     "zone": interval.get("zone"),
@@ -122,6 +160,47 @@ def run_search(payload: dict[str, Any]) -> list[dict[str, Any]]:
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, directory=str(ROOT_DIR), **kwargs)
+
+    def do_GET(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        qs = parse_qs(parsed.query)
+
+        def _qs(key: str) -> str:
+            return qs.get(key, [""])[0].strip()
+
+        if parsed.path == "/api/streams":
+            activity_id = _qs("activity_id")
+            api_key = _qs("api_key")
+            if not activity_id or not api_key:
+                _json_response(self, HTTPStatus.BAD_REQUEST, {"error": "activity_id and api_key are required"})
+                return
+            try:
+                _json_response(self, HTTPStatus.OK, run_streams(activity_id, api_key))
+            except HTTPError as exc:
+                _json_response(self, HTTPStatus.BAD_GATEWAY, {"error": f"Upstream HTTP {exc.code}"})
+            except URLError as exc:
+                _json_response(self, HTTPStatus.BAD_GATEWAY, {"error": f"Upstream error: {exc.reason}"})
+            except Exception as exc:  # noqa: BLE001
+                _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+            return
+
+        if parsed.path == "/api/zone-models":
+            athlete_id = _qs("athlete_id")
+            api_key = _qs("api_key")
+            if not athlete_id or not api_key:
+                _json_response(self, HTTPStatus.BAD_REQUEST, {"error": "athlete_id and api_key are required"})
+                return
+            try:
+                _json_response(self, HTTPStatus.OK, run_zone_models(athlete_id, api_key))
+            except HTTPError as exc:
+                _json_response(self, HTTPStatus.BAD_GATEWAY, {"error": f"Upstream HTTP {exc.code}"})
+            except URLError as exc:
+                _json_response(self, HTTPStatus.BAD_GATEWAY, {"error": f"Upstream error: {exc.reason}"})
+            except Exception as exc:  # noqa: BLE001
+                _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+            return
+
+        super().do_GET()
 
     def do_POST(self) -> None:  # noqa: N802
         if self.path != "/api/search":

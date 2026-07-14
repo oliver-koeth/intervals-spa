@@ -132,6 +132,50 @@ input, select {
   align-items: flex-end;
   padding-bottom: 2px;
 }
+.checkbox-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0;
+}
+.settings-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.25rem 0 0.25rem;
+}
+.zone-model-table {
+  width: 100%;
+  max-width: 540px;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  margin-top: 0.5rem;
+}
+.zone-model-table th {
+  text-align: left;
+  padding: 0.25rem 0.5rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.zone-model-table td {
+  padding: 0.25rem 0.5rem;
+}
+.zone-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.chart-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
 
 /* ── Selection bar ───────────────────────────────────────────────────────── */
 .selection-bar {
