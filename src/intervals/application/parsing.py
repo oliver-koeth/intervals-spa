@@ -21,6 +21,6 @@ def parse_contract(model_cls: type[_T], payload: dict[str, Any]) -> _T:
         return model_cls.model_validate(payload)
     except PydanticValidationError as exc:
         messages = "; ".join(
-            f"{'.'.join(str(l) for l in e['loc'])}: {e['msg']}" for e in exc.errors()
+            f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in exc.errors()
         )
         raise ValidationError(messages) from exc

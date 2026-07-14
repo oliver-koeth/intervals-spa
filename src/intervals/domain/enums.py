@@ -1,10 +1,10 @@
 """Canonical domain enumerations for the intervals package."""
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class IntensityZone(str, Enum):
+class IntensityZone(StrEnum):
     """Heart-rate / power training zones Z1–Z5."""
 
     Z1 = "z1"
@@ -14,7 +14,7 @@ class IntensityZone(str, Enum):
     Z5 = "z5"
 
 
-class TrainingType(str, Enum):
+class TrainingType(StrEnum):
     """High-level workout modality."""
 
     CYCLING = "cycling"
@@ -24,7 +24,7 @@ class TrainingType(str, Enum):
     OTHER = "other"
 
 
-class WorkoutStatus(str, Enum):
+class WorkoutStatus(StrEnum):
     """Lifecycle status of a planned or completed workout."""
 
     PLANNED = "planned"

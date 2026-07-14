@@ -1,8 +1,8 @@
 """Unit tests for domain model invariants."""
 import pytest
 
-from intervals.domain.model import Interval
 from intervals.domain.enums import IntensityZone
+from intervals.domain.model import Interval
 
 
 def test_interval_rejects_zero_duration() -> None:
