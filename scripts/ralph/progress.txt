@@ -1,0 +1,2 @@
+Phase 1 — Foundation and Scaffolding
+Scaffolded project: Python backend (FastAPI), React SPA (Vite), docs, CI.

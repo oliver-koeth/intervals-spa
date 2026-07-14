@@ -1,0 +1,56 @@
+{
+  "project": "intervals-spa",
+  "branch": "ralph/phase-1-foundation-scaffolding",
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Project skeleton compiles and tests run",
+      "priority": 1,
+      "passes": false,
+      "acceptance": [
+        "uv sync --dev succeeds",
+        "uv run pytest exits 0",
+        "uv run ruff check . exits 0",
+        "uv run mypy --strict src exits 0"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Frontend skeleton builds and tests run",
+      "priority": 2,
+      "passes": false,
+      "acceptance": [
+        "pnpm install succeeds",
+        "pnpm run typecheck exits 0",
+        "pnpm run lint exits 0",
+        "pnpm run test run exits 0"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Health endpoint returns {\"status\": \"ok\"}",
+      "priority": 3,
+      "passes": false,
+      "acceptance": [
+        "GET /api/v1/health returns 200",
+        "Response body is {\"status\": \"ok\"}",
+        "Integration test passes"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Workout create/list/get endpoints work",
+      "priority": 4,
+      "passes": false,
+      "acceptance": [
+        "POST /api/v1/workouts with valid payload returns 201",
+        "GET /api/v1/workouts returns the created workout",
+        "GET /api/v1/workouts/{id} returns the workout",
+        "Invalid payload returns 400 with error.code=validation_error",
+        "Unknown id returns 404 with error.code=not_found",
+        "Typecheck passes",
+        "Tests pass"
+      ]
+    }
+  ]
+}

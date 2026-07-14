@@ -1,0 +1,16 @@
+{
+  "project": "intervals-spa",
+  "branch": "ralph/phase-1-foundation-scaffolding",
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Example story",
+      "priority": 1,
+      "passes": false,
+      "acceptance": [
+        "Acceptance criterion 1",
+        "Acceptance criterion 2"
+      ]
+    }
+  ]
+}

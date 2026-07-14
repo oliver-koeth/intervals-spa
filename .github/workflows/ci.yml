@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Sync backend dependencies
+        run: uv sync --dev
+
+      - name: Ruff
+        run: uv run ruff check .
+
+      - name: MyPy
+        run: uv run mypy --strict src
+
+      - name: Pytest
+        run: uv run pytest
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "9"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: ESLint
+        working-directory: frontend
+        run: pnpm run lint
+
+      - name: TypeScript typecheck
+        working-directory: frontend
+        run: pnpm run typecheck
+
+      - name: Vitest
+        working-directory: frontend
+        run: pnpm run test run
+
+  build:
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "9"
+
+      - name: Sync backend dependencies
+        run: uv sync --dev
+
+      - name: Build Python wheel
+        run: uv build
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: frontend
+        run: pnpm run build
+
+      - name: Upload Python dist artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: intervals-dist
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Upload frontend dist artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: intervals-frontend-dist
+          path: frontend/dist/
+          if-no-files-found: error
+
+  smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Sync dependencies
+        run: uv sync --dev
+
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: intervals-dist
+          path: dist
+
+      - name: Install wheel into fresh venv
+        run: |
+          python -m venv /tmp/intervals-smoke-venv
+          /tmp/intervals-smoke-venv/bin/pip install dist/*.whl
+
+      - name: Smoke — start API and check health
+        run: |
+          /tmp/intervals-smoke-venv/bin/intervals-api &
+          SERVER_PID=$!
+          sleep 3
+          curl --fail http://127.0.0.1:8000/api/v1/health
+          kill $SERVER_PID
