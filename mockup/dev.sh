@@ -43,6 +43,5 @@ watchexec \
   --watch "${SCRIPT_DIR}" \
   --exts  "${WATCH_EXTS}" \
   --restart \
-  --on-busy-update restart \
   --print-events \
   -- python3 -m http.server "${PORT}" --directory "${SCRIPT_DIR}"
