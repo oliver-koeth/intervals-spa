@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Intervals Mockup</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/echarts@6/dist/echarts.min.js"></script>
+  </head>
+  <body class="theme-dark">
+    <header class="topbar">
+      <div class="brand">Intervals</div>
+      <nav class="nav">
+        <button class="nav-btn" data-screen-target="search">Search</button>
+        <button class="nav-btn" data-screen-target="intervals">Intervals</button>
+        <button class="nav-btn" data-screen-target="compare">Compare</button>
+        <button class="nav-btn" data-screen-target="settings">Settings</button>
+      </nav>
+      <button id="theme-toggle" class="btn secondary">Light mode</button>
+    </header>
+
+    <main class="container">
+
+      <!-- ─── Search ─────────────────────────────────────────────────────── -->
+      <section id="screen-search" class="screen active">
+        <div class="card">
+          <h1>Search Intervals</h1>
+          <p class="muted">Mock search — clicking Search moves to the Intervals screen with local filters applied.</p>
+          <form id="search-form" class="form-grid">
+            <label>
+              Label
+              <input id="search-label" type="text" placeholder="e.g. fahrtkopf" />
+            </label>
+            <label>
+              Activity type
+              <select id="search-type">
+                <option value="">All types</option>
+                <option value="Run">Run</option>
+                <option value="VirtualRun">Virtual Run</option>
+              </select>
+            </label>
+            <label>
+              Time target (mm:ss)
+              <input id="search-time" type="text" placeholder="25:00" />
+            </label>
+            <label>
+              Margin (mm:ss)
+              <input id="search-margin" type="text" placeholder="00:10" />
+            </label>
+            <label>
+              Date from
+              <input id="search-from" type="date" />
+            </label>
+            <label>
+              Date to
+              <input id="search-to" type="date" />
+            </label>
+            <div class="form-actions">
+              <button type="submit" class="btn primary">Search</button>
+              <button type="reset" class="btn secondary">Reset</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- ─── Intervals ──────────────────────────────────────────────────── -->
+      <section id="screen-intervals" class="screen">
+        <div class="card">
+          <div class="row space-between">
+            <h1>Intervals</h1>
+            <div id="result-summary" class="muted"></div>
+          </div>
+
+          <div class="filters">
+            <label>
+              Label
+              <input id="filter-label" type="text" placeholder="e.g. fahrtkopf" />
+            </label>
+            <label>
+              Activity type
+              <select id="filter-type">
+                <option value="">All types</option>
+                <option value="Run">Run</option>
+                <option value="VirtualRun">Virtual Run</option>
+              </select>
+            </label>
+            <label>
+              Time from (mm:ss)
+              <input id="filter-time-from" type="text" placeholder="22:00" />
+            </label>
+            <label>
+              Time to (mm:ss)
+              <input id="filter-time-to" type="text" placeholder="27:00" />
+            </label>
+            <label>
+              Date from
+              <input id="filter-date-from" type="date" />
+            </label>
+            <label>
+              Date to
+              <input id="filter-date-to" type="date" />
+            </label>
+            <div class="form-actions">
+              <button id="apply-filters" class="btn secondary">Apply</button>
+              <button id="clear-filters" class="btn secondary">Clear</button>
+            </div>
+          </div>
+
+          <div class="selection-bar">
+            <button id="select-all" class="btn secondary">Select all</button>
+            <button id="select-none" class="btn secondary">Select none</button>
+            <span id="selected-count" class="muted">0 selected</span>
+            <button id="go-compare" class="btn primary">Compare selected</button>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th class="center">Sel</th>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Activity</th>
+                  <th>Label</th>
+                  <th class="right">Time</th>
+                  <th class="right">Avg W</th>
+                  <th class="right">W/kg</th>
+                  <th class="right">Avg HR</th>
+                  <th class="right">Max HR</th>
+                  <th class="right">Load</th>
+                  <th class="right">Zone</th>
+                  <th class="right">Dec%</th>
+                </tr>
+              </thead>
+              <tbody id="intervals-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── Compare ────────────────────────────────────────────────────── -->
+      <section id="screen-compare" class="screen">
+        <div class="card">
+          <div class="row space-between">
+            <h1>Comparison Dashboard</h1>
+            <button id="back-to-list" class="btn secondary">Back to intervals</button>
+          </div>
+          <p id="compare-summary" class="muted"></p>
+          <p class="hint muted">Click any point in the top row to pin zone distribution and HR stream to that interval.</p>
+
+          <!-- row 1: three equal charts -->
+          <div class="chart-grid chart-grid-3">
+            <div id="chart-progression" class="chart"></div>
+            <div id="chart-hr" class="chart"></div>
+            <div id="chart-scatter" class="chart"></div>
+          </div>
+
+          <!-- row 2: zone (1 col) + hr stream (2 cols) -->
+          <div class="chart-grid chart-grid-3" style="margin-top:0.75rem">
+            <div id="chart-zones" class="chart"></div>
+            <div id="chart-hr-stream" class="chart chart-span2"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── Settings ───────────────────────────────────────────────────── -->
+      <section id="screen-settings" class="screen">
+        <div class="card">
+          <h1>Settings</h1>
+          <p class="muted">Stored in browser local storage only — never sent anywhere in this mockup.</p>
+          <form id="settings-form" class="form-grid" style="max-width:480px">
+            <label>
+              Athlete ID
+              <input id="settings-athlete-id" type="text" placeholder="e.g. i75074" />
+            </label>
+            <label>
+              API Key
+              <input id="settings-api-key" type="password" placeholder="your intervals.icu API key" />
+              <span class="hint muted">Stored in browser localStorage, not transmitted.</span>
+            </label>
+            <div class="form-actions">
+              <button type="submit" class="btn primary">Save</button>
+              <button type="button" id="settings-clear" class="btn secondary">Clear</button>
+            </div>
+          </form>
+          <p id="settings-status" class="muted" style="margin-top:0.75rem"></p>
+        </div>
+      </section>
+
+    </main>
+    <script src="./app.js"></script>
+  </body>
+</html>
