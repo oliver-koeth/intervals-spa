@@ -154,3 +154,17 @@ th, td {
 .right { text-align: right; }
 .center { text-align: center; }
 tr:hover td { background: rgba(148,163,184,0.07); }
+
+/* ── Chart grids ─────────────────────────────────────────────────────────── */
+.chart-grid { display: grid; gap: 0.75rem; margin-top: 0.75rem; }
+.chart-grid-3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 900px) {
+  .chart-grid-3 { grid-template-columns: 1fr; }
+  .chart-span2  { grid-column: span 1 !important; }
+}
+.chart {
+  height: 280px;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+.chart-span2 { grid-column: span 2; }
