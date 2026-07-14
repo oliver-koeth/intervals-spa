@@ -218,7 +218,23 @@ Plain, short, operational:
 
 ---
 
-## 11. Definition of Done for New UI Work
+## 11. Charts
+
+- Use **Apache ECharts** for all chart visualisations.
+- Default chart theme is **dark** on first load; light theme is available via UI toggle.
+- Keep chart visuals neutral and data-first:
+  - thin axis lines
+  - compact legends
+  - no decorative gradients
+  - subtle transitions only
+- Chart defaults by use case:
+  - progression and trends: line charts
+  - metric relationships: scatter charts
+  - zone and distribution summaries: bar charts
+
+---
+
+## 12. Definition of Done for New UI Work
 
 A new screen fits this style guide when it:
 - Uses the neutral card-based shell.

@@ -61,6 +61,7 @@ intervals-spa/
    pnpm dev
    ```
 4. Open `http://localhost:5173` in your browser.
+5. Charts are rendered with [Apache ECharts](https://echarts.apache.org/).
 
 ## Quality Checks
 
