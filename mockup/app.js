@@ -29,18 +29,15 @@ function isDark() { return document.body.classList.contains("theme-dark"); }
 
 function intervalTooltip(item) {
   const z = item.zone;
-  const zColor = ZONE_COLORS[z] || "inherit";
-  return [
-    `<b>${item.date}</b>  ${item.activity_type || ""}`,
-    item.activity_name,
-    `Label: <b>${item.label}</b>`,
-    `Time: ${fmtTime(item.moving_time_s)}   Zone: <span style="color:${zColor}">Z${z || "-"}</span>`,
-    `Avg W: ${Math.round(item.avg_watts || 0)}  Weighted: ${Math.round(item.weighted_watts || 0)}`,
-    `W/kg: ${(item.avg_watts_kg || 0).toFixed(2)}   Intensity: ${item.intensity_pct || "-"}%`,
-    `Avg HR: ${Math.round(item.avg_hr || 0)}  Max HR: ${Math.round(item.max_hr || 0)}`,
-    `Cadence: ${(item.avg_cadence || 0).toFixed(1)}   Decoupling: ${(item.decoupling || 0).toFixed(1)}%`,
-    `Load: ${(item.training_load || 0).toFixed(1)}   Joules↑FTP: ${Math.round(item.joules_above_ftp || 0)}`,
-  ].join("<br/>");
+  const zColor = ZONE_COLORS[z] || "#94a3b8";
+  const name = item.activity_name.length > 34 ? item.activity_name.slice(0, 33) + "…" : item.activity_name;
+  return `<div style="line-height:1.7;font-size:12px">
+    <div style="font-weight:700;font-size:13px;margin-bottom:2px">${item.date} · ${item.activity_type || ""}</div>
+    <div style="color:#94a3b8;margin-bottom:4px">${name}</div>
+    <div>Label: <b>${item.label}</b></div>
+    <div>Time: <b>${fmtTime(item.moving_time_s)}</b> &nbsp; Zone: <b style="color:${zColor}">Z${z || "–"}</b></div>
+    <div>HR: <b>${Math.round(item.avg_hr || 0)}</b> avg / <b>${Math.round(item.max_hr || 0)}</b> max bpm</div>
+  </div>`;
 }
 
 /* ─── Navigation ───────────────────────────────────────────────────────── */
@@ -228,21 +225,19 @@ function renderCompare() {
   const sorted = state.compareSource;
   const dates  = sorted.map((x) => x.date);
 
-  // Rich axis tooltip lookup helper
+  // Axis tooltip: interval header only (series values shown by ECharts default below)
   function axisFormatter(params) {
     const idx = params[0]?.dataIndex ?? 0;
     const item = sorted[idx];
     if (!item) return "";
-    return `<div style="max-width:240px">${intervalTooltip(item)}<br/><hr style="border-color:#555;margin:4px 0"/>${
-      params.map((p) => `<span style="color:${p.color}">■</span> ${p.seriesName}: <b>${typeof p.value === "number" ? p.value.toFixed(1) : p.value}</b>`).join("<br/>")
-    }</div>`;
+    return intervalTooltip(item);
   }
 
   // ── Progression ──
   const progChart = mkChart("progression");
   progChart.setOption({
     title: { text: "Progression over time", textStyle: { fontSize: 12 } },
-    tooltip: { trigger: "axis", formatter: axisFormatter },
+    tooltip: { trigger: "axis", formatter: axisFormatter, extraCssText: 'background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.55);color:#f1f5f9;font-size:12px;max-width:260px' },
     legend: { top: 22, textStyle: { fontSize: 11 } },
     grid: { left: 44, right: 44, top: 56, bottom: 32 },
     xAxis: { type: "category", data: dates },
@@ -262,7 +257,7 @@ function renderCompare() {
   const hrChart = mkChart("hr");
   hrChart.setOption({
     title: { text: "Heart rate trends", textStyle: { fontSize: 12 } },
-    tooltip: { trigger: "axis", formatter: axisFormatter },
+    tooltip: { trigger: "axis", formatter: axisFormatter, extraCssText: 'background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.55);color:#f1f5f9;font-size:12px;max-width:260px' },
     legend: { top: 22, textStyle: { fontSize: 11 } },
     grid: { left: 44, right: 16, top: 56, bottom: 32 },
     xAxis: { type: "category", data: dates },
@@ -284,6 +279,7 @@ function renderCompare() {
         const item = sorted[p.dataIndex];
         return item ? intervalTooltip(item) : "";
       },
+      extraCssText: 'background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.55);color:#f1f5f9;font-size:12px;max-width:260px',
     },
     grid: { left: 44, right: 16, top: 36, bottom: 32 },
     xAxis: { type: "value", name: "Avg W",  nameLocation: "end" },
