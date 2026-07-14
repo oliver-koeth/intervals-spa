@@ -32,11 +32,16 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # ── Load .env ─────────────────────────────────────────────────────────────────
 ENV_FILE="${PROJECT_ROOT}/.env"
 if [[ -f "${ENV_FILE}" ]]; then
-  # Export only KEY=VALUE lines, skip comments and blanks
+  # Write filtered lines to a temp file and source it directly.
+  # (process substitution opens a subshell on macOS bash 3.2 and
+  #  does not export variables back to the parent shell.)
+  _env_tmp=$(mktemp)
+  grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "${ENV_FILE}" > "${_env_tmp}"
   set -o allexport
   # shellcheck disable=SC1090
-  source <(grep -E '^[A-Z_]+=.+' "${ENV_FILE}")
+  source "${_env_tmp}"
   set +o allexport
+  rm -f "${_env_tmp}"
 else
   echo "ERROR: .env file not found at ${ENV_FILE}" >&2
   echo "       Copy .env.example to .env and fill in your credentials." >&2
