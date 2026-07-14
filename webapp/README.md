@@ -15,20 +15,20 @@ Charts are intentionally not included yet.
 Use the local server (serves static files + exposes `/api/search` proxy):
 
 ```bash
-./mockup/run.sh 8080
+./webapp/run.sh 8080
 ```
 
 or with auto-restart on file changes:
 
 ```bash
-./mockup/dev.sh 8080
+./webapp/dev.sh 8080
 ```
 
 Open: `http://localhost:8080`
 
 ## Static deployment (GitHub Pages)
 
-Deploy the files in `mockup/` as static assets.
+Deploy the files in `webapp/` as static assets.
 
 In static mode, set **API mode** to **Direct intervals.icu** (or leave **Auto**, which
 chooses direct mode outside localhost).

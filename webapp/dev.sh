@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# mockup/dev.sh — hot-reload dev server for the mockup
+# webapp/dev.sh — hot-reload dev server for the web app
 #
 # Runs the local Python server and restarts it automatically whenever any
 # of the tracked files change, using watchexec.
 #
 # Usage:
-#   ./mockup/dev.sh [PORT]
+#   ./webapp/dev.sh [PORT]
 #
 # Default port: 8080
 #
@@ -26,13 +26,13 @@ if ! command -v watchexec &>/dev/null; then
 fi
 
 # ── Watched extensions ────────────────────────────────────────────────────
-# html, css, js  — mockup source files
-# json           — data files under mockup/data/
+# html, css, js  — web app source files
+# json           — data files under webapp/data/
 # py             — local proxy/static server code
 WATCH_EXTS="html,css,js,json,py"
 
 echo ""
-echo "  Intervals Mockup — dev server"
+echo "  Intervals Web App — dev server"
 echo "  ─────────────────────────────────────────"
 echo "  URL:      http://localhost:${PORT}"
 echo "  Watching: ${WATCH_EXTS} under ${SCRIPT_DIR}"

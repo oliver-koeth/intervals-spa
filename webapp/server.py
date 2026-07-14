@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Local server for the static intervals app.
 
-- Serves static files from ./mockup
+- Serves static files from ./webapp
 - Adds POST /api/search proxy endpoint for intervals.icu
 """
 

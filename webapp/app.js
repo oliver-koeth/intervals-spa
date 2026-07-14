@@ -283,11 +283,11 @@ async function handleSearchSubmit(e) {
 function toggleTheme() {
   const dark = document.body.classList.toggle("theme-dark");
   document.getElementById("theme-toggle").textContent = dark ? "Light mode" : "Dark mode";
-  localStorage.setItem("mockup-theme", dark ? "dark" : "light");
+  localStorage.setItem("webapp-theme", dark ? "dark" : "light");
 }
 
 function init() {
-  const storedTheme = localStorage.getItem("mockup-theme");
+  const storedTheme = localStorage.getItem("webapp-theme") || localStorage.getItem("mockup-theme");
   if (storedTheme === "light") {
     document.body.classList.remove("theme-dark");
     document.getElementById("theme-toggle").textContent = "Dark mode";
