@@ -1,30 +1,40 @@
-# Mockup
+# Intervals Web App (Static + Local Server)
 
-Static HTML mockup for the interval search/list/compare flow.
+This folder now contains a real static web app (not a mock data dashboard).
 
-## Run
+Implemented screens:
 
-From the repository root:
+1. **Search** — triggers an intervals.icu search.
+2. **Intervals** — displays actual search results and local result filtering.
+3. **Settings** — stores athlete ID / API key / API mode in browser local storage.
 
-```bash
-python3 -m http.server 8080 --directory mockup
-```
+Charts are intentionally not included yet.
 
-or:
+## Local testing (Python server)
+
+Use the local server (serves static files + exposes `/api/search` proxy):
 
 ```bash
 ./mockup/run.sh 8080
 ```
 
-Open:
+or with auto-restart on file changes:
 
-```text
-http://localhost:8080
+```bash
+./mockup/dev.sh 8080
 ```
 
-## Notes
+Open: `http://localhost:8080`
 
-- Data is hardcoded from `tools/output/intervals-fahrtkopf-2026-01-01-2026-07-14.json`
-  and copied to `mockup/data/intervals.json`.
-- Search is mock-only: submit moves to the intervals screen and applies local filters.
-- Charts use Apache ECharts and are rendered from hardcoded/mock data.
+## Static deployment (GitHub Pages)
+
+Deploy the files in `mockup/` as static assets.
+
+In static mode, set **API mode** to **Direct intervals.icu** (or leave **Auto**, which
+chooses direct mode outside localhost).
+
+## API modes
+
+- **Auto** (recommended): localhost uses proxy, other hosts use direct.
+- **Local proxy**: browser calls `POST /api/search` on local Python server.
+- **Direct intervals.icu**: browser calls intervals.icu directly.

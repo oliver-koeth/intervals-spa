@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # mockup/dev.sh — hot-reload dev server for the mockup
 #
-# Runs python3 -m http.server and restarts it automatically whenever any
+# Runs the local Python server and restarts it automatically whenever any
 # of the tracked files change, using watchexec.
 #
 # Usage:
@@ -28,7 +28,7 @@ fi
 # ── Watched extensions ────────────────────────────────────────────────────
 # html, css, js  — mockup source files
 # json           — data files under mockup/data/
-# py             — in case a custom Python server script is added later
+# py             — local proxy/static server code
 WATCH_EXTS="html,css,js,json,py"
 
 echo ""
@@ -44,4 +44,4 @@ watchexec \
   --exts  "${WATCH_EXTS}" \
   --restart \
   --print-events \
-  -- python3 -m http.server "${PORT}" --directory "${SCRIPT_DIR}"
+  -- python3 "${SCRIPT_DIR}/server.py" --port "${PORT}"
