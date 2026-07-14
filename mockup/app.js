@@ -236,10 +236,10 @@ function renderCompare() {
   // ── Progression ──
   const progChart = mkChart("progression");
   progChart.setOption({
-    title: { text: "Progression over time", textStyle: { fontSize: 12 } },
+    title: { text: "Progression over time", top: 6, textStyle: { fontSize: 12 } },
     tooltip: { trigger: "axis", formatter: axisFormatter, extraCssText: 'background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.55);color:#f1f5f9;font-size:12px;max-width:260px' },
-    legend: { top: 22, textStyle: { fontSize: 11 } },
-    grid: { left: 44, right: 44, top: 56, bottom: 32 },
+    legend: { top: 28, textStyle: { fontSize: 11 } },
+    grid: { left: 44, right: 44, top: 68, bottom: 32 },
     xAxis: { type: "category", data: dates },
     yAxis: [
       { type: "value", name: "W",    nameTextStyle: { fontSize: 10 } },
@@ -256,10 +256,10 @@ function renderCompare() {
   // ── HR trends ──
   const hrChart = mkChart("hr");
   hrChart.setOption({
-    title: { text: "Heart rate trends", textStyle: { fontSize: 12 } },
+    title: { text: "Heart rate trends", top: 6, textStyle: { fontSize: 12 } },
     tooltip: { trigger: "axis", formatter: axisFormatter, extraCssText: 'background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.55);color:#f1f5f9;font-size:12px;max-width:260px' },
-    legend: { top: 22, textStyle: { fontSize: 11 } },
-    grid: { left: 44, right: 16, top: 56, bottom: 32 },
+    legend: { top: 28, textStyle: { fontSize: 11 } },
+    grid: { left: 44, right: 16, top: 68, bottom: 32 },
     xAxis: { type: "category", data: dates },
     yAxis: { type: "value", name: "bpm", nameTextStyle: { fontSize: 10 } },
     series: [
