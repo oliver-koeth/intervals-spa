@@ -36,3 +36,6 @@ Thumbs.db
 scripts/ralph/.last-branch
 scripts/ralph/.codex-last-message*.txt
 data/
+
+# Tool output artefacts
+tools/output/
