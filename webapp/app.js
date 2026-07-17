@@ -20,8 +20,10 @@ const state = {
   dismissedCallouts: new Set(),
 };
 
-/** In-memory HR stream cache — keyed by activity_id, not persisted. */
+/** In-memory HR stream cache — keyed by "source:activity_id". */
 const hrStreamCache = {};
+/** In-memory Strava activity start-time cache — keyed by activity_id. */
+const stravaActivityStartCache = {};
 const INTERVALS_CACHE_KEY = "intervals_cached_intervals_v1";
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
@@ -496,16 +498,23 @@ async function stravaGet(path, settings, token) {
 function mapSegmentEffortToInterval(effort) {
   const segment = effort.segment || {};
   const activity = effort.activity || {};
-  const effortStart = Date.parse(effort.start_date_local || effort.start_date || "");
-  const activityStart = Date.parse(effort.__activityStart || "");
-  const startOffsetS = Number.isFinite(effortStart) && Number.isFinite(activityStart)
-    ? Math.max(0, Math.round((effortStart - activityStart) / 1000))
+  // effort_start_iso stores the effort's absolute start so we can compute the
+  // correct stream offset at render time once we know the activity's start time.
+  const effortStartIso = effort.start_date_local || effort.start_date || "";
+  // Pre-compute offset only when __activityStart is the TRUE activity start
+  // (activity-scan path sets this correctly; all_efforts path may not).
+  const effortEpoch = Date.parse(effortStartIso);
+  const activityEpoch = Date.parse(effort.__activityStart || "");
+  const startOffsetS = Number.isFinite(effortEpoch) && Number.isFinite(activityEpoch)
+    && Math.abs(effortEpoch - activityEpoch) > 100   // sanity: ignore if same time
+    ? Math.max(0, Math.round((effortEpoch - activityEpoch) / 1000))
     : 0;
   return {
     interval_id: `strava-${effort.id}`,
     activity_id: activity.id || `strava-activity-${effort.id}`,
-    activity_start_local: effort.__activityStart || effort.start_date_local || effort.start_date || "",
-    date: String(effort.start_date_local || effort.start_date || "").slice(0, 10),
+    activity_start_local: effort.__activityStart || effortStartIso,
+    effort_start_iso: effortStartIso,
+    date: String(effortStartIso).slice(0, 10),
     activity_name: effort.__activityName || segment.name || effort.name || "Strava segment",
     activity_type: effort.__activityType || segment.activity_type || "",
     label: segment.name || effort.name || "",
@@ -1170,6 +1179,25 @@ function renderRow2Empty() {
   placeholder("hr-stream");
 }
 
+/**
+ * Fetch and cache the start_date_local of a Strava activity.
+ * Used to compute the correct stream offset for segment efforts.
+ */
+async function fetchStravaActivityStart(activityId, settings, token) {
+  if (stravaActivityStartCache[activityId] !== undefined) {
+    return stravaActivityStartCache[activityId];
+  }
+  try {
+    const act = await stravaGet(`/activities/${activityId}`, settings, token);
+    const t = act.start_date_local || act.start_date || "";
+    stravaActivityStartCache[activityId] = t;
+    return t;
+  } catch {
+    stravaActivityStartCache[activityId] = "";
+    return "";
+  }
+}
+
 async function renderRow2(item) {
   if (!item) { renderRow2Empty(); return; }
 
@@ -1186,7 +1214,25 @@ async function renderRow2(item) {
   try {
     const settings = getSettings();
     const stream = await fetchHrStream(item.activity_id, settings, item.source || "intervals");
-    const points = sliceHrStream(stream, item.start_index, item.moving_time_s);
+
+    // For Strava items, recompute the true stream offset using the effort's
+    // absolute start time vs the activity's actual start time.
+    // This is necessary because the all_efforts path cannot pre-compute the
+    // offset without fetching the parent activity.
+    let startIndex = Number(item.start_index) || 0;
+    if (item.source === "strava" && item.effort_start_iso && item.activity_id) {
+      const token = await refreshStravaTokenIfNeeded(settings);
+      const activityStartIso = await fetchStravaActivityStart(item.activity_id, settings, token);
+      if (activityStartIso) {
+        const effortEpoch   = Date.parse(item.effort_start_iso);
+        const activityEpoch = Date.parse(activityStartIso);
+        if (Number.isFinite(effortEpoch) && Number.isFinite(activityEpoch)) {
+          startIndex = Math.max(0, Math.round((effortEpoch - activityEpoch) / 1000));
+        }
+      }
+    }
+
+    const points = sliceHrStream(stream, startIndex, item.moving_time_s);
 
     // Zone chart — histogram from HR stream if model available, fallback otherwise
     const model = getSelectedZoneModel();
