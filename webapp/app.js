@@ -844,11 +844,17 @@ async function handleSearchSubmit(e) {
   }
   const targetSeconds = parseMmSs(document.getElementById("search-time").value);
   const marginSeconds = parseMmSs(document.getElementById("search-margin").value) ?? 10;
+  const defaultRange = defaultDateRange();
+  const resolvedStartDate = document.getElementById("search-from").value || defaultRange.from;
+  const resolvedEndDate = document.getElementById("search-to").value || defaultRange.to;
+  // Keep the form state consistent for subsequent searches.
+  document.getElementById("search-from").value = resolvedStartDate;
+  document.getElementById("search-to").value = resolvedEndDate;
   const params = {
     label:           document.getElementById("search-label").value.trim(),
     activityType:    document.getElementById("search-type").value,
-    startDate:       document.getElementById("search-from").value,
-    endDate:         document.getElementById("search-to").value,
+    startDate:       resolvedStartDate,
+    endDate:         resolvedEndDate,
     targetSeconds,
     marginSeconds,
     excludeRecovery: document.getElementById("search-exclude-recovery").checked,
@@ -905,6 +911,9 @@ function init() {
 
   document.getElementById("search-form").addEventListener("submit", handleSearchSubmit);
   document.getElementById("search-form").addEventListener("reset", () => {
+    const resetRange = defaultDateRange();
+    document.getElementById("search-from").value = resetRange.from;
+    document.getElementById("search-to").value = resetRange.to;
     hideSearchPreview();
     setStatus("");
   });
