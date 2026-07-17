@@ -340,10 +340,6 @@ function isAutoProxyMode(savedMode) {
   return savedMode === "auto" && ["localhost","127.0.0.1"].includes(window.location.hostname);
 }
 
-function resolveProxyBase(savedMode) {
-  return resolveApiMode(savedMode) === "proxy";
-}
-
 async function stravaTokenExchangeViaProxy(body) {
   const res = await fetch("./api/strava/token", {
     method: "POST",
@@ -369,15 +365,15 @@ async function stravaTokenExchangeDirect(body) {
 }
 
 async function exchangeStravaToken(body, settings) {
-  const shouldProxy = resolveProxyBase(settings.apiMode);
-  if (shouldProxy) {
+  // Prefer direct in auto mode to avoid local Python SSL trust-store issues.
+  if (settings.apiMode !== "proxy") {
     try {
-      return await stravaTokenExchangeViaProxy(body);
+      return await stravaTokenExchangeDirect(body);
     } catch (err) {
-      if (!isAutoProxyMode(settings.apiMode)) throw err;
+      if (settings.apiMode === "direct") throw err;
     }
   }
-  return await stravaTokenExchangeDirect(body);
+  return await stravaTokenExchangeViaProxy(body);
 }
 
 function storeStravaTokenPayload(payload) {
@@ -470,8 +466,16 @@ async function handleStravaOAuthCallback() {
 }
 
 async function stravaGet(path, settings, token) {
-  const mode = resolveApiMode(settings.apiMode);
-  if (mode === "proxy") {
+  // Prefer direct in auto mode to avoid local Python SSL trust-store issues.
+  if (settings.apiMode !== "proxy") {
+    const res = await fetch(`https://www.strava.com/api/v3${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(`Strava request failed (${res.status})`);
+    return await res.json();
+  }
+
+  if (settings.apiMode === "proxy") {
     try {
       const qs = new URLSearchParams({ path, access_token: token });
       const res = await fetch(`./api/strava/get?${qs}`);
@@ -481,15 +485,12 @@ async function stravaGet(path, settings, token) {
       }
       const data = await res.json();
       return data.result;
-    } catch (err) {
-      if (!isAutoProxyMode(settings.apiMode)) throw err;
+    }
+    catch (err) {
+      throw err;
     }
   }
-  const res = await fetch(`https://www.strava.com/api/v3${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`Strava request failed (${res.status})`);
-  return await res.json();
+  throw new Error("Unsupported Strava API mode.");
 }
 
 function mapSegmentEffortToInterval(effort) {
@@ -524,6 +525,7 @@ async function runStravaSegmentSearch(params, settings) {
   let starredIds = null;
   if (params.starredOnly) {
     starredIds = new Set();
+    let processedActivities = 0;
     for (let page = 1; page <= 5; page++) {
       const starred = await stravaGet(`/segments/starred?page=${page}&per_page=200`, settings, token);
       if (!Array.isArray(starred) || !starred.length) break;
@@ -549,6 +551,8 @@ async function runStravaSegmentSearch(params, settings) {
     }
     if (!Array.isArray(activities) || !activities.length) break;
     for (const activity of activities) {
+      if (processedActivities >= 30) break;
+      processedActivities += 1;
       const activityType = String(activity.type || "");
       if (typeNeedle && normalizeActivityType(activityType) !== typeNeedle) continue;
       try {
@@ -570,6 +574,7 @@ async function runStravaSegmentSearch(params, settings) {
         // Skip activities that cannot be read with current token scope.
       }
     }
+    if (processedActivities >= 30) break;
     if (activities.length < 50) break;
   }
 
