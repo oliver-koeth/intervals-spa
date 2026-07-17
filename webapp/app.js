@@ -24,6 +24,8 @@ const state = {
 const hrStreamCache = {};
 /** In-memory Strava activity start-time cache — keyed by activity_id. */
 const stravaActivityStartCache = {};
+/** In-memory Strava effort start-time cache — keyed by effort_id. */
+const stravaEffortStartCache = {};
 
 const INTERVALS_CACHE_KEY   = "intervals_cached_intervals_v1";
 const HR_STREAM_LS_PREFIX   = "intervals_hr_stream:";   // localStorage key prefix for HR streams
@@ -72,6 +74,11 @@ function writeHrDiagnostics(payload) {
   const pre = document.getElementById("hr-diagnostics");
   if (!pre) return;
   pre.textContent = JSON.stringify(payload, null, 2);
+}
+
+function parseStravaEffortId(intervalId) {
+  const m = String(intervalId || "").match(/^strava-(\d+)$/);
+  return m ? m[1] : "";
 }
 
 function isDark() { return document.body.classList.contains("theme-dark"); }
@@ -545,6 +552,7 @@ function mapSegmentEffortToInterval(effort) {
     : 0;
   return {
     interval_id: `strava-${effort.id}`,
+    strava_effort_id: String(effort.id || ""),
     activity_id: activity.id || `strava-activity-${effort.id}`,
     activity_start_local: effort.__activityStart || effortStartIso,
     effort_start_iso: effortStartIso,
@@ -1228,6 +1236,26 @@ async function fetchStravaActivityStart(activityId, settings, token) {
   }
 }
 
+/**
+ * Fetch and cache start_date_local of a Strava segment effort.
+ * Used as fallback for legacy cached rows missing effort_start_iso.
+ */
+async function fetchStravaEffortStart(effortId, settings, token) {
+  if (!effortId) return "";
+  if (stravaEffortStartCache[effortId] !== undefined) {
+    return stravaEffortStartCache[effortId];
+  }
+  try {
+    const effort = await stravaGet(`/segment_efforts/${effortId}`, settings, token);
+    const t = effort.start_date_local || effort.start_date || "";
+    stravaEffortStartCache[effortId] = t;
+    return t;
+  } catch {
+    stravaEffortStartCache[effortId] = "";
+    return "";
+  }
+}
+
 async function renderRow2(item) {
   if (!item) { renderRow2Empty(); return; }
 
@@ -1265,14 +1293,21 @@ async function renderRow2(item) {
     // This is necessary because the all_efforts path cannot pre-compute the
     // offset without fetching the parent activity.
     let startIndex = Number(item.start_index) || 0;
-    if (item.source === "strava" && item.effort_start_iso && item.activity_id) {
+    if (item.source === "strava" && item.activity_id) {
       const token = await refreshStravaTokenIfNeeded(settings);
       const activityStartIso = await fetchStravaActivityStart(item.activity_id, settings, token);
-      const effortEpoch   = Date.parse(item.effort_start_iso);
+      let effortStartIso = item.effort_start_iso || "";
+      const effortId = item.strava_effort_id || parseStravaEffortId(item.interval_id);
+      if (!effortStartIso && effortId) {
+        effortStartIso = await fetchStravaEffortStart(effortId, settings, token);
+      }
+      const effortEpoch   = Date.parse(effortStartIso);
       const activityEpoch = Date.parse(activityStartIso);
       if (activityStartIso && Number.isFinite(effortEpoch) && Number.isFinite(activityEpoch)) {
         startIndex = Math.max(0, Math.round((effortEpoch - activityEpoch) / 1000));
       }
+      diag.strava_effort_id = effortId || "";
+      diag.effort_start_iso_resolved = effortStartIso || "";
       diag.activity_start_iso = activityStartIso || "";
       diag.effort_epoch = Number.isFinite(effortEpoch) ? effortEpoch : null;
       diag.activity_epoch = Number.isFinite(activityEpoch) ? activityEpoch : null;
@@ -1293,6 +1328,18 @@ async function renderRow2(item) {
     diag.points_count = points.length;
     diag.points_first = points[0] || null;
     diag.points_last = points[points.length - 1] || null;
+    const safeStartIdx = Math.max(0, Math.min(startIndex, (stream?.time?.length || 1) - 1));
+    diag.stream_time_head = (stream?.time || []).slice(0, 12);
+    diag.stream_hr_head = (stream?.heartrate || []).slice(0, 12);
+    diag.stream_time_at_start = (stream?.time || []).slice(safeStartIdx, safeStartIdx + 12);
+    diag.stream_hr_at_start = (stream?.heartrate || []).slice(safeStartIdx, safeStartIdx + 12);
+    diag.points_sample = points.slice(0, 20);
+    if (points.length) {
+      const sum = points.reduce((acc, p) => acc + Number(p[1] || 0), 0);
+      diag.points_avg_hr = +(sum / points.length).toFixed(1);
+    } else {
+      diag.points_avg_hr = null;
+    }
     writeHrDiagnostics(diag);
 
     // Zone chart — histogram from HR stream if model available, fallback otherwise
