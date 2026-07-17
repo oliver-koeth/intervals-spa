@@ -5,6 +5,6 @@ import NotFoundPage from "../pages/NotFoundPage";
 describe("NotFoundPage", () => {
   it("renders 404 heading", () => {
     render(<NotFoundPage />);
-    expect(screen.getByRole("heading")).toHaveTextContent("404");
+    expect(screen.getByRole("heading").textContent).toContain("404");
   });
 });
