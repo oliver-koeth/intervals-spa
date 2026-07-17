@@ -89,6 +89,7 @@ h1 {
 .space-between { justify-content: space-between; }
 .muted { color: var(--text-muted); font-size: 0.85rem; }
 .hint { font-size: 0.78rem; }
+.hidden { display: none !important; }
 
 /* ── Forms ───────────────────────────────────────────────────────────────── */
 .form-grid, .filters {
@@ -198,6 +199,21 @@ th, td {
 .right { text-align: right; }
 .center { text-align: center; }
 tr:hover td { background: rgba(148,163,184,0.07); }
+
+/* ── Search preview ───────────────────────────────────────────────────────── */
+.search-preview {
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  padding: 0.75rem;
+  background: rgba(148,163,184,0.05);
+}
+.search-preview-actions {
+  margin-top: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
 
 /* ── Chart grids ─────────────────────────────────────────────────────────── */
 .chart-grid { display: grid; gap: 0.75rem; margin-top: 0.75rem; }

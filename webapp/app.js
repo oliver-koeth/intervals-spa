@@ -10,6 +10,8 @@ const state = {
   intervals: [],
   filtered: [],
   selected: new Set(),
+  pendingSearchResults: [],
+  pendingSearchParams: null,
   screen: "search",
   charts: {},
   compareSource: [],
@@ -19,6 +21,7 @@ const state = {
 
 /** In-memory HR stream cache — keyed by activity_id, not persisted. */
 const hrStreamCache = {};
+const INTERVALS_CACHE_KEY = "intervals_cached_intervals_v1";
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 function parseMmSs(input) {
@@ -132,8 +135,13 @@ function saveApiMode() {
 function clearSettings() {
   [
     "intervals_athlete_id", "intervals_api_key", "intervals_api_mode",
-    "intervals_zone_model_id", "intervals_zone_models",
+    "intervals_zone_model_id", "intervals_zone_models", INTERVALS_CACHE_KEY,
   ].forEach((k) => localStorage.removeItem(k));
+  state.intervals = [];
+  state.filtered = [];
+  state.selected.clear();
+  hideSearchPreview();
+  renderIntervals();
   loadSettingsToForm();
   document.getElementById("settings-status").textContent = "";
   document.getElementById("zone-model-status").textContent = "";
@@ -284,6 +292,81 @@ function resolveApiMode(savedMode) {
 
 function isAutoProxyMode(savedMode) {
   return savedMode === "auto" && ["localhost","127.0.0.1"].includes(window.location.hostname);
+}
+
+function saveIntervalsCache(intervals) {
+  localStorage.setItem(INTERVALS_CACHE_KEY, JSON.stringify(intervals));
+}
+
+function loadIntervalsCache() {
+  try {
+    const raw = localStorage.getItem(INTERVALS_CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function clearIntervalsCache() {
+  localStorage.removeItem(INTERVALS_CACHE_KEY);
+}
+
+function hideSearchPreview() {
+  const box = document.getElementById("search-preview");
+  box.classList.add("hidden");
+  document.getElementById("search-preview-body").innerHTML = "";
+  document.getElementById("search-preview-summary").textContent = "";
+  document.getElementById("search-preview-add").disabled = false;
+  state.pendingSearchResults = [];
+  state.pendingSearchParams = null;
+}
+
+function renderSearchPreview(results) {
+  const body = document.getElementById("search-preview-body");
+  body.innerHTML = "";
+  results.forEach((item) => {
+    const tr = document.createElement("tr");
+    const z = item.zone;
+    tr.innerHTML = `
+      <td>${item.date || ""}</td>
+      <td>${item.activity_type || ""}</td>
+      <td title="${item.activity_name || ""}">${(item.activity_name || "").slice(0, 34)}</td>
+      <td>${item.label || ""}</td>
+      <td class="right">${formatSeconds(item.start_index || 0)}</td>
+      <td class="right">${formatSeconds(item.moving_time_s)}</td>
+      <td class="right" style="color:${ZONE_COLORS[z] || "inherit"}">${z ? `Z${z}` : "-"}</td>
+    `;
+    body.appendChild(tr);
+  });
+  document.getElementById("search-preview-summary").textContent = `${results.length} interval(s) found`;
+  document.getElementById("search-preview-add").disabled = results.length === 0;
+  document.getElementById("search-preview").classList.remove("hidden");
+}
+
+function commitIntervals(results, params) {
+  state.intervals = results.sort(compareIntervalsChronologically);
+  state.filtered  = [...state.intervals];
+  state.selected.clear();
+  renderIntervals();
+  saveIntervalsCache(state.intervals);
+  setStatus(`Added ${results.length} interval(s).`);
+  if (params) {
+    document.getElementById("filter-label").value = params.label;
+    document.getElementById("filter-type").value  = params.activityType;
+    if (params.targetSeconds !== null) {
+      document.getElementById("filter-time-from").value = formatSeconds(Math.max(0, params.targetSeconds - params.marginSeconds));
+      document.getElementById("filter-time-to").value   = formatSeconds(params.targetSeconds + params.marginSeconds);
+    } else {
+      document.getElementById("filter-time-from").value = "";
+      document.getElementById("filter-time-to").value   = "";
+    }
+    document.getElementById("filter-date-from").value = params.startDate;
+    document.getElementById("filter-date-to").value   = params.endDate;
+  }
+  hideSearchPreview();
+  setScreen("intervals");
 }
 
 /* ─── Map API response → internal interval object ─────────────────────────── */
@@ -787,23 +870,11 @@ async function handleSearchSubmit(e) {
     } else {
       results = await runDirectSearch(params, settings.athleteId, settings.apiKey);
     }
-    state.intervals = results.sort(compareIntervalsChronologically);
-    state.filtered  = [...state.intervals];
-    state.selected.clear();
-    renderIntervals();
-    setStatus(`Done. ${results.length} intervals found.`);
-    setScreen("intervals");
-    document.getElementById("filter-label").value = params.label;
-    document.getElementById("filter-type").value  = params.activityType;
-    if (targetSeconds !== null) {
-      document.getElementById("filter-time-from").value = formatSeconds(Math.max(0, targetSeconds - marginSeconds));
-      document.getElementById("filter-time-to").value   = formatSeconds(targetSeconds + marginSeconds);
-    } else {
-      document.getElementById("filter-time-from").value = "";
-      document.getElementById("filter-time-to").value   = "";
-    }
-    document.getElementById("filter-date-from").value = params.startDate;
-    document.getElementById("filter-date-to").value   = params.endDate;
+    const sorted = results.sort(compareIntervalsChronologically);
+    state.pendingSearchResults = sorted;
+    state.pendingSearchParams = params;
+    renderSearchPreview(sorted);
+    setStatus(`Search complete. ${sorted.length} interval(s) ready to add.`);
   } catch (err) {
     setStatus(`Search failed: ${err.message}`, true);
   } finally {
@@ -823,14 +894,40 @@ function init() {
   document.getElementById("search-from").value = range.from;
   document.getElementById("search-to").value   = range.to;
 
+  const cached = loadIntervalsCache().sort(compareIntervalsChronologically);
+  state.intervals = cached;
+  state.filtered = [...cached];
+  renderIntervals();
+
   loadSettingsToForm();
   updateSettingsCallouts();
   setScreen("search");
 
   document.getElementById("search-form").addEventListener("submit", handleSearchSubmit);
+  document.getElementById("search-form").addEventListener("reset", () => {
+    hideSearchPreview();
+    setStatus("");
+  });
+  document.getElementById("search-preview-cancel").addEventListener("click", () => {
+    hideSearchPreview();
+    setStatus("Search preview canceled.");
+  });
+  document.getElementById("search-preview-add").addEventListener("click", () => {
+    if (!state.pendingSearchResults.length) return;
+    commitIntervals(state.pendingSearchResults, state.pendingSearchParams);
+  });
   document.getElementById("settings-form").addEventListener("submit", saveSettings);
   document.getElementById("settings-save-mode").addEventListener("click", saveApiMode);
   document.getElementById("settings-reset").addEventListener("click", clearSettings);
+  document.getElementById("settings-clear-interval-cache").addEventListener("click", () => {
+    clearIntervalsCache();
+    state.intervals = [];
+    state.filtered = [];
+    state.selected.clear();
+    hideSearchPreview();
+    renderIntervals();
+    document.getElementById("settings-status").textContent = "Intervals cache deleted.";
+  });
   document.getElementById("load-zone-models").addEventListener("click", handleLoadZoneModels);
   // Callout dismiss buttons
   document.querySelectorAll(".callout-dismiss").forEach((btn) => {
