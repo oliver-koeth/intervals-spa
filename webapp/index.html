@@ -337,6 +337,8 @@
               <span class="callout-body">
                 Enter your Strava <strong>Client ID</strong> and <strong>Client Secret</strong>, then connect OAuth to
                 retrieve an access token with <em>read + activity:read_all</em> scope for segment search and HR streams.
+                If Strava shows <em>redirect_uri invalid</em>, set <strong>OAuth Redirect URI</strong> to exactly the
+                callback URL configured in your Strava app.
               </span>
               <button class="callout-dismiss" data-dismiss="callout-strava" title="Dismiss">✕</button>
             </div>
@@ -353,6 +355,9 @@
               </label>
               <label>Access Token
                 <input id="settings-strava-access-token" type="password" placeholder="Strava access token" />
+              </label>
+              <label>OAuth Redirect URI (optional)
+                <input id="settings-strava-redirect-uri" type="text" placeholder="e.g. https://oliver-koeth.github.io/intervals-spa" />
               </label>
               <div class="form-actions save-actions">
                 <button type="button" id="settings-save-strava" class="btn primary">Save</button>

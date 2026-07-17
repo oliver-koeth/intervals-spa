@@ -137,6 +137,7 @@ function getSettings() {
       clientId: localStorage.getItem("intervals_strava_client_id") || "",
       clientSecret: localStorage.getItem("intervals_strava_client_secret") || "",
       accessToken: localStorage.getItem("intervals_strava_access_token") || "",
+      redirectUri: localStorage.getItem("intervals_strava_redirect_uri") || "",
       scope: localStorage.getItem("intervals_strava_scope") || "",
       refreshToken: localStorage.getItem("intervals_strava_refresh_token") || "",
       expiresAtEpoch: Number(localStorage.getItem("intervals_strava_expires_at_epoch") || "0"),
@@ -172,6 +173,7 @@ function loadSettingsToForm() {
   document.getElementById("settings-strava-client-id").value = s.strava.clientId;
   document.getElementById("settings-strava-client-secret").value = s.strava.clientSecret;
   document.getElementById("settings-strava-access-token").value = s.strava.accessToken;
+  document.getElementById("settings-strava-redirect-uri").value = s.strava.redirectUri;
   const exp = s.strava.expiresAtEpoch
     ? new Date(s.strava.expiresAtEpoch * 1000).toISOString()
     : "";
@@ -207,6 +209,10 @@ function saveStravaSettings() {
     "intervals_strava_access_token",
     document.getElementById("settings-strava-access-token").value.trim()
   );
+  localStorage.setItem(
+    "intervals_strava_redirect_uri",
+    document.getElementById("settings-strava-redirect-uri").value.trim()
+  );
   document.getElementById("settings-strava-oauth-status").textContent = "Saved manually (no OAuth refresh token).";
   document.getElementById("settings-strava-status").textContent = "Strava settings saved.";
   updateSettingsCallouts();
@@ -217,9 +223,9 @@ function clearSettings() {
     "intervals_athlete_id", "intervals_api_key", "intervals_api_mode",
     "intervals_zone_model_id", "intervals_zone_models", INTERVALS_CACHE_KEY,
     "intervals_strava_client_id", "intervals_strava_client_secret",
-    "intervals_strava_access_token", "intervals_strava_scope",
+    "intervals_strava_access_token", "intervals_strava_redirect_uri", "intervals_strava_scope",
     "intervals_strava_refresh_token", "intervals_strava_expires_at_epoch",
-    "intervals_strava_granted_scope", "intervals_strava_oauth_state",
+    "intervals_strava_granted_scope", "intervals_strava_oauth_state", "intervals_strava_oauth_redirect_uri",
   ].forEach((k) => localStorage.removeItem(k));
   state.intervals = [];
   state.filtered = [];
@@ -452,6 +458,20 @@ async function refreshStravaTokenIfNeeded(settings) {
   return payload.access_token || "";
 }
 
+function resolveStravaRedirectUri(settings) {
+  const configured = String(settings?.strava?.redirectUri || "").trim();
+  if (configured) return configured;
+  const clean = new URL(window.location.href);
+  clean.search = "";
+  clean.hash = "";
+  // Strava redirect matching is strict in some app configurations; prefer
+  // no trailing slash on non-root paths.
+  if (clean.pathname !== "/" && clean.pathname.endsWith("/")) {
+    clean.pathname = clean.pathname.slice(0, -1);
+  }
+  return clean.toString();
+}
+
 function startStravaOAuth() {
   const settings = getSettings();
   if (!settings.strava.clientId || !settings.strava.clientSecret) {
@@ -461,7 +481,8 @@ function startStravaOAuth() {
   }
   const stateToken = Math.random().toString(36).slice(2);
   localStorage.setItem("intervals_strava_oauth_state", stateToken);
-  const redirectUri = `${window.location.origin}${window.location.pathname}`;
+  const redirectUri = resolveStravaRedirectUri(settings);
+  localStorage.setItem("intervals_strava_oauth_redirect_uri", redirectUri);
   const url = new URL("https://www.strava.com/oauth/authorize");
   url.searchParams.set("client_id", settings.strava.clientId);
   url.searchParams.set("response_type", "code");
@@ -478,6 +499,7 @@ async function handleStravaOAuthCallback() {
   const code = url.searchParams.get("code") || "";
   const stateParam = url.searchParams.get("state") || "";
   const expectedState = localStorage.getItem("intervals_strava_oauth_state") || "";
+  const expectedRedirectUri = localStorage.getItem("intervals_strava_oauth_redirect_uri") || "";
   const settings = getSettings();
   const statusEl = document.getElementById("settings-strava-status");
   try {
@@ -492,6 +514,7 @@ async function handleStravaOAuthCallback() {
         client_id: settings.strava.clientId,
         client_secret: settings.strava.clientSecret,
         code,
+        redirect_uri: expectedRedirectUri || resolveStravaRedirectUri(settings),
         grant_type: "authorization_code",
       },
       settings
@@ -502,6 +525,7 @@ async function handleStravaOAuthCallback() {
     statusEl.textContent = `Strava OAuth failed: ${err.message}`;
   } finally {
     localStorage.removeItem("intervals_strava_oauth_state");
+    localStorage.removeItem("intervals_strava_oauth_redirect_uri");
     const clean = new URL(window.location.href);
     ["code", "state", "scope"].forEach((k) => clean.searchParams.delete(k));
     window.history.replaceState({}, "", clean.toString());
