@@ -94,6 +94,9 @@ function getSettings() {
       clientSecret: localStorage.getItem("intervals_strava_client_secret") || "",
       accessToken: localStorage.getItem("intervals_strava_access_token") || "",
       scope: localStorage.getItem("intervals_strava_scope") || "",
+      refreshToken: localStorage.getItem("intervals_strava_refresh_token") || "",
+      expiresAtEpoch: Number(localStorage.getItem("intervals_strava_expires_at_epoch") || "0"),
+      grantedScope: localStorage.getItem("intervals_strava_granted_scope") || "",
     },
   };
 }
@@ -126,6 +129,12 @@ function loadSettingsToForm() {
   document.getElementById("settings-strava-client-secret").value = s.strava.clientSecret;
   document.getElementById("settings-strava-access-token").value = s.strava.accessToken;
   document.getElementById("settings-strava-scope").value = s.strava.scope;
+  const exp = s.strava.expiresAtEpoch
+    ? new Date(s.strava.expiresAtEpoch * 1000).toISOString()
+    : "";
+  document.getElementById("settings-strava-oauth-status").textContent = s.strava.accessToken
+    ? `Connected (${s.strava.grantedScope || "scope unknown"})${exp ? ` · expires ${exp}` : ""}`
+    : "Not connected";
   populateZoneModelSelect(s.zoneModels, s.zoneModelId);
 }
 
@@ -159,6 +168,7 @@ function saveStravaSettings() {
     "intervals_strava_scope",
     document.getElementById("settings-strava-scope").value.trim()
   );
+  document.getElementById("settings-strava-oauth-status").textContent = "Saved manually (no OAuth refresh token).";
   document.getElementById("settings-strava-status").textContent = "Strava settings saved.";
 }
 
@@ -168,6 +178,8 @@ function clearSettings() {
     "intervals_zone_model_id", "intervals_zone_models", INTERVALS_CACHE_KEY,
     "intervals_strava_client_id", "intervals_strava_client_secret",
     "intervals_strava_access_token", "intervals_strava_scope",
+    "intervals_strava_refresh_token", "intervals_strava_expires_at_epoch",
+    "intervals_strava_granted_scope", "intervals_strava_oauth_state",
   ].forEach((k) => localStorage.removeItem(k));
   state.intervals = [];
   state.filtered = [];
@@ -177,6 +189,7 @@ function clearSettings() {
   loadSettingsToForm();
   document.getElementById("settings-status").textContent = "";
   document.getElementById("settings-strava-status").textContent = "";
+  document.getElementById("settings-strava-oauth-status").textContent = "";
   document.getElementById("zone-model-status").textContent = "";
   document.getElementById("zone-model-preview").innerHTML = "";
   // Reset any per-session dismiss flags
@@ -325,6 +338,214 @@ function resolveApiMode(savedMode) {
 
 function isAutoProxyMode(savedMode) {
   return savedMode === "auto" && ["localhost","127.0.0.1"].includes(window.location.hostname);
+}
+
+function resolveProxyBase(savedMode) {
+  return resolveApiMode(savedMode) === "proxy";
+}
+
+async function stravaTokenExchangeViaProxy(body) {
+  const res = await fetch("./api/strava/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Strava token proxy error (${res.status})`);
+  return await res.json();
+}
+
+async function stravaTokenExchangeDirect(body) {
+  const form = new URLSearchParams(body);
+  const res = await fetch("https://www.strava.com/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: form.toString(),
+  });
+  if (!res.ok) throw new Error(`Strava token request failed (${res.status})`);
+  return await res.json();
+}
+
+async function exchangeStravaToken(body, settings) {
+  const shouldProxy = resolveProxyBase(settings.apiMode);
+  if (shouldProxy) {
+    try {
+      return await stravaTokenExchangeViaProxy(body);
+    } catch (err) {
+      if (!isAutoProxyMode(settings.apiMode)) throw err;
+    }
+  }
+  return await stravaTokenExchangeDirect(body);
+}
+
+function storeStravaTokenPayload(payload) {
+  localStorage.setItem("intervals_strava_access_token", payload.access_token || "");
+  localStorage.setItem("intervals_strava_refresh_token", payload.refresh_token || "");
+  localStorage.setItem("intervals_strava_expires_at_epoch", String(payload.expires_at || 0));
+  localStorage.setItem("intervals_strava_granted_scope", payload.scope || "");
+  document.getElementById("settings-strava-access-token").value = payload.access_token || "";
+  document.getElementById("settings-strava-oauth-status").textContent =
+    payload.access_token
+      ? `Connected (${payload.scope || "scope unknown"})`
+      : "Not connected";
+}
+
+async function refreshStravaTokenIfNeeded(settings) {
+  const nowEpoch = Math.floor(Date.now() / 1000);
+  if (settings.strava.accessToken && settings.strava.expiresAtEpoch > nowEpoch + 120) {
+    return settings.strava.accessToken;
+  }
+  if (!settings.strava.refreshToken) {
+    return settings.strava.accessToken;
+  }
+  const payload = await exchangeStravaToken(
+    {
+      client_id: settings.strava.clientId,
+      client_secret: settings.strava.clientSecret,
+      grant_type: "refresh_token",
+      refresh_token: settings.strava.refreshToken,
+    },
+    settings
+  );
+  storeStravaTokenPayload(payload);
+  return payload.access_token || "";
+}
+
+function startStravaOAuth() {
+  const settings = getSettings();
+  if (!settings.strava.clientId || !settings.strava.clientSecret) {
+    document.getElementById("settings-strava-status").textContent =
+      "Enter Strava Client ID and Client Secret first.";
+    return;
+  }
+  const stateToken = Math.random().toString(36).slice(2);
+  localStorage.setItem("intervals_strava_oauth_state", stateToken);
+  const redirectUri = `${window.location.origin}${window.location.pathname}`;
+  const url = new URL("https://www.strava.com/oauth/authorize");
+  url.searchParams.set("client_id", settings.strava.clientId);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("redirect_uri", redirectUri);
+  url.searchParams.set("approval_prompt", "auto");
+  url.searchParams.set("scope", "read");
+  url.searchParams.set("state", stateToken);
+  window.location.assign(url.toString());
+}
+
+async function handleStravaOAuthCallback() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("code")) return;
+  const code = url.searchParams.get("code") || "";
+  const stateParam = url.searchParams.get("state") || "";
+  const expectedState = localStorage.getItem("intervals_strava_oauth_state") || "";
+  const settings = getSettings();
+  const statusEl = document.getElementById("settings-strava-status");
+  try {
+    if (!code) throw new Error("Missing authorization code.");
+    if (!expectedState || stateParam !== expectedState) throw new Error("Invalid OAuth state.");
+    if (!settings.strava.clientId || !settings.strava.clientSecret) {
+      throw new Error("Missing client ID/client secret in settings.");
+    }
+    statusEl.textContent = "Completing Strava OAuth…";
+    const payload = await exchangeStravaToken(
+      {
+        client_id: settings.strava.clientId,
+        client_secret: settings.strava.clientSecret,
+        code,
+        grant_type: "authorization_code",
+      },
+      settings
+    );
+    storeStravaTokenPayload(payload);
+    statusEl.textContent = "Strava OAuth connected.";
+  } catch (err) {
+    statusEl.textContent = `Strava OAuth failed: ${err.message}`;
+  } finally {
+    localStorage.removeItem("intervals_strava_oauth_state");
+    const clean = new URL(window.location.href);
+    ["code", "state", "scope"].forEach((k) => clean.searchParams.delete(k));
+    window.history.replaceState({}, "", clean.toString());
+  }
+}
+
+async function stravaGet(path, settings, token) {
+  const mode = resolveApiMode(settings.apiMode);
+  if (mode === "proxy") {
+    try {
+      const qs = new URLSearchParams({ path, access_token: token });
+      const res = await fetch(`./api/strava/get?${qs}`);
+      if (!res.ok) throw new Error(`Strava proxy error (${res.status})`);
+      const data = await res.json();
+      return data.result;
+    } catch (err) {
+      if (!isAutoProxyMode(settings.apiMode)) throw err;
+    }
+  }
+  const res = await fetch(`https://www.strava.com/api/v3${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Strava request failed (${res.status})`);
+  return await res.json();
+}
+
+function mapSegmentEffortToInterval(effort) {
+  const segment = effort.segment || {};
+  const activity = effort.activity || {};
+  return {
+    interval_id: `strava-${effort.id}`,
+    activity_id: activity.id || `strava-activity-${effort.id}`,
+    activity_start_local: effort.start_date_local || effort.start_date || "",
+    date: String(effort.start_date_local || effort.start_date || "").slice(0, 10),
+    activity_name: segment.name || effort.name || "Strava segment",
+    activity_type: segment.activity_type || "",
+    label: segment.name || effort.name || "",
+    interval_type: "STRAVA_SEGMENT",
+    moving_time_s: Number(effort.elapsed_time || effort.moving_time || 0),
+    start_index: 0,
+    avg_watts: Number(effort.average_watts || 0),
+    weighted_watts: Number(effort.average_watts || 0),
+    avg_watts_kg: 0,
+    avg_hr: Number(effort.average_heartrate || 0),
+    max_hr: Number(effort.max_heartrate || 0),
+    training_load: 0,
+    decoupling: 0,
+    zone: null,
+  };
+}
+
+async function runStravaSegmentSearch(params, settings) {
+  const token = await refreshStravaTokenIfNeeded(settings);
+  if (!token) throw new Error("No Strava access token. Use Connect Strava first.");
+
+  let starredIds = null;
+  if (params.starredOnly) {
+    starredIds = new Set();
+    for (let page = 1; page <= 5; page++) {
+      const starred = await stravaGet(`/segments/starred?page=${page}&per_page=200`, settings, token);
+      if (!Array.isArray(starred) || !starred.length) break;
+      starred.forEach((s) => starredIds.add(Number(s.id)));
+      if (starred.length < 200) break;
+    }
+  }
+
+  const efforts = [];
+  for (let page = 1; page <= 5; page++) {
+    const chunk = await stravaGet(`/athlete/segment_efforts?page=${page}&per_page=200`, settings, token);
+    if (!Array.isArray(chunk) || !chunk.length) break;
+    efforts.push(...chunk);
+    if (chunk.length < 200) break;
+  }
+
+  const labelNeedle = params.label.trim().toLowerCase();
+  const typeNeedle = normalizeActivityType(params.activityType);
+  return efforts
+    .filter((effort) => {
+      const segment = effort.segment || {};
+      if (labelNeedle && !String(segment.name || effort.name || "").toLowerCase().includes(labelNeedle)) return false;
+      if (typeNeedle && normalizeActivityType(segment.activity_type || "") !== typeNeedle) return false;
+      if (starredIds && !starredIds.has(Number(segment.id))) return false;
+      return true;
+    })
+    .map(mapSegmentEffortToInterval)
+    .sort(compareIntervalsChronologically);
 }
 
 function saveIntervalsCache(intervals) {
@@ -921,6 +1142,31 @@ async function handleSearchSubmit(e) {
   }
 }
 
+async function handleStravaSearchSubmit(e) {
+  e.preventDefault();
+  const settings = getSettings();
+  const params = {
+    label: document.getElementById("strava-search-label").value.trim(),
+    activityType: document.getElementById("strava-search-type").value,
+    starredOnly: document.getElementById("strava-search-starred").checked,
+  };
+  const submit = document.getElementById("strava-search-submit");
+  const status = document.getElementById("strava-search-status");
+  submit.disabled = true;
+  status.textContent = "Searching Strava segments…";
+  try {
+    const results = await runStravaSegmentSearch(params, settings);
+    state.pendingSearchResults = results;
+    state.pendingSearchParams = null;
+    renderSearchPreview(results);
+    status.textContent = `${results.length} segment effort(s) ready to add.`;
+  } catch (err) {
+    status.textContent = `Strava search failed: ${err.message}`;
+  } finally {
+    submit.disabled = false;
+  }
+}
+
 /* ─── Init ───────────────────────────────────────────────────────────────── */
 function init() {
   const storedTheme = localStorage.getItem("webapp-theme") || localStorage.getItem("mockup-theme");
@@ -940,6 +1186,7 @@ function init() {
 
   loadSettingsToForm();
   updateSettingsCallouts();
+  handleStravaOAuthCallback();
   setScreen("search");
 
   document.getElementById("search-form").addEventListener("submit", handleSearchSubmit);
@@ -958,9 +1205,14 @@ function init() {
     if (!state.pendingSearchResults.length) return;
     commitIntervals(state.pendingSearchResults, state.pendingSearchParams);
   });
+  document.getElementById("strava-search-form").addEventListener("submit", handleStravaSearchSubmit);
+  document.getElementById("strava-search-form").addEventListener("reset", () => {
+    document.getElementById("strava-search-status").textContent = "";
+  });
   document.getElementById("settings-form").addEventListener("submit", saveSettings);
   document.getElementById("settings-save-mode").addEventListener("click", saveApiMode);
   document.getElementById("settings-save-strava").addEventListener("click", saveStravaSettings);
+  document.getElementById("settings-strava-connect").addEventListener("click", startStravaOAuth);
   document.getElementById("settings-reset").addEventListener("click", clearSettings);
   document.getElementById("settings-clear-interval-cache").addEventListener("click", () => {
     clearIntervalsCache();

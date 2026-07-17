@@ -91,6 +91,35 @@
             </div>
           </div>
         </div>
+
+        <div class="card" style="margin-top:.75rem">
+          <h1>Search Strava Segments</h1>
+          <p class="muted">Searches your Strava segment efforts and maps results to interval rows.</p>
+          <form id="strava-search-form" class="form-grid">
+            <label>Label
+              <input id="strava-search-label" type="text" placeholder="e.g. hill, segment name" />
+            </label>
+            <label>Activity type
+              <select id="strava-search-type">
+                <option value="">All types</option>
+                <option value="Run">Run</option>
+                <option value="Ride">Ride</option>
+              </select>
+            </label>
+            <label class="checkbox-label">
+              <span>&nbsp;</span>
+              <span class="checkbox-wrap">
+                <input id="strava-search-starred" type="checkbox" />
+                Starred segment only
+              </span>
+            </label>
+            <div class="form-actions">
+              <button type="submit" id="strava-search-submit" class="btn primary">Search segments</button>
+              <button type="reset" class="btn secondary">Reset</button>
+            </div>
+          </form>
+          <p id="strava-search-status" class="muted" style="margin-top:.75rem"></p>
+        </div>
       </section>
 
       <!-- ── Intervals ─────────────────────────────────────────────────────── -->
@@ -252,6 +281,10 @@
           <div class="settings-group">
             <h2>Strava Connection</h2>
             <p class="muted" style="margin:0 0 .5rem">Stored locally in this browser only.</p>
+            <div class="row" style="margin-bottom:.5rem; flex-wrap:wrap">
+              <button type="button" id="settings-strava-connect" class="btn secondary">Connect Strava (OAuth read)</button>
+              <span id="settings-strava-oauth-status" class="muted"></span>
+            </div>
             <div class="form-grid">
               <label>Client ID
                 <input id="settings-strava-client-id" type="text" placeholder="e.g. 29670" />

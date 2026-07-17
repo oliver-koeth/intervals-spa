@@ -16,7 +16,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -39,6 +39,28 @@ def _api_get(url: str, auth: str) -> Any:
         url,
         headers={
             "Authorization": auth,
+            "Accept": "application/json",
+            "User-Agent": USER_AGENT,
+        },
+    )
+    with urlopen(req, timeout=30) as resp:  # nosec B310
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _api_get_with_headers(url: str, headers: dict[str, str]) -> Any:
+    req = Request(url, headers=headers)
+    with urlopen(req, timeout=30) as resp:  # nosec B310
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _api_post_form(url: str, form_data: dict[str, str]) -> Any:
+    raw = urlencode(form_data).encode()
+    req = Request(
+        url,
+        data=raw,
+        method="POST",
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
             "Accept": "application/json",
             "User-Agent": USER_AGENT,
         },
@@ -157,6 +179,47 @@ def run_search(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return results
 
 
+def run_strava_token(payload: dict[str, Any]) -> dict[str, Any]:
+    client_id = str(payload.get("client_id", "")).strip()
+    client_secret = str(payload.get("client_secret", "")).strip()
+    grant_type = str(payload.get("grant_type", "")).strip()
+    if not client_id or not client_secret or not grant_type:
+        raise ValueError("client_id, client_secret and grant_type are required")
+
+    form: dict[str, str] = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "grant_type": grant_type,
+    }
+    if grant_type == "authorization_code":
+        code = str(payload.get("code", "")).strip()
+        if not code:
+            raise ValueError("code is required for authorization_code grant")
+        form["code"] = code
+    elif grant_type == "refresh_token":
+        refresh_token = str(payload.get("refresh_token", "")).strip()
+        if not refresh_token:
+            raise ValueError("refresh_token is required for refresh_token grant")
+        form["refresh_token"] = refresh_token
+    else:
+        raise ValueError("unsupported grant_type")
+
+    return _api_post_form("https://www.strava.com/oauth/token", form)
+
+
+def run_strava_get(path: str, access_token: str) -> Any:
+    if not path.startswith("/"):
+        raise ValueError("path must start with /")
+    return _api_get_with_headers(
+        f"https://www.strava.com/api/v3{path}",
+        {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+            "User-Agent": USER_AGENT,
+        },
+    )
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, directory=str(ROOT_DIR), **kwargs)
@@ -216,10 +279,36 @@ class Handler(SimpleHTTPRequestHandler):
                 _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
             return
 
+        if parsed.path == "/api/strava/get":
+            path = _qs("path")
+            access_token = _qs("access_token")
+            if not path or not access_token:
+                _json_response(
+                    self,
+                    HTTPStatus.BAD_REQUEST,
+                    {"error": "path and access_token are required"},
+                )
+                return
+            try:
+                _json_response(self, HTTPStatus.OK, {"result": run_strava_get(path, access_token)})
+            except ValueError as exc:
+                _json_response(self, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            except HTTPError as exc:
+                _json_response(self, HTTPStatus.BAD_GATEWAY, {"error": f"Upstream HTTP {exc.code}"})
+            except URLError as exc:
+                _json_response(
+                    self,
+                    HTTPStatus.BAD_GATEWAY,
+                    {"error": f"Upstream error: {exc.reason}"},
+                )
+            except Exception as exc:  # noqa: BLE001
+                _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+            return
+
         super().do_GET()
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path != "/api/search":
+        if self.path not in ("/api/search", "/api/strava/token"):
             _json_response(self, HTTPStatus.NOT_FOUND, {"error": "Not found"})
             return
 
@@ -227,7 +316,12 @@ class Handler(SimpleHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
             body = self.rfile.read(length).decode("utf-8")
             payload = json.loads(body or "{}")
-            results = run_search(payload)
+            if self.path == "/api/search":
+                results = run_search(payload)
+                _json_response(self, HTTPStatus.OK, {"results": results})
+            else:
+                token_payload = run_strava_token(payload)
+                _json_response(self, HTTPStatus.OK, token_payload)
         except ValueError as exc:
             _json_response(self, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             return
@@ -240,8 +334,6 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception as exc:  # noqa: BLE001
             _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
             return
-
-        _json_response(self, HTTPStatus.OK, {"results": results})
 
 
 def main() -> None:
