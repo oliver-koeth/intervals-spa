@@ -68,6 +68,12 @@ function formatSeconds(value) {
 
 function delay(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+function writeHrDiagnostics(payload) {
+  const pre = document.getElementById("hr-diagnostics");
+  if (!pre) return;
+  pre.textContent = JSON.stringify(payload, null, 2);
+}
+
 function isDark() { return document.body.classList.contains("theme-dark"); }
 
 function normalizeActivityType(type) {
@@ -1238,6 +1244,21 @@ async function renderRow2(item) {
   try {
     const settings = getSettings();
     const stream = await fetchHrStream(item.activity_id, settings, item.source || "intervals");
+    const diag = {
+      source: item.source || "intervals",
+      interval_id: item.interval_id,
+      activity_id: item.activity_id,
+      label: item.label || "",
+      date: item.date || "",
+      moving_time_s: Number(item.moving_time_s || 0),
+      avg_hr_metadata: Number(item.avg_hr || 0),
+      max_hr_metadata: Number(item.max_hr || 0),
+      item_start_index: Number(item.start_index || 0),
+      effort_start_iso: item.effort_start_iso || "",
+      activity_start_local: item.activity_start_local || "",
+      stream_time_len: Array.isArray(stream?.time) ? stream.time.length : 0,
+      stream_hr_len: Array.isArray(stream?.heartrate) ? stream.heartrate.length : 0,
+    };
 
     // For Strava items, recompute the true stream offset using the effort's
     // absolute start time vs the activity's actual start time.
@@ -1252,21 +1273,9 @@ async function renderRow2(item) {
       if (activityStartIso && Number.isFinite(effortEpoch) && Number.isFinite(activityEpoch)) {
         startIndex = Math.max(0, Math.round((effortEpoch - activityEpoch) / 1000));
       }
-      console.group("[HR-DIAG] Strava segment stream");
-      console.log("item.activity_id     :", item.activity_id);
-      console.log("item.effort_start_iso:", item.effort_start_iso);
-      console.log("item.start_index     :", item.start_index);
-      console.log("item.moving_time_s   :", item.moving_time_s);
-      console.log("item.avg_hr          :", item.avg_hr);
-      console.log("activityStartIso     :", activityStartIso);
-      console.log("effortEpoch          :", effortEpoch);
-      console.log("activityEpoch        :", activityEpoch);
-      console.log("computed startIndex  :", startIndex, "s");
-      console.log("stream.time length   :", stream?.time?.length);
-      console.log("stream.hr  length    :", stream?.heartrate?.length);
-      console.log("stream.time[0..4]    :", stream?.time?.slice(0, 5));
-      console.log("stream.hr at start   :", stream?.heartrate?.slice(startIndex, startIndex + 5));
-      console.groupEnd();
+      diag.activity_start_iso = activityStartIso || "";
+      diag.effort_epoch = Number.isFinite(effortEpoch) ? effortEpoch : null;
+      diag.activity_epoch = Number.isFinite(activityEpoch) ? activityEpoch : null;
       // startIndex is now elapsed seconds — sliceHrStream can use it directly.
     } else {
       // intervals.icu: start_index is an array index into the stream, NOT elapsed seconds.
@@ -1280,6 +1289,11 @@ async function renderRow2(item) {
     }
 
     const points = sliceHrStream(stream, startIndex, item.moving_time_s);
+    diag.computed_start_s = startIndex;
+    diag.points_count = points.length;
+    diag.points_first = points[0] || null;
+    diag.points_last = points[points.length - 1] || null;
+    writeHrDiagnostics(diag);
 
     // Zone chart — histogram from HR stream if model available, fallback otherwise
     const model = getSelectedZoneModel();
@@ -1297,6 +1311,12 @@ async function renderRow2(item) {
     }
   } catch (err) {
     console.warn("HR stream fetch failed:", err);
+    writeHrDiagnostics({
+      source: item?.source || "intervals",
+      interval_id: item?.interval_id || null,
+      activity_id: item?.activity_id || null,
+      error: String(err?.message || err || "Unknown error"),
+    });
     renderZoneFallback(item);
     loadPlaceholder("hr-stream", `HR stream: ${item.date}`, `Error: ${err.message}`);
   }
