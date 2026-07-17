@@ -1041,14 +1041,18 @@ function toStreamArray(streamPart) {
   return [];
 }
 
-async function fetchHrStream(activityId, settings, source = "intervals") {
-  const cacheKey = `${source}:${activityId}`;
-  if (hrStreamCache[cacheKey]) return hrStreamCache[cacheKey];
+async function fetchHrStream(activityId, settings, source = "intervals", stravaEffortId = "") {
+  const activityCacheKey = `${source}:${activityId}`;
+  const effortCacheKey = source === "strava" && stravaEffortId ? `strava-effort:${stravaEffortId}` : "";
 
-  const stored = loadHrStreamFromStorage(cacheKey);
-  if (stored && Array.isArray(stored.time) && Array.isArray(stored.heartrate)) {
-    hrStreamCache[cacheKey] = stored;
-    return stored;
+  const cacheCandidates = [activityCacheKey, effortCacheKey].filter(Boolean);
+  for (const key of cacheCandidates) {
+    if (hrStreamCache[key]) return hrStreamCache[key];
+    const stored = loadHrStreamFromStorage(key);
+    if (stored && Array.isArray(stored.time) && Array.isArray(stored.heartrate)) {
+      hrStreamCache[key] = stored;
+      return stored;
+    }
   }
 
   let result;
@@ -1064,13 +1068,28 @@ async function fetchHrStream(activityId, settings, source = "intervals") {
       result = {
         time: toStreamArray(raw?.time),
         heartrate: toStreamArray(raw?.heartrate),
+        __stream_scope: "activity",
       };
     } catch (err) {
       const msg = String(err?.message || "");
       if (msg.includes("401")) {
         throw new Error("Strava token missing scope activity:read_all. Reconnect Strava in Settings.");
       }
-      throw err;
+      if (msg.includes("404") && stravaEffortId) {
+        const fallbackRaw = await stravaGet(
+          `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate&key_by_type=true`,
+          settings,
+          token
+        );
+        result = {
+          time: toStreamArray(fallbackRaw?.time),
+          heartrate: toStreamArray(fallbackRaw?.heartrate),
+          __stream_scope: "segment_effort",
+          __segment_effort_id: stravaEffortId,
+        };
+      } else {
+        throw err;
+      }
     }
   } else {
     const mode = resolveApiMode(settings.apiMode);
@@ -1101,8 +1120,11 @@ async function fetchHrStream(activityId, settings, source = "intervals") {
     }
   }
 
-  hrStreamCache[cacheKey] = result;
-  saveHrStreamToStorage(cacheKey, result);
+  const writeKey = source === "strava" && result?.__stream_scope === "segment_effort" && effortCacheKey
+    ? effortCacheKey
+    : activityCacheKey;
+  hrStreamCache[writeKey] = result;
+  saveHrStreamToStorage(writeKey, result);
   return result;
 }
 
@@ -1282,11 +1304,18 @@ async function renderRow2(item) {
 
   try {
     const settings = getSettings();
-    const stream = await fetchHrStream(item.activity_id, settings, item.source || "intervals");
+    const effortIdForStream = item.strava_effort_id || parseStravaEffortId(item.interval_id);
+    const stream = await fetchHrStream(
+      item.activity_id,
+      settings,
+      item.source || "intervals",
+      effortIdForStream
+    );
     const diag = {
       source: item.source || "intervals",
       interval_id: item.interval_id,
       activity_id: item.activity_id,
+      strava_effort_id: effortIdForStream || "",
       label: item.label || "",
       date: item.date || "",
       moving_time_s: Number(item.moving_time_s || 0),
@@ -1297,6 +1326,7 @@ async function renderRow2(item) {
       activity_start_local: item.activity_start_local || "",
       stream_time_len: Array.isArray(stream?.time) ? stream.time.length : 0,
       stream_hr_len: Array.isArray(stream?.heartrate) ? stream.heartrate.length : 0,
+      stream_scope: stream?.__stream_scope || "unknown",
     };
 
     // For Strava items, recompute the true stream offset using the effort's
@@ -1308,7 +1338,7 @@ async function renderRow2(item) {
       const token = await refreshStravaTokenIfNeeded(settings);
       const activityStartIso = await fetchStravaActivityStart(item.activity_id, settings, token);
       let effortStartIso = item.effort_start_iso || "";
-      const effortId = item.strava_effort_id || parseStravaEffortId(item.interval_id);
+      const effortId = effortIdForStream;
       if (!effortStartIso && effortId) {
         effortStartIso = await fetchStravaEffortStart(effortId, settings, token);
       }
@@ -1322,6 +1352,10 @@ async function renderRow2(item) {
       diag.activity_start_iso = activityStartIso || "";
       diag.effort_epoch = Number.isFinite(effortEpoch) ? effortEpoch : null;
       diag.activity_epoch = Number.isFinite(activityEpoch) ? activityEpoch : null;
+      if (stream?.__stream_scope === "segment_effort") {
+        // Segment-effort streams already start at effort t=0.
+        startIndex = 0;
+      }
       // startIndex is now elapsed seconds — sliceHrStream can use it directly.
     } else {
       // intervals.icu: start_index is an array index into the stream, NOT elapsed seconds.
