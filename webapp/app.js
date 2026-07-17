@@ -24,7 +24,35 @@ const state = {
 const hrStreamCache = {};
 /** In-memory Strava activity start-time cache — keyed by activity_id. */
 const stravaActivityStartCache = {};
-const INTERVALS_CACHE_KEY = "intervals_cached_intervals_v1";
+
+const INTERVALS_CACHE_KEY   = "intervals_cached_intervals_v1";
+const HR_STREAM_LS_PREFIX   = "intervals_hr_stream:";   // localStorage key prefix for HR streams
+
+/** Persist a stream object to localStorage (silently skips on quota errors). */
+function saveHrStreamToStorage(cacheKey, stream) {
+  try {
+    localStorage.setItem(HR_STREAM_LS_PREFIX + cacheKey, JSON.stringify(stream));
+  } catch { /* quota or private-mode — ignore */ }
+}
+
+/** Load a stream object from localStorage; returns null if not found. */
+function loadHrStreamFromStorage(cacheKey) {
+  try {
+    const raw = localStorage.getItem(HR_STREAM_LS_PREFIX + cacheKey);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+/** Remove all HR stream entries from both in-memory and localStorage caches. */
+function clearHrStreamCache() {
+  for (const k of Object.keys(hrStreamCache)) delete hrStreamCache[k];
+  const toRemove = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith(HR_STREAM_LS_PREFIX)) toRemove.push(k);
+  }
+  toRemove.forEach((k) => localStorage.removeItem(k));
+}
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 function parseMmSs(input) {
@@ -1003,6 +1031,13 @@ async function fetchHrStream(activityId, settings, source = "intervals") {
   const cacheKey = `${source}:${activityId}`;
   if (hrStreamCache[cacheKey]) return hrStreamCache[cacheKey];
 
+  // Check localStorage before hitting the network
+  const stored = loadHrStreamFromStorage(cacheKey);
+  if (stored) {
+    hrStreamCache[cacheKey] = stored;
+    return stored;
+  }
+
   let result;
   if (source === "strava") {
     const token = await refreshStravaTokenIfNeeded(settings);
@@ -1054,6 +1089,7 @@ async function fetchHrStream(activityId, settings, source = "intervals") {
   }
 
   hrStreamCache[cacheKey] = result;
+  saveHrStreamToStorage(cacheKey, result);
   return result;
 }
 
@@ -1521,6 +1557,11 @@ function init() {
     hideSearchPreview("strava");
     renderIntervals();
     document.getElementById("settings-status").textContent = "Intervals cache deleted.";
+  });
+
+  document.getElementById("settings-clear-hr-cache").addEventListener("click", () => {
+    clearHrStreamCache();
+    document.getElementById("settings-status").textContent = "HR stream cache deleted.";
   });
   document.getElementById("load-zone-models").addEventListener("click", handleLoadZoneModels);
   // Callout dismiss buttons
