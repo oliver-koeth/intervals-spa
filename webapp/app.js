@@ -1259,13 +1259,26 @@ async function renderRow2(item) {
     if (item.source === "strava" && item.effort_start_iso && item.activity_id) {
       const token = await refreshStravaTokenIfNeeded(settings);
       const activityStartIso = await fetchStravaActivityStart(item.activity_id, settings, token);
-      if (activityStartIso) {
-        const effortEpoch   = Date.parse(item.effort_start_iso);
-        const activityEpoch = Date.parse(activityStartIso);
-        if (Number.isFinite(effortEpoch) && Number.isFinite(activityEpoch)) {
-          startIndex = Math.max(0, Math.round((effortEpoch - activityEpoch) / 1000));
-        }
+      const effortEpoch   = Date.parse(item.effort_start_iso);
+      const activityEpoch = Date.parse(activityStartIso);
+      if (activityStartIso && Number.isFinite(effortEpoch) && Number.isFinite(activityEpoch)) {
+        startIndex = Math.max(0, Math.round((effortEpoch - activityEpoch) / 1000));
       }
+      console.group("[HR-DIAG] Strava segment stream");
+      console.log("item.activity_id     :", item.activity_id);
+      console.log("item.effort_start_iso:", item.effort_start_iso);
+      console.log("item.start_index     :", item.start_index);
+      console.log("item.moving_time_s   :", item.moving_time_s);
+      console.log("item.avg_hr          :", item.avg_hr);
+      console.log("activityStartIso     :", activityStartIso);
+      console.log("effortEpoch          :", effortEpoch);
+      console.log("activityEpoch        :", activityEpoch);
+      console.log("computed startIndex  :", startIndex, "s");
+      console.log("stream.time length   :", stream?.time?.length);
+      console.log("stream.hr  length    :", stream?.heartrate?.length);
+      console.log("stream.time[0..4]    :", stream?.time?.slice(0, 5));
+      console.log("stream.hr at start   :", stream?.heartrate?.slice(startIndex, startIndex + 5));
+      console.groupEnd();
       // startIndex is now elapsed seconds — sliceHrStream can use it directly.
     } else {
       // intervals.icu: start_index is an array index into the stream, NOT elapsed seconds.
