@@ -1442,8 +1442,15 @@ function init() {
     const resetRange = defaultDateRange();
     document.getElementById("strava-search-from").value = resetRange.from;
     document.getElementById("strava-search-to").value = resetRange.to;
+    // Reset checkbox to checked default and hide warning
+    document.getElementById("strava-search-starred").checked = true;
+    document.getElementById("strava-nonstarred-warn-wrap").style.display = "none";
     hideSearchPreview("strava");
     document.getElementById("strava-search-status").textContent = "";
+  });
+  document.getElementById("strava-search-starred").addEventListener("change", (e) => {
+    document.getElementById("strava-nonstarred-warn-wrap").style.display =
+      e.target.checked ? "none" : "";
   });
   document.getElementById("strava-search-preview-cancel").addEventListener("click", () => {
     hideSearchPreview("strava");

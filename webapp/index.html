@@ -123,8 +123,14 @@
             <label class="checkbox-label">
               <span>&nbsp;</span>
               <span class="checkbox-wrap">
-                <input id="strava-search-starred" type="checkbox" />
+                <input id="strava-search-starred" type="checkbox" checked />
                 Starred segment only
+              </span>
+            </label>
+            <label class="checkbox-label" id="strava-nonstarred-warn-wrap" style="display:none">
+              <span>&nbsp;</span>
+              <span class="callout callout-warn" style="margin:0;font-size:.8rem;padding:.4rem .6rem">
+                ⚠ Without "Starred segment only" results may be incomplete — Strava limits activity scanning to the last 30 activities.
               </span>
             </label>
             <div class="form-actions search-actions">
