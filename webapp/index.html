@@ -16,7 +16,15 @@
         <button class="nav-btn" data-screen-target="compare">Compare</button>
         <button class="nav-btn" data-screen-target="settings">Settings</button>
       </nav>
-      <button id="theme-toggle" class="btn secondary">Light mode</button>
+      <div class="row">
+        <a
+          href="https://github.com/oliver-koeth/intervals-spa/issues"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="btn secondary"
+        >Open issue</a>
+        <button id="theme-toggle" class="btn secondary">Light mode</button>
+      </div>
     </header>
 
     <main class="container">
@@ -44,6 +52,12 @@
             <label>Margin (mm:ss)
               <input id="search-margin" type="text" placeholder="e.g. 00:10" />
             </label>
+            <label>Date from
+              <input id="search-from" type="date" />
+            </label>
+            <label>Date to
+              <input id="search-to" type="date" />
+            </label>
             <label class="checkbox-label">
               <span>&nbsp;</span>
               <span class="checkbox-wrap">
@@ -51,13 +65,7 @@
                 Exclude recovery intervals
               </span>
             </label>
-            <label>Date from
-              <input id="search-from" type="date" />
-            </label>
-            <label>Date to
-              <input id="search-to" type="date" />
-            </label>
-            <div class="form-actions">
+            <div class="form-actions search-actions">
               <button type="submit" id="search-submit" class="btn primary">Search</button>
               <button type="reset" class="btn secondary">Reset</button>
             </div>
@@ -106,6 +114,12 @@
                 <option value="Ride">Ride</option>
               </select>
             </label>
+            <label>Date from
+              <input id="strava-search-from" type="date" />
+            </label>
+            <label>Date to
+              <input id="strava-search-to" type="date" />
+            </label>
             <label class="checkbox-label">
               <span>&nbsp;</span>
               <span class="checkbox-wrap">
@@ -113,8 +127,8 @@
                 Starred segment only
               </span>
             </label>
-            <div class="form-actions">
-              <button type="submit" id="strava-search-submit" class="btn primary">Search segments</button>
+            <div class="form-actions search-actions">
+              <button type="submit" id="strava-search-submit" class="btn primary">Search</button>
               <button type="reset" class="btn secondary">Reset</button>
             </div>
           </form>
@@ -252,11 +266,32 @@
       <section id="screen-settings" class="screen">
         <div class="card">
           <h1>Settings</h1>
-          <p class="muted">Saved in browser local storage — never sent anywhere except to intervals.icu directly.</p>
+          <div class="settings-group">
+            <h2>Data privacy</h2>
+            <div class="callout">
+              <span class="callout-icon">ℹ</span>
+              <span class="callout-body">
+                This app stores settings and optional intervals cache in your browser <strong>Local Storage</strong>.
+                This implementation has no built-in analytics, tracking pixels, or telemetry.
+                Data is sent only when you trigger API actions, and only to
+                <a href="https://intervals.icu/" target="_blank" rel="noopener">intervals.icu</a>,
+                <a href="https://www.strava.com/" target="_blank" rel="noopener">Strava</a>,
+                and optionally your own local proxy endpoint (<code>/api/*</code>) when using Proxy mode.
+                On page load, the chart library is also fetched from
+                <a href="https://www.jsdelivr.com/" target="_blank" rel="noopener">jsDelivr CDN</a>.
+                Use <strong>Reset all settings</strong> to remove stored values from this browser.
+              </span>
+            </div>
+            <p class="muted" style="margin:0">
+              Note: this is a technical transparency summary, not a complete GDPR privacy notice.
+            </p>
+          </div>
+
+          <hr class="settings-divider" />
 
           <!-- ── Group 1: Account ── -->
           <div class="settings-group">
-            <h2>Account</h2>
+            <h2>Intervals.icu Connection</h2>
             <div id="callout-account" class="callout callout-warn">
               <span class="callout-icon">⚠</span>
               <span class="callout-body">
@@ -274,7 +309,7 @@
               <label>API Key
                 <input id="settings-api-key" type="password" placeholder="intervals.icu API key" />
               </label>
-              <div class="form-actions">
+              <div class="form-actions save-actions">
                 <button type="submit" class="btn primary">Save</button>
               </div>
             </form>
@@ -283,7 +318,42 @@
 
           <hr class="settings-divider" />
 
-          <!-- ── Group 2: API Mode ── -->
+          <!-- ── Group 3: Strava Connection ── -->
+          <div class="settings-group">
+            <h2>Strava Connection</h2>
+            <p class="muted" style="margin:0 0 .5rem">Stored locally in this browser only.</p>
+            <div id="callout-strava" class="callout callout-warn hidden">
+              <span class="callout-icon">⚠</span>
+              <span class="callout-body">
+                Enter your Strava <strong>Client ID</strong> and <strong>Client Secret</strong>, then connect OAuth to
+                retrieve an access token with <em>read + activity:read_all</em> scope for segment search and HR streams.
+              </span>
+              <button class="callout-dismiss" data-dismiss="callout-strava" title="Dismiss">✕</button>
+            </div>
+            <div class="row" style="margin-bottom:.5rem; flex-wrap:wrap">
+              <button type="button" id="settings-strava-connect" class="btn secondary">Connect Strava (OAuth read + activity:read_all)</button>
+              <span id="settings-strava-oauth-status" class="muted"></span>
+            </div>
+            <div class="form-grid">
+              <label>Client ID
+                <input id="settings-strava-client-id" type="text" placeholder="e.g. 29670" />
+              </label>
+              <label>Client Secret
+                <input id="settings-strava-client-secret" type="password" placeholder="Strava client secret" />
+              </label>
+              <label>Access Token
+                <input id="settings-strava-access-token" type="password" placeholder="Strava access token" />
+              </label>
+              <div class="form-actions save-actions">
+                <button type="button" id="settings-save-strava" class="btn primary">Save</button>
+              </div>
+            </div>
+            <p id="settings-strava-status" class="muted" style="margin:.5rem 0 0"></p>
+          </div>
+
+          <hr class="settings-divider" />
+
+          <!-- ── Group 4: API Mode ── -->
           <div class="settings-group">
             <h2>API Mode</h2>
             <div id="callout-api-mode" class="callout hidden">
@@ -304,7 +374,7 @@
                   <option value="direct">Direct intervals.icu</option>
                 </select>
               </label>
-              <div class="form-actions">
+              <div class="form-actions save-actions">
                 <button type="button" id="settings-save-mode" class="btn primary">Save</button>
               </div>
             </div>
@@ -312,37 +382,7 @@
 
           <hr class="settings-divider" />
 
-          <!-- ── Group 3: Strava Connection ── -->
-          <div class="settings-group">
-            <h2>Strava Connection</h2>
-            <p class="muted" style="margin:0 0 .5rem">Stored locally in this browser only.</p>
-            <div class="row" style="margin-bottom:.5rem; flex-wrap:wrap">
-              <button type="button" id="settings-strava-connect" class="btn secondary">Connect Strava (OAuth read + activity:read_all)</button>
-              <span id="settings-strava-oauth-status" class="muted"></span>
-            </div>
-            <div class="form-grid">
-              <label>Client ID
-                <input id="settings-strava-client-id" type="text" placeholder="e.g. 29670" />
-              </label>
-              <label>Client Secret
-                <input id="settings-strava-client-secret" type="password" placeholder="Strava client secret" />
-              </label>
-              <label>Access Token
-                <input id="settings-strava-access-token" type="password" placeholder="Strava access token" />
-              </label>
-              <label>Scope
-                <input id="settings-strava-scope" type="text" placeholder="e.g. read" />
-              </label>
-              <div class="form-actions">
-                <button type="button" id="settings-save-strava" class="btn primary">Save Strava</button>
-              </div>
-            </div>
-            <p id="settings-strava-status" class="muted" style="margin:.5rem 0 0"></p>
-          </div>
-
-          <hr class="settings-divider" />
-
-          <!-- ── Group 4: HR Zone Model ── -->
+          <!-- ── Group 5: HR Zone Model ── -->
           <div class="settings-group">
             <h2>HR Zone Model</h2>
             <div id="callout-zone-model" class="callout hidden">
@@ -381,6 +421,15 @@
       </section>
 
     </main>
+    <footer class="footer">
+      <div class="footer-inner">
+        <span>© Oliver Koeth</span>
+        <a href="./impressum.html">Impressum</a>
+        <a href="./datenschutz.html">Datenschutz</a>
+        <a href="./license.html">Lizenz (GPL)</a>
+        <a href="https://github.com/oliver-koeth/intervals-spa" target="_blank" rel="noopener noreferrer">Source</a>
+      </div>
+    </footer>
     <script src="./app.js"></script>
   </body>
 </html>

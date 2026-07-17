@@ -120,6 +120,7 @@ input, select {
   font-size: 0.85rem;
   white-space: nowrap;
 }
+a.btn { text-decoration: none; display: inline-block; }
 .btn.primary {
   background: var(--primary);
   color: var(--primary-text);
@@ -132,6 +133,16 @@ input, select {
   gap: 0.5rem;
   align-items: flex-end;
   padding-bottom: 2px;
+}
+.search-actions {
+  grid-column: 1 / -1;
+  align-items: flex-start;
+  padding-bottom: 0;
+}
+.save-actions {
+  grid-column: 1 / -1;
+  align-items: flex-start;
+  padding-bottom: 0;
 }
 .checkbox-wrap {
   display: flex;
@@ -228,6 +239,31 @@ tr:hover td { background: rgba(148,163,184,0.07); }
   border-radius: 0.5rem;
 }
 .chart-span2 { grid-column: span 2; }
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.footer {
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.footer-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0.8rem 1rem;
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.footer a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.footer a:hover {
+  text-decoration: underline;
+  color: var(--text);
+}
 
 /* ── Settings callouts ───────────────────────────────────────────────────── */
 .settings-group {

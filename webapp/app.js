@@ -129,7 +129,6 @@ function loadSettingsToForm() {
   document.getElementById("settings-strava-client-id").value = s.strava.clientId;
   document.getElementById("settings-strava-client-secret").value = s.strava.clientSecret;
   document.getElementById("settings-strava-access-token").value = s.strava.accessToken;
-  document.getElementById("settings-strava-scope").value = s.strava.scope;
   const exp = s.strava.expiresAtEpoch
     ? new Date(s.strava.expiresAtEpoch * 1000).toISOString()
     : "";
@@ -165,12 +164,9 @@ function saveStravaSettings() {
     "intervals_strava_access_token",
     document.getElementById("settings-strava-access-token").value.trim()
   );
-  localStorage.setItem(
-    "intervals_strava_scope",
-    document.getElementById("settings-strava-scope").value.trim()
-  );
   document.getElementById("settings-strava-oauth-status").textContent = "Saved manually (no OAuth refresh token).";
   document.getElementById("settings-strava-status").textContent = "Strava settings saved.";
+  updateSettingsCallouts();
 }
 
 function clearSettings() {
@@ -203,6 +199,7 @@ function clearSettings() {
 function updateSettingsCallouts() {
   const s = getSettings();
   const needsAccount = !s.athleteId || !s.apiKey;
+  const needsStrava = !s.strava.clientId || !s.strava.clientSecret || !s.strava.accessToken;
   const needsMode = s.apiMode !== "auto";
   const needsZone = !s.zoneModelId || !s.zoneModels.length;
 
@@ -217,6 +214,7 @@ function updateSettingsCallouts() {
   }
 
   setCallout("callout-account",    needsAccount);
+  setCallout("callout-strava",     needsStrava);
   setCallout("callout-api-mode",   needsMode);
   setCallout("callout-zone-model", needsZone);
 }
@@ -498,6 +496,11 @@ async function stravaGet(path, settings, token) {
 function mapSegmentEffortToInterval(effort) {
   const segment = effort.segment || {};
   const activity = effort.activity || {};
+  const effortStart = Date.parse(effort.start_date_local || effort.start_date || "");
+  const activityStart = Date.parse(effort.__activityStart || "");
+  const startOffsetS = Number.isFinite(effortStart) && Number.isFinite(activityStart)
+    ? Math.max(0, Math.round((effortStart - activityStart) / 1000))
+    : 0;
   return {
     interval_id: `strava-${effort.id}`,
     activity_id: activity.id || `strava-activity-${effort.id}`,
@@ -509,7 +512,7 @@ function mapSegmentEffortToInterval(effort) {
     interval_type: "STRAVA_SEGMENT",
     source: "strava",
     moving_time_s: Number(effort.elapsed_time || effort.moving_time || 0),
-    start_index: 0,
+    start_index: startOffsetS,
     avg_watts: Number(effort.average_watts || 0),
     weighted_watts: Number(effort.average_watts || 0),
     avg_watts_kg: 0,
@@ -521,30 +524,117 @@ function mapSegmentEffortToInterval(effort) {
   };
 }
 
-async function runStravaSegmentSearch(params, settings) {
+/**
+ * Fetch all athlete efforts for a single segment from Strava.
+ * Uses GET /segments/{id}/all_efforts with optional date range.
+ * Returns raw effort objects (augmented with __segment for mapping).
+ */
+async function fetchAllEffortsForSegment(segmentId, segment, params, settings, token) {
+  const efforts = [];
+  const qs = new URLSearchParams({ per_page: "200" });
+  if (params.startDate) qs.set("start_date_local", `${params.startDate}T00:00:00Z`);
+  if (params.endDate)   qs.set("end_date_local",   `${params.endDate}T23:59:59Z`);
+  for (let page = 1; page <= 10; page++) {
+    qs.set("page", String(page));
+    const batch = await stravaGet(`/segments/${segmentId}/all_efforts?${qs}`, settings, token);
+    if (!Array.isArray(batch) || !batch.length) break;
+    batch.forEach((e) => {
+      // Enrich with segment info (all_efforts results omit full segment detail)
+      efforts.push({
+        ...e,
+        segment: e.segment ?? segment,
+        __activityType: segment.activity_type || "",
+        __activityName: segment.name || "",
+        __activityStart: e.start_date_local || e.start_date || "",
+      });
+    });
+    if (batch.length < 200) break;
+  }
+  return efforts;
+}
+
+async function runStravaSegmentSearch(params, settings, onProgress = () => {}) {
+  const emitProgress = (text) => onProgress(`Searching Strava segments… ${text}`);
+  emitProgress("Preparing request.");
   const token = await refreshStravaTokenIfNeeded(settings);
   if (!token) throw new Error("No Strava access token. Use Connect Strava first.");
 
-  let processedActivities = 0;
-  let starredIds = null;
+  const labelNeedle = params.label.trim().toLowerCase();
+  const typeNeedle = normalizeActivityType(params.activityType);
+
+  // ── Starred path: load starred segments, then fetch all efforts per segment ──
+  // This is much more complete than activity scanning: Strava returns every
+  // effort the athlete has on that segment, respecting the date range filter.
   if (params.starredOnly) {
-    starredIds = new Set();
-    for (let page = 1; page <= 5; page++) {
-      const starred = await stravaGet(`/segments/starred?page=${page}&per_page=200`, settings, token);
-      if (!Array.isArray(starred) || !starred.length) break;
-      starred.forEach((s) => starredIds.add(Number(s.id)));
-      if (starred.length < 200) break;
+    emitProgress("Loading starred segments…");
+    const starredSegments = [];
+    for (let page = 1; page <= 10; page++) {
+      emitProgress(`Loading starred segments (page ${page})…`);
+      const batch = await stravaGet(
+        `/segments/starred?page=${page}&per_page=200`,
+        settings,
+        token
+      );
+      if (!Array.isArray(batch) || !batch.length) break;
+      batch.forEach((s) => starredSegments.push(s));
+      if (batch.length < 200) break;
     }
+    emitProgress(`${starredSegments.length} starred segment(s) found. Filtering by label…`);
+
+    // Filter segments by label first so we only fetch efforts for matching ones
+    const matchingSegments = labelNeedle
+      ? starredSegments.filter((s) => String(s.name || "").toLowerCase().includes(labelNeedle))
+      : starredSegments;
+
+    emitProgress(`${matchingSegments.length} matching segment(s). Fetching your efforts…`);
+
+    const allEfforts = [];
+    for (let i = 0; i < matchingSegments.length; i++) {
+      const seg = matchingSegments[i];
+      emitProgress(`Fetching efforts for "${seg.name}" (${i + 1}/${matchingSegments.length})…`);
+      try {
+        const efforts = await fetchAllEffortsForSegment(seg.id, seg, params, settings, token);
+        const typeFiltered = typeNeedle
+          ? efforts.filter((e) => normalizeActivityType(e.__activityType) === typeNeedle)
+          : efforts;
+        allEfforts.push(...typeFiltered);
+        emitProgress(`"${seg.name}": ${typeFiltered.length} effort(s) in range. Total so far: ${allEfforts.length}.`);
+      } catch (err) {
+        const msg = String(err?.message || "");
+        if (msg.includes("401")) {
+          throw new Error("Strava token missing scope activity:read_all. Reconnect Strava in Settings.");
+        }
+        // Skip segments that can't be read (e.g. private)
+        console.warn(`Skipping segment ${seg.id} (${seg.name}): ${msg}`);
+      }
+    }
+
+    emitProgress("Done.");
+    return allEfforts
+      .map(mapSegmentEffortToInterval)
+      .sort(compareIntervalsChronologically);
   }
 
-  // Strava does not provide a direct "all segment efforts" endpoint for the athlete.
-  // Fetch recent activities, then collect each activity's segment efforts.
+  // ── Non-starred path: scan athlete activities ──────────────────────────────
+  // There is no Strava endpoint to search segments by name for all athletes,
+  // so we fall back to scanning recent activities and collecting efforts.
+  const afterEpoch = params.startDate
+    ? Math.floor(new Date(`${params.startDate}T00:00:00`).getTime() / 1000)
+    : 0;
+  const beforeEpoch = params.endDate
+    ? Math.floor(new Date(`${params.endDate}T23:59:59`).getTime() / 1000)
+    : 0;
+
   const efforts = [];
-  const typeNeedle = normalizeActivityType(params.activityType);
+  let processedActivities = 0;
   for (let page = 1; page <= 5; page++) {
+    emitProgress(`Scanning activities page ${page}/5…`);
+    const activityQuery = new URLSearchParams({ page: String(page), per_page: "50" });
+    if (afterEpoch > 0) activityQuery.set("after", String(afterEpoch));
+    if (beforeEpoch > 0) activityQuery.set("before", String(beforeEpoch));
     let activities;
     try {
-      activities = await stravaGet(`/athlete/activities?page=${page}&per_page=50`, settings, token);
+      activities = await stravaGet(`/athlete/activities?${activityQuery}`, settings, token);
     } catch (err) {
       const msg = String(err?.message || "");
       if (msg.includes("401")) {
@@ -556,6 +646,7 @@ async function runStravaSegmentSearch(params, settings) {
     for (const activity of activities) {
       if (processedActivities >= 30) break;
       processedActivities += 1;
+      emitProgress(`Scanning activity ${processedActivities}/30…`);
       const activityType = String(activity.type || "");
       if (typeNeedle && normalizeActivityType(activityType) !== typeNeedle) continue;
       try {
@@ -565,14 +656,15 @@ async function runStravaSegmentSearch(params, settings) {
           token
         );
         const segmentEfforts = Array.isArray(detail.segment_efforts) ? detail.segment_efforts : [];
-        segmentEfforts.forEach((effort) => {
+        segmentEfforts.forEach((e) => {
           efforts.push({
-            ...effort,
+            ...e,
             __activityType: detail.type || activityType,
             __activityName: detail.name || activity.name || "",
             __activityStart: detail.start_date_local || detail.start_date || "",
           });
         });
+        emitProgress(`Scanning activity ${processedActivities}/30… found ${efforts.length} effort(s).`);
       } catch {
         // Skip activities that cannot be read with current token scope.
       }
@@ -581,15 +673,19 @@ async function runStravaSegmentSearch(params, settings) {
     if (activities.length < 50) break;
   }
 
-  const labelNeedle = params.label.trim().toLowerCase();
+  emitProgress("Filtering results…");
   return efforts
     .filter((effort) => {
       const segment = effort.segment || {};
       if (labelNeedle && !String(segment.name || effort.name || "").toLowerCase().includes(labelNeedle)) return false;
-      if (starredIds && !starredIds.has(Number(segment.id))) return false;
       return true;
     })
     .map(mapSegmentEffortToInterval)
+    .filter((item) => {
+      if (params.startDate && item.date < params.startDate) return false;
+      if (params.endDate && item.date > params.endDate) return false;
+      return true;
+    })
     .sort(compareIntervalsChronologically);
 }
 
@@ -650,13 +746,46 @@ function renderSearchPreview(results, kind) {
   document.getElementById(`${prefix}-preview`).classList.remove("hidden");
 }
 
+function intervalIdentity(item) {
+  return [
+    item.source || "intervals",
+    item.activity_id || "",
+    item.interval_id || "",
+    Number(item.start_index) || 0,
+  ].join("|");
+}
+
+function mergeIntervals(existing, incoming) {
+  const byId = new Map();
+  existing.forEach((item) => byId.set(intervalIdentity(item), item));
+  let added = 0;
+  let updated = 0;
+  incoming.forEach((raw) => {
+    const item = { ...raw, source: raw.source || "intervals" };
+    const key = intervalIdentity(item);
+    if (byId.has(key)) {
+      byId.set(key, item);
+      updated += 1;
+    } else {
+      byId.set(key, item);
+      added += 1;
+    }
+  });
+  return { items: [...byId.values()], added, updated };
+}
+
 function commitIntervals(results, params) {
-  state.intervals = results.sort(compareIntervalsChronologically);
+  const merged = mergeIntervals(state.intervals, results);
+  state.intervals = merged.items.sort(compareIntervalsChronologically);
   state.filtered  = [...state.intervals];
   state.selected.clear();
   renderIntervals();
   saveIntervalsCache(state.intervals);
-  setStatus(`Added ${results.length} interval(s).`);
+  setStatus(
+    merged.updated
+      ? `Added ${merged.added} interval(s), updated ${merged.updated} duplicate(s).`
+      : `Added ${merged.added} interval(s).`
+  );
   if (params) {
     document.getElementById("filter-label").value = params.label;
     document.getElementById("filter-type").value  = params.activityType;
@@ -772,7 +901,9 @@ function renderIntervals() {
     const id = String(item.interval_id);
     const z  = item.zone;
     const source = item.source || "intervals";
-    const sourceIcon = source === "strava" ? "🏁" : "📈";
+    const sourceIcon = source === "strava"
+      ? '<span style="color:#f59e0b;font-weight:700">S</span>'
+      : '<span style="color:#ef4444;font-weight:700">I</span>';
     const sourceLabel = source === "strava" ? "Strava" : "Intervals.icu";
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -853,50 +984,80 @@ function mockHrStream(item) {
 }
 
 /* ─── HR stream fetch (with cache) ──────────────────────────────────────── */
-async function fetchHrStream(activityId, settings) {
-  if (hrStreamCache[activityId]) return hrStreamCache[activityId];
+function toStreamArray(streamPart) {
+  if (Array.isArray(streamPart)) return streamPart;
+  if (streamPart && Array.isArray(streamPart.data)) return streamPart.data;
+  return [];
+}
 
-  const mode = resolveApiMode(settings.apiMode);
+async function fetchHrStream(activityId, settings, source = "intervals") {
+  const cacheKey = `${source}:${activityId}`;
+  if (hrStreamCache[cacheKey]) return hrStreamCache[cacheKey];
+
   let result;
-
-  if (mode === "proxy") {
+  if (source === "strava") {
+    const token = await refreshStravaTokenIfNeeded(settings);
+    if (!token) throw new Error("No Strava access token. Use Connect Strava first.");
     try {
-      const qs = new URLSearchParams({ activity_id: activityId, api_key: settings.apiKey });
-      const res = await fetch(`./api/streams?${qs}`);
-      if (!res.ok) throw new Error(`Streams proxy error (${res.status})`);
-      result = await res.json();
+      const raw = await stravaGet(
+        `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate&key_by_type=true`,
+        settings,
+        token
+      );
+      result = {
+        time: toStreamArray(raw?.time),
+        heartrate: toStreamArray(raw?.heartrate),
+      };
     } catch (err) {
-      if (!isAutoProxyMode(settings.apiMode)) throw err;
-      // Auto mode fallback: retry direct.
+      const msg = String(err?.message || "");
+      if (msg.includes("401")) {
+        throw new Error("Strava token missing scope activity:read_all. Reconnect Strava in Settings.");
+      }
+      throw err;
+    }
+  } else {
+    const mode = resolveApiMode(settings.apiMode);
+    if (mode === "proxy") {
+      try {
+        const qs = new URLSearchParams({ activity_id: activityId, api_key: settings.apiKey });
+        const res = await fetch(`./api/streams?${qs}`);
+        if (!res.ok) throw new Error(`Streams proxy error (${res.status})`);
+        result = await res.json();
+      } catch (err) {
+        if (!isAutoProxyMode(settings.apiMode)) throw err;
+        // Auto mode fallback: retry direct.
+      }
+    }
+
+    if (!result) {
+      const auth = `Basic ${btoa(`API_KEY:${settings.apiKey}`)}`;
+      const res = await fetch(
+        `https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/streams?types=heartrate,time`,
+        { headers: { Authorization: auth, Accept: "application/json" } }
+      );
+      if (!res.ok) throw new Error(`Streams request failed (${res.status})`);
+      const raw = await res.json();
+      result = {
+        time:      (raw.find((s) => s.type === "time")?.data)      || [],
+        heartrate: (raw.find((s) => s.type === "heartrate")?.data) || [],
+      };
     }
   }
 
-  if (!result) {
-    const auth = `Basic ${btoa(`API_KEY:${settings.apiKey}`)}`;
-    const res = await fetch(
-      `https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/streams?types=heartrate,time`,
-      { headers: { Authorization: auth, Accept: "application/json" } }
-    );
-    if (!res.ok) throw new Error(`Streams request failed (${res.status})`);
-    const raw = await res.json();
-    result = {
-      time:      (raw.find((s) => s.type === "time")?.data)      || [],
-      heartrate: (raw.find((s) => s.type === "heartrate")?.data) || [],
-    };
-  }
-
-  hrStreamCache[activityId] = result;
+  hrStreamCache[cacheKey] = result;
   return result;
 }
 
 /** Extract the HR data points for a single interval from the full activity stream. */
 function sliceHrStream(stream, startIndex, movingTimeS) {
-  const endIndex = startIndex + movingTimeS;
+  const safeStart = Number(startIndex) || 0;
+  const endIndex = safeStart + (Number(movingTimeS) || 0);
   const points = [];
   for (let i = 0; i < stream.time.length; i++) {
     const t = stream.time[i];
-    if (t >= startIndex && t < endIndex) {
-      points.push([(t - startIndex) / 60, stream.heartrate[i]]);
+    const hr = stream.heartrate[i];
+    if (t >= safeStart && t < endIndex) {
+      if (typeof hr === "number") points.push([(t - safeStart) / 60, hr]);
     }
   }
   return points;
@@ -1024,7 +1185,7 @@ async function renderRow2(item) {
 
   try {
     const settings = getSettings();
-    const stream = await fetchHrStream(item.activity_id, settings);
+    const stream = await fetchHrStream(item.activity_id, settings, item.source || "intervals");
     const points = sliceHrStream(stream, item.start_index, item.moving_time_s);
 
     // Zone chart — histogram from HR stream if model available, fallback otherwise
@@ -1205,9 +1366,16 @@ async function handleSearchSubmit(e) {
 async function handleStravaSearchSubmit(e) {
   e.preventDefault();
   const settings = getSettings();
+  const defaultRange = defaultDateRange();
+  const resolvedStartDate = document.getElementById("strava-search-from").value || defaultRange.from;
+  const resolvedEndDate = document.getElementById("strava-search-to").value || defaultRange.to;
+  document.getElementById("strava-search-from").value = resolvedStartDate;
+  document.getElementById("strava-search-to").value = resolvedEndDate;
   const params = {
     label: document.getElementById("strava-search-label").value.trim(),
     activityType: document.getElementById("strava-search-type").value,
+    startDate: resolvedStartDate,
+    endDate: resolvedEndDate,
     starredOnly: document.getElementById("strava-search-starred").checked,
   };
   const submit = document.getElementById("strava-search-submit");
@@ -1215,7 +1383,9 @@ async function handleStravaSearchSubmit(e) {
   submit.disabled = true;
   status.textContent = "Searching Strava segments…";
   try {
-    const results = await runStravaSegmentSearch(params, settings);
+    const results = await runStravaSegmentSearch(params, settings, (text) => {
+      status.textContent = text;
+    });
     state.pendingStravaResults = results;
     renderSearchPreview(results, "strava");
     hideSearchPreview("intervals");
@@ -1238,6 +1408,8 @@ function init() {
   const range = defaultDateRange();
   document.getElementById("search-from").value = range.from;
   document.getElementById("search-to").value   = range.to;
+  document.getElementById("strava-search-from").value = range.from;
+  document.getElementById("strava-search-to").value = range.to;
 
   const cached = loadIntervalsCache().sort(compareIntervalsChronologically);
   state.intervals = cached;
@@ -1267,6 +1439,9 @@ function init() {
   });
   document.getElementById("strava-search-form").addEventListener("submit", handleStravaSearchSubmit);
   document.getElementById("strava-search-form").addEventListener("reset", () => {
+    const resetRange = defaultDateRange();
+    document.getElementById("strava-search-from").value = resetRange.from;
+    document.getElementById("strava-search-to").value = resetRange.to;
     hideSearchPreview("strava");
     document.getElementById("strava-search-status").textContent = "";
   });
