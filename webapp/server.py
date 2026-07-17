@@ -52,7 +52,7 @@ def _normalize_type(value: str) -> str:
 
 
 def run_streams(activity_id: str, api_key: str) -> dict[str, list[int]]:
-    auth = "Basic " + base64.b64encode(f"API_KEY:{api_key}".encode("utf-8")).decode("ascii")
+    auth = "Basic " + base64.b64encode(f"API_KEY:{api_key}".encode()).decode("ascii")
     url = f"{API_BASE}/activity/{quote(activity_id)}/streams?types=heartrate,time"
     raw = _api_get(url, auth)
     return {
@@ -62,7 +62,7 @@ def run_streams(activity_id: str, api_key: str) -> dict[str, list[int]]:
 
 
 def run_zone_models(athlete_id: str, api_key: str) -> list[dict[str, Any]]:
-    auth = "Basic " + base64.b64encode(f"API_KEY:{api_key}".encode("utf-8")).decode("ascii")
+    auth = "Basic " + base64.b64encode(f"API_KEY:{api_key}".encode()).decode("ascii")
     url = f"{API_BASE}/athlete/{quote(athlete_id)}/sport-settings"
     raw = _api_get(url, auth)
     seen: set[int] = set()
@@ -97,7 +97,7 @@ def run_search(payload: dict[str, Any]) -> list[dict[str, Any]]:
     if not athlete_id or not api_key or not start_date or not end_date:
         raise ValueError("athlete_id, api_key, start_date, and end_date are required")
 
-    auth = "Basic " + base64.b64encode(f"API_KEY:{api_key}".encode("utf-8")).decode("ascii")
+    auth = "Basic " + base64.b64encode(f"API_KEY:{api_key}".encode()).decode("ascii")
     fields = quote("id,name,start_date_local,type")
     activities_url = (
         f"{API_BASE}/athlete/{quote(athlete_id)}/activities"
@@ -172,14 +172,22 @@ class Handler(SimpleHTTPRequestHandler):
             activity_id = _qs("activity_id")
             api_key = _qs("api_key")
             if not activity_id or not api_key:
-                _json_response(self, HTTPStatus.BAD_REQUEST, {"error": "activity_id and api_key are required"})
+                _json_response(
+                    self,
+                    HTTPStatus.BAD_REQUEST,
+                    {"error": "activity_id and api_key are required"},
+                )
                 return
             try:
                 _json_response(self, HTTPStatus.OK, run_streams(activity_id, api_key))
             except HTTPError as exc:
                 _json_response(self, HTTPStatus.BAD_GATEWAY, {"error": f"Upstream HTTP {exc.code}"})
             except URLError as exc:
-                _json_response(self, HTTPStatus.BAD_GATEWAY, {"error": f"Upstream error: {exc.reason}"})
+                _json_response(
+                    self,
+                    HTTPStatus.BAD_GATEWAY,
+                    {"error": f"Upstream error: {exc.reason}"},
+                )
             except Exception as exc:  # noqa: BLE001
                 _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
             return
@@ -188,14 +196,22 @@ class Handler(SimpleHTTPRequestHandler):
             athlete_id = _qs("athlete_id")
             api_key = _qs("api_key")
             if not athlete_id or not api_key:
-                _json_response(self, HTTPStatus.BAD_REQUEST, {"error": "athlete_id and api_key are required"})
+                _json_response(
+                    self,
+                    HTTPStatus.BAD_REQUEST,
+                    {"error": "athlete_id and api_key are required"},
+                )
                 return
             try:
                 _json_response(self, HTTPStatus.OK, run_zone_models(athlete_id, api_key))
             except HTTPError as exc:
                 _json_response(self, HTTPStatus.BAD_GATEWAY, {"error": f"Upstream HTTP {exc.code}"})
             except URLError as exc:
-                _json_response(self, HTTPStatus.BAD_GATEWAY, {"error": f"Upstream error: {exc.reason}"})
+                _json_response(
+                    self,
+                    HTTPStatus.BAD_GATEWAY,
+                    {"error": f"Upstream error: {exc.reason}"},
+                )
             except Exception as exc:  # noqa: BLE001
                 _json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
             return
