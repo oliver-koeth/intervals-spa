@@ -498,10 +498,10 @@ function mapSegmentEffortToInterval(effort) {
   return {
     interval_id: `strava-${effort.id}`,
     activity_id: activity.id || `strava-activity-${effort.id}`,
-    activity_start_local: effort.start_date_local || effort.start_date || "",
+    activity_start_local: effort.__activityStart || effort.start_date_local || effort.start_date || "",
     date: String(effort.start_date_local || effort.start_date || "").slice(0, 10),
-    activity_name: segment.name || effort.name || "Strava segment",
-    activity_type: segment.activity_type || "",
+    activity_name: effort.__activityName || segment.name || effort.name || "Strava segment",
+    activity_type: effort.__activityType || segment.activity_type || "",
     label: segment.name || effort.name || "",
     interval_type: "STRAVA_SEGMENT",
     moving_time_s: Number(effort.elapsed_time || effort.moving_time || 0),
@@ -532,21 +532,43 @@ async function runStravaSegmentSearch(params, settings) {
     }
   }
 
+  // Strava does not provide a direct "all segment efforts" endpoint for the athlete.
+  // Fetch recent activities, then collect each activity's segment efforts.
   const efforts = [];
+  const typeNeedle = normalizeActivityType(params.activityType);
   for (let page = 1; page <= 5; page++) {
-    const chunk = await stravaGet(`/segment_efforts?page=${page}&per_page=200`, settings, token);
-    if (!Array.isArray(chunk) || !chunk.length) break;
-    efforts.push(...chunk);
-    if (chunk.length < 200) break;
+    const activities = await stravaGet(`/athlete/activities?page=${page}&per_page=50`, settings, token);
+    if (!Array.isArray(activities) || !activities.length) break;
+    for (const activity of activities) {
+      const activityType = String(activity.type || "");
+      if (typeNeedle && normalizeActivityType(activityType) !== typeNeedle) continue;
+      try {
+        const detail = await stravaGet(
+          `/activities/${activity.id}?include_all_efforts=true`,
+          settings,
+          token
+        );
+        const segmentEfforts = Array.isArray(detail.segment_efforts) ? detail.segment_efforts : [];
+        segmentEfforts.forEach((effort) => {
+          efforts.push({
+            ...effort,
+            __activityType: detail.type || activityType,
+            __activityName: detail.name || activity.name || "",
+            __activityStart: detail.start_date_local || detail.start_date || "",
+          });
+        });
+      } catch {
+        // Skip activities that cannot be read with current token scope.
+      }
+    }
+    if (activities.length < 50) break;
   }
 
   const labelNeedle = params.label.trim().toLowerCase();
-  const typeNeedle = normalizeActivityType(params.activityType);
   return efforts
     .filter((effort) => {
       const segment = effort.segment || {};
       if (labelNeedle && !String(segment.name || effort.name || "").toLowerCase().includes(labelNeedle)) return false;
-      if (typeNeedle && normalizeActivityType(segment.activity_type || "") !== typeNeedle) return false;
       if (starredIds && !starredIds.has(Number(segment.id))) return false;
       return true;
     })
