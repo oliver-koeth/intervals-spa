@@ -1020,7 +1020,7 @@ function mockHrStream(item) {
   return pts;
 }
 
-/* ─── HR stream fetch (with cache) ──────────────────────────────────────── */
+/* ─── HR stream fetch (always fresh, no cache) ──────────────────────────── */
 function toStreamArray(streamPart) {
   if (Array.isArray(streamPart)) return streamPart;
   if (streamPart && Array.isArray(streamPart.data)) return streamPart.data;
@@ -1028,16 +1028,6 @@ function toStreamArray(streamPart) {
 }
 
 async function fetchHrStream(activityId, settings, source = "intervals") {
-  const cacheKey = `${source}:${activityId}`;
-  if (hrStreamCache[cacheKey]) return hrStreamCache[cacheKey];
-
-  // Check localStorage before hitting the network
-  const stored = loadHrStreamFromStorage(cacheKey);
-  if (stored) {
-    hrStreamCache[cacheKey] = stored;
-    return stored;
-  }
-
   let result;
   if (source === "strava") {
     const token = await refreshStravaTokenIfNeeded(settings);
@@ -1088,8 +1078,6 @@ async function fetchHrStream(activityId, settings, source = "intervals") {
     }
   }
 
-  hrStreamCache[cacheKey] = result;
-  saveHrStreamToStorage(cacheKey, result);
   return result;
 }
 
