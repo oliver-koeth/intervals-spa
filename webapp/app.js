@@ -428,7 +428,7 @@ function startStravaOAuth() {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("approval_prompt", "auto");
-  url.searchParams.set("scope", "read");
+  url.searchParams.set("scope", "read,activity:read_all");
   url.searchParams.set("state", stateToken);
   window.location.assign(url.toString());
 }
@@ -537,7 +537,16 @@ async function runStravaSegmentSearch(params, settings) {
   const efforts = [];
   const typeNeedle = normalizeActivityType(params.activityType);
   for (let page = 1; page <= 5; page++) {
-    const activities = await stravaGet(`/athlete/activities?page=${page}&per_page=50`, settings, token);
+    let activities;
+    try {
+      activities = await stravaGet(`/athlete/activities?page=${page}&per_page=50`, settings, token);
+    } catch (err) {
+      const msg = String(err?.message || "");
+      if (msg.includes("401")) {
+        throw new Error("Strava token missing scope activity:read_all. Reconnect Strava in Settings.");
+      }
+      throw err;
+    }
     if (!Array.isArray(activities) || !activities.length) break;
     for (const activity of activities) {
       const activityType = String(activity.type || "");
