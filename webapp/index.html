@@ -161,45 +161,100 @@
       <section id="screen-settings" class="screen">
         <div class="card">
           <h1>Settings</h1>
-          <p class="muted">Saved in browser local storage.</p>
+          <p class="muted">Saved in browser local storage — never sent anywhere except to intervals.icu directly.</p>
 
-          <form id="settings-form" class="form-grid" style="max-width:540px">
-            <label>Athlete ID
-              <input id="settings-athlete-id" type="text" placeholder="e.g. i75074" />
-            </label>
-            <label>API Key
-              <input id="settings-api-key" type="password" placeholder="intervals.icu API key" />
-            </label>
-            <label>API mode
-              <select id="settings-api-mode">
-                <option value="auto">Auto (recommended)</option>
-                <option value="proxy">Local proxy (/api/search)</option>
-                <option value="direct">Direct intervals.icu</option>
-              </select>
-            </label>
-            <div class="form-actions">
-              <button type="submit" class="btn primary">Save</button>
-              <button type="button" id="settings-clear" class="btn secondary">Clear</button>
+          <!-- ── Group 1: Account ── -->
+          <div class="settings-group">
+            <h2>Account</h2>
+            <div id="callout-account" class="callout callout-warn">
+              <span class="callout-icon">⚠</span>
+              <span class="callout-body">
+                Enter your <strong>Athlete ID</strong> and <strong>API key</strong> to enable search.
+                Find your athlete ID at the bottom of
+                <a href="https://intervals.icu/settings" target="_blank" rel="noopener">intervals.icu/settings</a>
+                and generate an API key under <em>Account → API access</em>.
+              </span>
+              <button class="callout-dismiss" data-dismiss="callout-account" title="Dismiss">✕</button>
             </div>
-          </form>
-          <p id="settings-status" class="muted" style="margin-top:.75rem"></p>
+            <form id="settings-form" class="form-grid">
+              <label>Athlete ID
+                <input id="settings-athlete-id" type="text" placeholder="e.g. i75074" />
+              </label>
+              <label>API Key
+                <input id="settings-api-key" type="password" placeholder="intervals.icu API key" />
+              </label>
+              <div class="form-actions">
+                <button type="submit" class="btn primary">Save</button>
+              </div>
+            </form>
+            <p id="settings-status" class="muted" style="margin-top:.5rem"></p>
+          </div>
 
           <hr class="settings-divider" />
 
-          <h2 style="margin:1rem 0 .25rem">HR Zone Model</h2>
-          <p class="muted" style="margin:0 0 .75rem">Select the zone model used for zone distribution and HR stream charts.</p>
-          <div class="form-grid" style="max-width:540px">
-            <label>Zone model
-              <select id="settings-zone-model">
-                <option value="">Default (Z1–Z5)</option>
-              </select>
-            </label>
-            <div class="form-actions">
-              <button type="button" id="load-zone-models" class="btn secondary">Load from intervals.icu</button>
+          <!-- ── Group 2: API Mode ── -->
+          <div class="settings-group">
+            <h2>API Mode</h2>
+            <div id="callout-api-mode" class="callout hidden">
+              <span class="callout-icon">ℹ</span>
+              <span class="callout-body">
+                <strong>Auto</strong> is recommended — it uses the local Python proxy when running on
+                localhost and direct API access on GitHub Pages. Set to <em>Proxy</em> only if you are
+                running <code>server.py</code> locally and want to force it. Set to <em>Direct</em>
+                only for debugging.
+              </span>
+              <button class="callout-dismiss" data-dismiss="callout-api-mode" title="Dismiss">✕</button>
+            </div>
+            <div class="form-grid">
+              <label>API mode
+                <select id="settings-api-mode">
+                  <option value="auto">Auto (recommended)</option>
+                  <option value="proxy">Local proxy (/api/search)</option>
+                  <option value="direct">Direct intervals.icu</option>
+                </select>
+              </label>
+              <div class="form-actions">
+                <button type="button" id="settings-save-mode" class="btn primary">Save</button>
+              </div>
             </div>
           </div>
-          <p id="zone-model-status" class="muted" style="margin:.5rem 0"></p>
-          <div id="zone-model-preview"></div>
+
+          <hr class="settings-divider" />
+
+          <!-- ── Group 3: HR Zone Model ── -->
+          <div class="settings-group">
+            <h2>HR Zone Model</h2>
+            <div id="callout-zone-model" class="callout hidden">
+              <span class="callout-icon">ℹ</span>
+              <span class="callout-body">
+                Without a zone model the zone histogram uses a generic Z1–Z5 split. Load your sport
+                settings from intervals.icu to get named zones with your actual LTHR thresholds and
+                coloured HR stream bands.
+              </span>
+              <button class="callout-dismiss" data-dismiss="callout-zone-model" title="Dismiss">✕</button>
+            </div>
+            <div class="form-grid">
+              <label>Zone model
+                <select id="settings-zone-model">
+                  <option value="">Default (Z1–Z5)</option>
+                </select>
+              </label>
+              <div class="form-actions">
+                <button type="button" id="load-zone-models" class="btn secondary">Load from intervals.icu</button>
+              </div>
+            </div>
+            <p id="zone-model-status" class="muted" style="margin:.5rem 0"></p>
+            <div id="zone-model-preview"></div>
+          </div>
+
+          <hr class="settings-divider" />
+
+          <!-- ── Reset ── -->
+          <div class="settings-reset-row">
+            <button type="button" id="settings-reset" class="btn secondary">Reset all settings</button>
+            <span class="muted" style="font-size:.8rem">Removes all data from local storage and reloads the form.</span>
+          </div>
+
         </div>
       </section>
 

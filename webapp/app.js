@@ -14,6 +14,7 @@ const state = {
   charts: {},
   compareSource: [],
   pinnedInterval: null,
+  dismissedCallouts: new Set(),
 };
 
 /** In-memory HR stream cache — keyed by activity_id, not persisted. */
@@ -119,8 +120,13 @@ function saveSettings(e) {
   e.preventDefault();
   localStorage.setItem("intervals_athlete_id", document.getElementById("settings-athlete-id").value.trim());
   localStorage.setItem("intervals_api_key",    document.getElementById("settings-api-key").value.trim());
-  localStorage.setItem("intervals_api_mode",   document.getElementById("settings-api-mode").value);
   document.getElementById("settings-status").textContent = "Saved.";
+  updateSettingsCallouts();
+}
+
+function saveApiMode() {
+  localStorage.setItem("intervals_api_mode", document.getElementById("settings-api-mode").value);
+  updateSettingsCallouts();
 }
 
 function clearSettings() {
@@ -129,9 +135,34 @@ function clearSettings() {
     "intervals_zone_model_id", "intervals_zone_models",
   ].forEach((k) => localStorage.removeItem(k));
   loadSettingsToForm();
-  document.getElementById("settings-status").textContent = "Cleared.";
+  document.getElementById("settings-status").textContent = "";
   document.getElementById("zone-model-status").textContent = "";
   document.getElementById("zone-model-preview").innerHTML = "";
+  // Reset any per-session dismiss flags
+  state.dismissedCallouts.clear();
+  updateSettingsCallouts();
+}
+
+/* ─── Settings callouts ─────────────────────────────────────────────────── */
+function updateSettingsCallouts() {
+  const s = getSettings();
+  const needsAccount = !s.athleteId || !s.apiKey;
+  const needsMode = s.apiMode !== "auto";
+  const needsZone = !s.zoneModelId || !s.zoneModels.length;
+
+  function setCallout(id, visible) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!visible || state.dismissedCallouts.has(id)) {
+      el.classList.add("hidden");
+    } else {
+      el.classList.remove("hidden");
+    }
+  }
+
+  setCallout("callout-account",    needsAccount);
+  setCallout("callout-api-mode",   needsMode);
+  setCallout("callout-zone-model", needsZone);
 }
 
 /* ─── Zone model UI ──────────────────────────────────────────────────────── */
@@ -226,6 +257,7 @@ async function handleLoadZoneModels() {
     const currentId = settings.zoneModelId;
     populateZoneModelSelect(models, currentId);
     statusEl.textContent = `${models.length} zone model(s) loaded.`;
+    updateSettingsCallouts();
   } catch (err) {
     statusEl.textContent = `Error: ${err.message}`;
   } finally {
@@ -767,16 +799,27 @@ function init() {
   document.getElementById("search-to").value   = range.to;
 
   loadSettingsToForm();
+  updateSettingsCallouts();
   setScreen("search");
 
   document.getElementById("search-form").addEventListener("submit", handleSearchSubmit);
   document.getElementById("settings-form").addEventListener("submit", saveSettings);
-  document.getElementById("settings-clear").addEventListener("click", clearSettings);
+  document.getElementById("settings-save-mode").addEventListener("click", saveApiMode);
+  document.getElementById("settings-reset").addEventListener("click", clearSettings);
   document.getElementById("load-zone-models").addEventListener("click", handleLoadZoneModels);
+  // Callout dismiss buttons
+  document.querySelectorAll(".callout-dismiss").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.dismiss;
+      state.dismissedCallouts.add(id);
+      document.getElementById(id)?.classList.add("hidden");
+    });
+  });
   document.getElementById("settings-zone-model").addEventListener("change", (e) => {
     localStorage.setItem("intervals_zone_model_id", e.target.value);
     const s = getSettings();
     renderZoneModelPreview(s.zoneModels.find((m) => String(m.id) === e.target.value) || null);
+    updateSettingsCallouts();
   });
   document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
   document.getElementById("back-to-list").addEventListener("click", () => setScreen("intervals"));
