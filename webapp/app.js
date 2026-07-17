@@ -522,10 +522,10 @@ async function runStravaSegmentSearch(params, settings) {
   const token = await refreshStravaTokenIfNeeded(settings);
   if (!token) throw new Error("No Strava access token. Use Connect Strava first.");
 
+  let processedActivities = 0;
   let starredIds = null;
   if (params.starredOnly) {
     starredIds = new Set();
-    let processedActivities = 0;
     for (let page = 1; page <= 5; page++) {
       const starred = await stravaGet(`/segments/starred?page=${page}&per_page=200`, settings, token);
       if (!Array.isArray(starred) || !starred.length) break;
