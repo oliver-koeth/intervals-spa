@@ -248,7 +248,54 @@
 
           <hr class="settings-divider" />
 
-          <!-- ── Group 3: HR Zone Model ── -->
+          <!-- ── Group 3: Strava Connection ── -->
+          <div class="settings-group">
+            <h2>Strava Connection</h2>
+            <p class="muted" style="margin:0 0 .5rem">Stored locally in this browser only.</p>
+            <div class="form-grid">
+              <label>Client ID
+                <input id="settings-strava-client-id" type="text" placeholder="e.g. 29670" />
+              </label>
+              <label>Client Secret
+                <input id="settings-strava-client-secret" type="password" placeholder="Strava client secret" />
+              </label>
+              <label>Access Token
+                <input id="settings-strava-access-token" type="password" placeholder="Strava access token" />
+              </label>
+              <label>Refresh Token
+                <input id="settings-strava-refresh-token" type="password" placeholder="Strava refresh token" />
+              </label>
+              <label>Scope
+                <input id="settings-strava-scope" type="text" placeholder="e.g. read" />
+              </label>
+              <label>Expires At (UTC)
+                <input id="settings-strava-expires-at" type="text" placeholder="e.g. 2026-07-17T16:37:48Z" />
+              </label>
+              <div class="form-actions">
+                <button type="button" id="settings-save-strava" class="btn primary">Save Strava</button>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <label>Overall max rate limits (15m,daily)
+                <input id="settings-strava-overall-max" type="text" readonly />
+              </label>
+              <label>Overall current usage (15m,daily)
+                <input id="settings-strava-overall-current" type="text" readonly />
+              </label>
+              <label>Read max rate limits (15m,daily)
+                <input id="settings-strava-read-max" type="text" readonly />
+              </label>
+              <label>Read current usage (15m,daily)
+                <input id="settings-strava-read-current" type="text" readonly />
+              </label>
+            </div>
+            <p id="settings-strava-status" class="muted" style="margin:.5rem 0 0"></p>
+          </div>
+
+          <hr class="settings-divider" />
+
+          <!-- ── Group 4: HR Zone Model ── -->
           <div class="settings-group">
             <h2>HR Zone Model</h2>
             <div id="callout-zone-model" class="callout hidden">
