@@ -1041,6 +1041,36 @@ function toStreamArray(streamPart) {
   return [];
 }
 
+function normalizeStravaStream(raw) {
+  // key_by_type=true -> { time: {data:[...]}, heartrate: {data:[...]} }
+  if (!Array.isArray(raw)) {
+    return {
+      time: toStreamArray(raw?.time),
+      heartrate: toStreamArray(raw?.heartrate),
+    };
+  }
+  // key_by_type omitted -> [{type:"time",data:[...]}, {type:"heartrate",data:[...]}]
+  return {
+    time: toStreamArray(raw.find((s) => s.type === "time")),
+    heartrate: toStreamArray(raw.find((s) => s.type === "heartrate")),
+  };
+}
+
+async function fetchStravaStreamFromCandidates(candidates, settings, token) {
+  let lastErr = null;
+  for (const path of candidates) {
+    try {
+      const raw = await stravaGet(path, settings, token);
+      return { raw, path };
+    } catch (err) {
+      lastErr = err;
+      const msg = String(err?.message || "");
+      if (!(msg.includes("404") || msg.includes("400"))) throw err;
+    }
+  }
+  throw lastErr || new Error("Strava stream request failed.");
+}
+
 async function fetchHrStream(activityId, settings, source = "intervals", stravaEffortId = "") {
   const activityCacheKey = `${source}:${activityId}`;
   const effortCacheKey = source === "strava" && stravaEffortId ? `strava-effort:${stravaEffortId}` : "";
@@ -1060,15 +1090,17 @@ async function fetchHrStream(activityId, settings, source = "intervals", stravaE
     const token = await refreshStravaTokenIfNeeded(settings);
     if (!token) throw new Error("No Strava access token. Use Connect Strava first.");
     try {
-      const raw = await stravaGet(
+      const activityCandidates = [
         `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate&key_by_type=true`,
-        settings,
-        token
-      );
+        `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate`,
+      ];
+      const { raw, path } = await fetchStravaStreamFromCandidates(activityCandidates, settings, token);
+      const normalized = normalizeStravaStream(raw);
       result = {
-        time: toStreamArray(raw?.time),
-        heartrate: toStreamArray(raw?.heartrate),
+        time: normalized.time,
+        heartrate: normalized.heartrate,
         __stream_scope: "activity",
+        __stream_path: path,
       };
     } catch (err) {
       const msg = String(err?.message || "");
@@ -1076,20 +1108,26 @@ async function fetchHrStream(activityId, settings, source = "intervals", stravaE
         throw new Error("Strava token missing scope activity:read_all. Reconnect Strava in Settings.");
       }
       if (msg.includes("404") && stravaEffortId) {
-        const fallbackRaw = await stravaGet(
+        const effortCandidates = [
           `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate&key_by_type=true`,
-          settings,
-          token
-        );
+          `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate`,
+        ];
+        const { raw: fallbackRaw, path } = await fetchStravaStreamFromCandidates(effortCandidates, settings, token);
+        const normalized = normalizeStravaStream(fallbackRaw);
         result = {
-          time: toStreamArray(fallbackRaw?.time),
-          heartrate: toStreamArray(fallbackRaw?.heartrate),
+          time: normalized.time,
+          heartrate: normalized.heartrate,
           __stream_scope: "segment_effort",
           __segment_effort_id: stravaEffortId,
+          __stream_path: path,
         };
       } else {
         throw err;
       }
+    }
+
+    if (!Array.isArray(result.time) || !Array.isArray(result.heartrate) || !result.time.length) {
+      throw new Error("Strava HR stream unavailable for this effort/activity (no stream data returned).");
     }
   } else {
     const mode = resolveApiMode(settings.apiMode);
@@ -1327,6 +1365,7 @@ async function renderRow2(item) {
       stream_time_len: Array.isArray(stream?.time) ? stream.time.length : 0,
       stream_hr_len: Array.isArray(stream?.heartrate) ? stream.heartrate.length : 0,
       stream_scope: stream?.__stream_scope || "unknown",
+      stream_path: stream?.__stream_path || "",
     };
 
     // For Strava items, recompute the true stream offset using the effort's
