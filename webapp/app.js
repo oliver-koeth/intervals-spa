@@ -211,31 +211,36 @@ async function fetchZoneModels(settings) {
   const mode = resolveApiMode(settings.apiMode);
   let models;
   if (mode === "proxy") {
-    const qs = new URLSearchParams({ athlete_id: settings.athleteId, api_key: settings.apiKey });
-    const res = await fetch(`./api/zone-models?${qs}`);
-    if (!res.ok) throw new Error(`Zone models proxy error (${res.status})`);
-    models = await res.json();
-  } else {
-    const auth = `Basic ${btoa(`API_KEY:${settings.apiKey}`)}`;
-    const res = await fetch(
-      `https://intervals.icu/api/v1/athlete/${encodeURIComponent(settings.athleteId)}/sport-settings`,
-      { headers: { Authorization: auth, Accept: "application/json" } }
-    );
-    if (!res.ok) throw new Error(`Sport settings request failed (${res.status})`);
-    const raw = await res.json();
-    const seen = new Set();
-    models = [];
-    for (const s of raw) {
-      if (!seen.has(s.id) && Array.isArray(s.hr_zones) && s.hr_zones.length) {
-        seen.add(s.id);
-        models.push({
-          id: s.id,
-          hr_zones: s.hr_zones,
-          hr_zone_names: s.hr_zone_names || s.hr_zones.map((_, i) => `Z${i + 1}`),
-          lthr: s.lthr || null,
-          max_hr: s.max_hr || null,
-        });
-      }
+    try {
+      const qs = new URLSearchParams({ athlete_id: settings.athleteId, api_key: settings.apiKey });
+      const res = await fetch(`./api/zone-models?${qs}`);
+      if (!res.ok) throw new Error(`Zone models proxy error (${res.status})`);
+      return await res.json();
+    } catch (err) {
+      if (!isAutoProxyMode(settings.apiMode)) throw err;
+      // Auto mode fallback: proxy unavailable or upstream error, retry direct.
+    }
+  }
+
+  const auth = `Basic ${btoa(`API_KEY:${settings.apiKey}`)}`;
+  const res = await fetch(
+    `https://intervals.icu/api/v1/athlete/${encodeURIComponent(settings.athleteId)}/sport-settings`,
+    { headers: { Authorization: auth, Accept: "application/json" } }
+  );
+  if (!res.ok) throw new Error(`Sport settings request failed (${res.status})`);
+  const raw = await res.json();
+  const seen = new Set();
+  models = [];
+  for (const s of raw) {
+    if (!seen.has(s.id) && Array.isArray(s.hr_zones) && s.hr_zones.length) {
+      seen.add(s.id);
+      models.push({
+        id: s.id,
+        hr_zones: s.hr_zones,
+        hr_zone_names: s.hr_zone_names || s.hr_zones.map((_, i) => `Z${i + 1}`),
+        lthr: s.lthr || null,
+        max_hr: s.max_hr || null,
+      });
     }
   }
   return models;
@@ -275,6 +280,10 @@ function setStatus(text, isError = false) {
 function resolveApiMode(savedMode) {
   if (savedMode !== "auto") return savedMode;
   return ["localhost","127.0.0.1"].includes(window.location.hostname) ? "proxy" : "direct";
+}
+
+function isAutoProxyMode(savedMode) {
+  return savedMode === "auto" && ["localhost","127.0.0.1"].includes(window.location.hostname);
 }
 
 /* ─── Map API response → internal interval object ─────────────────────────── */
@@ -455,11 +464,18 @@ async function fetchHrStream(activityId, settings) {
   let result;
 
   if (mode === "proxy") {
-    const qs = new URLSearchParams({ activity_id: activityId, api_key: settings.apiKey });
-    const res = await fetch(`./api/streams?${qs}`);
-    if (!res.ok) throw new Error(`Streams proxy error (${res.status})`);
-    result = await res.json();
-  } else {
+    try {
+      const qs = new URLSearchParams({ activity_id: activityId, api_key: settings.apiKey });
+      const res = await fetch(`./api/streams?${qs}`);
+      if (!res.ok) throw new Error(`Streams proxy error (${res.status})`);
+      result = await res.json();
+    } catch (err) {
+      if (!isAutoProxyMode(settings.apiMode)) throw err;
+      // Auto mode fallback: retry direct.
+    }
+  }
+
+  if (!result) {
     const auth = `Basic ${btoa(`API_KEY:${settings.apiKey}`)}`;
     const res = await fetch(
       `https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/streams?types=heartrate,time`,
@@ -759,9 +775,18 @@ async function handleSearchSubmit(e) {
   setStatus("Searching…");
   try {
     const mode = resolveApiMode(settings.apiMode);
-    const results = mode === "proxy"
-      ? await runProxySearch(params, settings.athleteId, settings.apiKey)
-      : await runDirectSearch(params, settings.athleteId, settings.apiKey);
+    let results;
+    if (mode === "proxy") {
+      try {
+        results = await runProxySearch(params, settings.athleteId, settings.apiKey);
+      } catch (err) {
+        if (!isAutoProxyMode(settings.apiMode)) throw err;
+        setStatus("Local proxy unavailable, retrying direct…");
+        results = await runDirectSearch(params, settings.athleteId, settings.apiKey);
+      }
+    } else {
+      results = await runDirectSearch(params, settings.athleteId, settings.apiKey);
+    }
     state.intervals = results.sort(compareIntervalsChronologically);
     state.filtered  = [...state.intervals];
     state.selected.clear();
