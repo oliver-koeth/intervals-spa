@@ -1266,6 +1266,16 @@ async function renderRow2(item) {
           startIndex = Math.max(0, Math.round((effortEpoch - activityEpoch) / 1000));
         }
       }
+      // startIndex is now elapsed seconds — sliceHrStream can use it directly.
+    } else {
+      // intervals.icu: start_index is an array index into the stream, NOT elapsed seconds.
+      // GPS devices often record at 2 s or variable rate, so index ≠ seconds.
+      // Resolve via stream.time[start_index] to get the true elapsed-seconds offset.
+      const timeArr = Array.isArray(stream.time) ? stream.time : [];
+      if (timeArr.length > 0) {
+        const idx = Math.min(startIndex, timeArr.length - 1);
+        startIndex = Number(timeArr[idx]) || 0;
+      }
     }
 
     const points = sliceHrStream(stream, startIndex, item.moving_time_s);
