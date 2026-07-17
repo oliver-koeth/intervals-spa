@@ -350,7 +350,10 @@ async function stravaTokenExchangeViaProxy(body) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Strava token proxy error (${res.status})`);
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}));
+    throw new Error(payload.error || `Strava token proxy error (${res.status})`);
+  }
   return await res.json();
 }
 
@@ -472,7 +475,10 @@ async function stravaGet(path, settings, token) {
     try {
       const qs = new URLSearchParams({ path, access_token: token });
       const res = await fetch(`./api/strava/get?${qs}`);
-      if (!res.ok) throw new Error(`Strava proxy error (${res.status})`);
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error || `Strava proxy error (${res.status})`);
+      }
       const data = await res.json();
       return data.result;
     } catch (err) {
@@ -528,7 +534,7 @@ async function runStravaSegmentSearch(params, settings) {
 
   const efforts = [];
   for (let page = 1; page <= 5; page++) {
-    const chunk = await stravaGet(`/athlete/segment_efforts?page=${page}&per_page=200`, settings, token);
+    const chunk = await stravaGet(`/segment_efforts?page=${page}&per_page=200`, settings, token);
     if (!Array.isArray(chunk) || !chunk.length) break;
     efforts.push(...chunk);
     if (chunk.length < 200) break;

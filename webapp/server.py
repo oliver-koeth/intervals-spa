@@ -294,7 +294,8 @@ class Handler(SimpleHTTPRequestHandler):
             except ValueError as exc:
                 _json_response(self, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             except HTTPError as exc:
-                _json_response(self, HTTPStatus.BAD_GATEWAY, {"error": f"Upstream HTTP {exc.code}"})
+                status = exc.code if 400 <= exc.code < 600 else HTTPStatus.BAD_GATEWAY
+                _json_response(self, status, {"error": f"Strava HTTP {exc.code}"})
             except URLError as exc:
                 _json_response(
                     self,
@@ -326,7 +327,11 @@ class Handler(SimpleHTTPRequestHandler):
             _json_response(self, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             return
         except HTTPError as exc:
-            _json_response(self, HTTPStatus.BAD_GATEWAY, {"error": f"Upstream HTTP {exc.code}"})
+            if self.path == "/api/strava/token":
+                status = exc.code if 400 <= exc.code < 600 else HTTPStatus.BAD_GATEWAY
+                _json_response(self, status, {"error": f"Strava HTTP {exc.code}"})
+            else:
+                _json_response(self, HTTPStatus.BAD_GATEWAY, {"error": f"Upstream HTTP {exc.code}"})
             return
         except URLError as exc:
             _json_response(self, HTTPStatus.BAD_GATEWAY, {"error": f"Upstream error: {exc.reason}"})
