@@ -10,8 +10,9 @@ const state = {
   intervals: [],
   filtered: [],
   selected: new Set(),
-  pendingSearchResults: [],
-  pendingSearchParams: null,
+  pendingIntervalsResults: [],
+  pendingIntervalsParams: null,
+  pendingStravaResults: [],
   screen: "search",
   charts: {},
   compareSource: [],
@@ -184,7 +185,8 @@ function clearSettings() {
   state.intervals = [];
   state.filtered = [];
   state.selected.clear();
-  hideSearchPreview();
+  hideSearchPreview("intervals");
+  hideSearchPreview("strava");
   renderIntervals();
   loadSettingsToForm();
   document.getElementById("settings-status").textContent = "";
@@ -505,6 +507,7 @@ function mapSegmentEffortToInterval(effort) {
     activity_type: effort.__activityType || segment.activity_type || "",
     label: segment.name || effort.name || "",
     interval_type: "STRAVA_SEGMENT",
+    source: "strava",
     moving_time_s: Number(effort.elapsed_time || effort.moving_time || 0),
     start_index: 0,
     avg_watts: Number(effort.average_watts || 0),
@@ -609,18 +612,24 @@ function clearIntervalsCache() {
   localStorage.removeItem(INTERVALS_CACHE_KEY);
 }
 
-function hideSearchPreview() {
-  const box = document.getElementById("search-preview");
+function hideSearchPreview(kind) {
+  const prefix = kind === "strava" ? "strava-search" : "search";
+  const box = document.getElementById(`${prefix}-preview`);
   box.classList.add("hidden");
-  document.getElementById("search-preview-body").innerHTML = "";
-  document.getElementById("search-preview-summary").textContent = "";
-  document.getElementById("search-preview-add").disabled = false;
-  state.pendingSearchResults = [];
-  state.pendingSearchParams = null;
+  document.getElementById(`${prefix}-preview-body`).innerHTML = "";
+  document.getElementById(`${prefix}-preview-summary`).textContent = "";
+  document.getElementById(`${prefix}-preview-add`).disabled = false;
+  if (kind === "strava") {
+    state.pendingStravaResults = [];
+  } else {
+    state.pendingIntervalsResults = [];
+    state.pendingIntervalsParams = null;
+  }
 }
 
-function renderSearchPreview(results) {
-  const body = document.getElementById("search-preview-body");
+function renderSearchPreview(results, kind) {
+  const prefix = kind === "strava" ? "strava-search" : "search";
+  const body = document.getElementById(`${prefix}-preview-body`);
   body.innerHTML = "";
   results.forEach((item) => {
     const tr = document.createElement("tr");
@@ -636,9 +645,9 @@ function renderSearchPreview(results) {
     `;
     body.appendChild(tr);
   });
-  document.getElementById("search-preview-summary").textContent = `${results.length} interval(s) found`;
-  document.getElementById("search-preview-add").disabled = results.length === 0;
-  document.getElementById("search-preview").classList.remove("hidden");
+  document.getElementById(`${prefix}-preview-summary`).textContent = `${results.length} interval(s) found`;
+  document.getElementById(`${prefix}-preview-add`).disabled = results.length === 0;
+  document.getElementById(`${prefix}-preview`).classList.remove("hidden");
 }
 
 function commitIntervals(results, params) {
@@ -661,7 +670,8 @@ function commitIntervals(results, params) {
     document.getElementById("filter-date-from").value = params.startDate;
     document.getElementById("filter-date-to").value   = params.endDate;
   }
-  hideSearchPreview();
+  hideSearchPreview("intervals");
+  hideSearchPreview("strava");
   setScreen("intervals");
 }
 
@@ -676,6 +686,7 @@ function mapInterval(activity, interval) {
     activity_type:  activity.type || "",
     label:          interval.label || "",
     interval_type:  interval.type || "",
+    source:         "intervals",
     moving_time_s:  interval.moving_time || 0,
     start_index:    interval.start_index || 0,
     avg_watts:      interval.average_watts || 0,
@@ -760,9 +771,13 @@ function renderIntervals() {
   state.filtered.forEach((item) => {
     const id = String(item.interval_id);
     const z  = item.zone;
+    const source = item.source || "intervals";
+    const sourceIcon = source === "strava" ? "🏁" : "📈";
+    const sourceLabel = source === "strava" ? "Strava" : "Intervals.icu";
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td class="center"><input type="checkbox" data-select-id="${id}" ${state.selected.has(id) ? "checked" : ""} /></td>
+      <td class="center" title="${sourceLabel}">${sourceIcon}</td>
       <td>${item.date || ""}</td>
       <td>${item.activity_type || ""}</td>
       <td title="${item.activity_name || ""}">${(item.activity_name || "").slice(0, 34)}</td>
@@ -792,6 +807,7 @@ function renderIntervals() {
 /* ─── Local filter ───────────────────────────────────────────────────────── */
 function applyLocalFilters() {
   const labelNeedle = document.getElementById("filter-label").value.trim().toLowerCase();
+  const sourceNeedle = document.getElementById("filter-source").value;
   const typeNeedle  = normalizeActivityType(document.getElementById("filter-type").value);
   const tFrom = parseMmSs(document.getElementById("filter-time-from").value);
   const tTo   = parseMmSs(document.getElementById("filter-time-to").value);
@@ -800,6 +816,7 @@ function applyLocalFilters() {
 
   state.filtered = state.intervals.filter((item) => {
     if (labelNeedle && !String(item.label).toLowerCase().includes(labelNeedle)) return false;
+    if (sourceNeedle && (item.source || "intervals") !== sourceNeedle) return false;
     if (typeNeedle && normalizeActivityType(item.activity_type) !== typeNeedle) return false;
     if (tFrom !== null && Number(item.moving_time_s) < tFrom) return false;
     if (tTo   !== null && Number(item.moving_time_s) > tTo)   return false;
@@ -1173,9 +1190,10 @@ async function handleSearchSubmit(e) {
       results = await runDirectSearch(params, settings.athleteId, settings.apiKey);
     }
     const sorted = results.sort(compareIntervalsChronologically);
-    state.pendingSearchResults = sorted;
-    state.pendingSearchParams = params;
-    renderSearchPreview(sorted);
+    state.pendingIntervalsResults = sorted;
+    state.pendingIntervalsParams = params;
+    renderSearchPreview(sorted, "intervals");
+    hideSearchPreview("strava");
     setStatus(`Search complete. ${sorted.length} interval(s) ready to add.`);
   } catch (err) {
     setStatus(`Search failed: ${err.message}`, true);
@@ -1198,9 +1216,9 @@ async function handleStravaSearchSubmit(e) {
   status.textContent = "Searching Strava segments…";
   try {
     const results = await runStravaSegmentSearch(params, settings);
-    state.pendingSearchResults = results;
-    state.pendingSearchParams = null;
-    renderSearchPreview(results);
+    state.pendingStravaResults = results;
+    renderSearchPreview(results, "strava");
+    hideSearchPreview("intervals");
     status.textContent = `${results.length} segment effort(s) ready to add.`;
   } catch (err) {
     status.textContent = `Strava search failed: ${err.message}`;
@@ -1236,20 +1254,30 @@ function init() {
     const resetRange = defaultDateRange();
     document.getElementById("search-from").value = resetRange.from;
     document.getElementById("search-to").value = resetRange.to;
-    hideSearchPreview();
+    hideSearchPreview("intervals");
     setStatus("");
   });
   document.getElementById("search-preview-cancel").addEventListener("click", () => {
-    hideSearchPreview();
+    hideSearchPreview("intervals");
     setStatus("Search preview canceled.");
   });
   document.getElementById("search-preview-add").addEventListener("click", () => {
-    if (!state.pendingSearchResults.length) return;
-    commitIntervals(state.pendingSearchResults, state.pendingSearchParams);
+    if (!state.pendingIntervalsResults.length) return;
+    commitIntervals(state.pendingIntervalsResults, state.pendingIntervalsParams);
   });
   document.getElementById("strava-search-form").addEventListener("submit", handleStravaSearchSubmit);
   document.getElementById("strava-search-form").addEventListener("reset", () => {
+    hideSearchPreview("strava");
     document.getElementById("strava-search-status").textContent = "";
+  });
+  document.getElementById("strava-search-preview-cancel").addEventListener("click", () => {
+    hideSearchPreview("strava");
+    document.getElementById("strava-search-status").textContent = "Strava preview canceled.";
+  });
+  document.getElementById("strava-search-preview-add").addEventListener("click", () => {
+    if (!state.pendingStravaResults.length) return;
+    commitIntervals(state.pendingStravaResults, null);
+    document.getElementById("strava-search-status").textContent = "Added Strava results to intervals.";
   });
   document.getElementById("settings-form").addEventListener("submit", saveSettings);
   document.getElementById("settings-save-mode").addEventListener("click", saveApiMode);
@@ -1261,7 +1289,8 @@ function init() {
     state.intervals = [];
     state.filtered = [];
     state.selected.clear();
-    hideSearchPreview();
+    hideSearchPreview("intervals");
+    hideSearchPreview("strava");
     renderIntervals();
     document.getElementById("settings-status").textContent = "Intervals cache deleted.";
   });
@@ -1301,6 +1330,7 @@ function init() {
     ["filter-label","filter-time-from","filter-time-to","filter-date-from","filter-date-to"].forEach((id) => {
       document.getElementById(id).value = "";
     });
+    document.getElementById("filter-source").value = "";
     document.getElementById("filter-type").value = "";
     state.filtered = [...state.intervals];
     renderIntervals();

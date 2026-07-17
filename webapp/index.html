@@ -119,6 +119,33 @@
             </div>
           </form>
           <p id="strava-search-status" class="muted" style="margin-top:.75rem"></p>
+
+          <div id="strava-search-preview" class="search-preview hidden">
+            <div class="row space-between">
+              <h2 style="margin:.25rem 0">Strava result preview</h2>
+              <div id="strava-search-preview-summary" class="muted"></div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Activity</th>
+                    <th>Label</th>
+                    <th class="right">Start</th>
+                    <th class="right">Time</th>
+                    <th class="right">Zone</th>
+                  </tr>
+                </thead>
+                <tbody id="strava-search-preview-body"></tbody>
+              </table>
+            </div>
+            <div class="search-preview-actions">
+              <button id="strava-search-preview-cancel" type="button" class="btn secondary">Cancel</button>
+              <button id="strava-search-preview-add" type="button" class="btn primary">Add all to intervals</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -133,6 +160,13 @@
           <div class="filters">
             <label>Label
               <input id="filter-label" type="text" placeholder="e.g. fahrtkopf" />
+            </label>
+            <label>Source
+              <select id="filter-source">
+                <option value="">All sources</option>
+                <option value="intervals">Intervals.icu</option>
+                <option value="strava">Strava</option>
+              </select>
             </label>
             <label>Activity type
               <select id="filter-type">
@@ -171,6 +205,7 @@
               <thead>
                 <tr>
                   <th class="center">Sel</th>
+                  <th class="center">Src</th>
                   <th>Date</th>
                   <th>Type</th>
                   <th>Activity</th>
