@@ -93,13 +93,7 @@ function getSettings() {
       clientId: localStorage.getItem("intervals_strava_client_id") || "",
       clientSecret: localStorage.getItem("intervals_strava_client_secret") || "",
       accessToken: localStorage.getItem("intervals_strava_access_token") || "",
-      refreshToken: localStorage.getItem("intervals_strava_refresh_token") || "",
       scope: localStorage.getItem("intervals_strava_scope") || "",
-      expiresAt: localStorage.getItem("intervals_strava_expires_at") || "",
-      overallMax: localStorage.getItem("intervals_strava_overall_max") || "200,2000",
-      overallCurrent: localStorage.getItem("intervals_strava_overall_current") || "0,0",
-      readMax: localStorage.getItem("intervals_strava_read_max") || "100,1000",
-      readCurrent: localStorage.getItem("intervals_strava_read_current") || "0,0",
     },
   };
 }
@@ -131,13 +125,7 @@ function loadSettingsToForm() {
   document.getElementById("settings-strava-client-id").value = s.strava.clientId;
   document.getElementById("settings-strava-client-secret").value = s.strava.clientSecret;
   document.getElementById("settings-strava-access-token").value = s.strava.accessToken;
-  document.getElementById("settings-strava-refresh-token").value = s.strava.refreshToken;
   document.getElementById("settings-strava-scope").value = s.strava.scope;
-  document.getElementById("settings-strava-expires-at").value = s.strava.expiresAt;
-  document.getElementById("settings-strava-overall-max").value = s.strava.overallMax;
-  document.getElementById("settings-strava-overall-current").value = s.strava.overallCurrent;
-  document.getElementById("settings-strava-read-max").value = s.strava.readMax;
-  document.getElementById("settings-strava-read-current").value = s.strava.readCurrent;
   populateZoneModelSelect(s.zoneModels, s.zoneModelId);
 }
 
@@ -168,33 +156,8 @@ function saveStravaSettings() {
     document.getElementById("settings-strava-access-token").value.trim()
   );
   localStorage.setItem(
-    "intervals_strava_refresh_token",
-    document.getElementById("settings-strava-refresh-token").value.trim()
-  );
-  localStorage.setItem(
     "intervals_strava_scope",
     document.getElementById("settings-strava-scope").value.trim()
-  );
-  localStorage.setItem(
-    "intervals_strava_expires_at",
-    document.getElementById("settings-strava-expires-at").value.trim()
-  );
-  // Rate limit fields are read-only in UI, but still persisted for future sync updates.
-  localStorage.setItem(
-    "intervals_strava_overall_max",
-    document.getElementById("settings-strava-overall-max").value.trim() || "200,2000"
-  );
-  localStorage.setItem(
-    "intervals_strava_overall_current",
-    document.getElementById("settings-strava-overall-current").value.trim() || "0,0"
-  );
-  localStorage.setItem(
-    "intervals_strava_read_max",
-    document.getElementById("settings-strava-read-max").value.trim() || "100,1000"
-  );
-  localStorage.setItem(
-    "intervals_strava_read_current",
-    document.getElementById("settings-strava-read-current").value.trim() || "0,0"
   );
   document.getElementById("settings-strava-status").textContent = "Strava settings saved.";
 }
@@ -204,10 +167,7 @@ function clearSettings() {
     "intervals_athlete_id", "intervals_api_key", "intervals_api_mode",
     "intervals_zone_model_id", "intervals_zone_models", INTERVALS_CACHE_KEY,
     "intervals_strava_client_id", "intervals_strava_client_secret",
-    "intervals_strava_access_token", "intervals_strava_refresh_token",
-    "intervals_strava_scope", "intervals_strava_expires_at",
-    "intervals_strava_overall_max", "intervals_strava_overall_current",
-    "intervals_strava_read_max", "intervals_strava_read_current",
+    "intervals_strava_access_token", "intervals_strava_scope",
   ].forEach((k) => localStorage.removeItem(k));
   state.intervals = [];
   state.filtered = [];
