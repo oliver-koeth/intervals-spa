@@ -1735,7 +1735,6 @@ function renderCompare() {
     ],
     series: [
       { type: "line", name: "Avg W",      smooth: true, data: sorted.map((x) => x.avg_watts) },
-      { type: "line", name: "Weighted W", smooth: true, data: sorted.map((x) => x.weighted_watts) },
       {
         type: "line",
         name: stravaOnly ? "Seg time" : "Load",
