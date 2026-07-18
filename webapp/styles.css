@@ -196,6 +196,17 @@ a.btn { text-decoration: none; display: inline-block; }
   color: var(--text);
   border-color: var(--border);
 }
+#screen-search sl-option::part(base) {
+  color: var(--text);
+  opacity: 1;
+}
+#screen-search sl-option::part(label) {
+  color: var(--text);
+}
+#screen-search sl-option[aria-selected="true"]::part(base),
+#screen-search sl-option::part(base):hover {
+  color: #f8fafc;
+}
 #screen-search sl-checkbox::part(label) {
   color: var(--text);
 }
@@ -215,6 +226,38 @@ a.btn { text-decoration: none; display: inline-block; }
 }
 #screen-search sl-button[variant="primary"]::part(base):hover {
   filter: brightness(1.03);
+}
+
+/* flatpickr theme alignment (search page dates) */
+.flatpickr-calendar {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.flatpickr-months .flatpickr-month,
+.flatpickr-current-month .flatpickr-monthDropdown-months,
+.flatpickr-weekdays,
+.flatpickr-weekday,
+span.flatpickr-weekday {
+  background: transparent;
+  color: var(--text);
+}
+.flatpickr-day {
+  color: var(--text);
+}
+.flatpickr-day.today {
+  border-color: var(--primary);
+}
+.flatpickr-day.selected,
+.flatpickr-day.startRange,
+.flatpickr-day.endRange {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-text);
+}
+.flatpickr-day:hover {
+  background: rgba(148, 163, 184, 0.2);
 }
 
 .zone-model-table {

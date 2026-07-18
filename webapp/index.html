@@ -4,9 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Intervals</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/themes/light.css" />
     <link rel="stylesheet" href="./styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/echarts@6/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/shoelace-autoloader.js"></script>
   </head>
   <body class="theme-dark">
@@ -56,10 +58,10 @@
               <sl-input id="search-margin" placeholder="e.g. 00:10"></sl-input>
             </label>
             <label>Date from
-              <sl-input id="search-from" type="date"></sl-input>
+              <sl-input id="search-from" class="search-date-input" placeholder="YYYY-MM-DD" readonly></sl-input>
             </label>
             <label>Date to
-              <sl-input id="search-to" type="date"></sl-input>
+              <sl-input id="search-to" class="search-date-input" placeholder="YYYY-MM-DD" readonly></sl-input>
             </label>
             <div class="checkbox-label">
               <span>&nbsp;</span>
@@ -115,10 +117,10 @@
               </sl-select>
             </label>
             <label>Date from
-              <sl-input id="strava-search-from" type="date"></sl-input>
+              <sl-input id="strava-search-from" class="search-date-input" placeholder="YYYY-MM-DD" readonly></sl-input>
             </label>
             <label>Date to
-              <sl-input id="strava-search-to" type="date"></sl-input>
+              <sl-input id="strava-search-to" class="search-date-input" placeholder="YYYY-MM-DD" readonly></sl-input>
             </label>
             <div class="checkbox-label">
               <span>&nbsp;</span>

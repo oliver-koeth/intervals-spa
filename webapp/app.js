@@ -158,6 +158,23 @@ function initManualGallery() {
   });
 }
 
+function initSearchDatePickers() {
+  if (typeof flatpickr === "undefined") return;
+  const ids = ["search-from", "search-to", "strava-search-from", "strava-search-to"];
+  ids.forEach((id) => {
+    const host = document.getElementById(id);
+    if (!host) return;
+    const input = host.shadowRoot?.querySelector("input");
+    if (!input || input.dataset.fpAttached === "1") return;
+    flatpickr(input, {
+      dateFormat: "Y-m-d",
+      allowInput: false,
+      clickOpens: true,
+    });
+    input.dataset.fpAttached = "1";
+  });
+}
+
 function isDark() { return document.body.classList.contains("theme-dark"); }
 
 function normalizeActivityType(type) {
@@ -1972,6 +1989,7 @@ function init() {
   updateSettingsCallouts();
   handleStravaOAuthCallback();
   initManualGallery();
+  initSearchDatePickers();
   setScreen("search");
 
   document.getElementById("search-form").addEventListener("submit", handleSearchSubmit);
