@@ -1488,7 +1488,7 @@ function renderHrStreamChart(points, item, secondarySeries = null) {
         yAxisIndex: 1,
         smooth: true,
         showSymbol: false,
-        lineStyle: { width: 2, type: "dashed" },
+        lineStyle: { width: 2 },
         data: secondarySeries.points,
       }] : []),
     ],
