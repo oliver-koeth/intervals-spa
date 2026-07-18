@@ -280,6 +280,21 @@ tr:hover td { background: rgba(148,163,184,0.07); }
 .manual-content li {
   line-height: 1.55;
 }
+.manual-content a {
+  color: #60a5fa;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+body:not(.theme-dark) .manual-content a {
+  color: #1d4ed8;
+}
+.manual-content a:hover {
+  color: #93c5fd;
+}
+body:not(.theme-dark) .manual-content a:hover {
+  color: #1e40af;
+}
 .manual-gallery {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
