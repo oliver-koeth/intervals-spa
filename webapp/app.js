@@ -28,7 +28,7 @@ const stravaActivityStartCache = {};
 const stravaEffortStartCache = {};
 
 const INTERVALS_CACHE_KEY   = "intervals_cached_intervals_v1";
-const HR_STREAM_LS_PREFIX   = "intervals_hr_stream:";   // localStorage key prefix for HR streams
+const HR_STREAM_LS_PREFIX   = "intervals_hr_stream_v2:";   // localStorage key prefix for HR streams
 
 /** Persist a stream object to localStorage (silently skips on quota errors). */
 function saveHrStreamToStorage(cacheKey, stream) {
@@ -49,9 +49,10 @@ function loadHrStreamFromStorage(cacheKey) {
 function clearHrStreamCache() {
   for (const k of Object.keys(hrStreamCache)) delete hrStreamCache[k];
   const toRemove = [];
+  const prefixes = [HR_STREAM_LS_PREFIX, "intervals_hr_stream:"];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
-    if (k && k.startsWith(HR_STREAM_LS_PREFIX)) toRemove.push(k);
+    if (k && prefixes.some((prefix) => k.startsWith(prefix))) toRemove.push(k);
   }
   toRemove.forEach((k) => localStorage.removeItem(k));
 }
@@ -68,6 +69,32 @@ function formatSeconds(value) {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
+function formatPaceMinutes(value) {
+  if (!Number.isFinite(Number(value)) || Number(value) <= 0) return "-";
+  const total = Math.round(Number(value) * 60);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function shortZoneLabels(count) {
+  return Array.from({ length: count }, (_, i) => `Z${i + 1}`);
+}
+
+function computeNiceDurationAxis(values) {
+  const nums = values.map((v) => Number(v)).filter((v) => Number.isFinite(v));
+  if (!nums.length) return { min: 0, max: 300, interval: 60 };
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  const range = Math.max(30, max - min);
+  const target = range / 4;
+  const steps = [5, 10, 15, 30, 60, 120, 180, 300, 600, 900, 1200, 1800];
+  const step = steps.find((v) => v >= target) || 1800;
+  return {
+    min: Math.max(0, Math.floor((min - step) / step) * step),
+    max: Math.ceil((max + step) / step) * step,
+    interval: step,
+  };
+}
+
 function delay(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 function writeHrDiagnostics(payload) {
@@ -79,6 +106,20 @@ function writeHrDiagnostics(payload) {
 function parseStravaEffortId(intervalId) {
   const m = String(intervalId || "").match(/^strava-(\d+)$/);
   return m ? m[1] : "";
+}
+
+function extractStreamArray(raw, keys) {
+  if (Array.isArray(raw)) {
+    for (const key of keys) {
+      const found = raw.find((s) => s?.type === key);
+      if (found) return toStreamArray(found);
+    }
+    return [];
+  }
+  for (const key of keys) {
+    if (raw && raw[key] !== undefined) return toStreamArray(raw[key]);
+  }
+  return [];
 }
 
 function initManualGallery() {
@@ -1102,17 +1143,13 @@ function toStreamArray(streamPart) {
 }
 
 function normalizeStravaStream(raw) {
-  // key_by_type=true -> { time: {data:[...]}, heartrate: {data:[...]} }
-  if (!Array.isArray(raw)) {
-    return {
-      time: toStreamArray(raw?.time),
-      heartrate: toStreamArray(raw?.heartrate),
-    };
-  }
-  // key_by_type omitted -> [{type:"time",data:[...]}, {type:"heartrate",data:[...]}]
   return {
-    time: toStreamArray(raw.find((s) => s.type === "time")),
-    heartrate: toStreamArray(raw.find((s) => s.type === "heartrate")),
+    time: extractStreamArray(raw, ["time"]),
+    heartrate: extractStreamArray(raw, ["heartrate"]),
+    watts: extractStreamArray(raw, ["watts"]),
+    velocity: extractStreamArray(raw, ["velocity_smooth"]),
+    pace: extractStreamArray(raw, ["pace"]),
+    gap: extractStreamArray(raw, ["grade_adjusted_pace", "gap"]),
   };
 }
 
@@ -1151,6 +1188,8 @@ async function fetchHrStream(activityId, settings, source = "intervals", stravaE
     if (!token) throw new Error("No Strava access token. Use Connect Strava first.");
     try {
       const activityCandidates = [
+        `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate,watts,velocity_smooth&key_by_type=true`,
+        `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate,watts,velocity_smooth`,
         `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate&key_by_type=true`,
         `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate`,
       ];
@@ -1169,6 +1208,8 @@ async function fetchHrStream(activityId, settings, source = "intervals", stravaE
       }
       if (msg.includes("404") && stravaEffortId) {
         const effortCandidates = [
+          `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate,watts,velocity_smooth&key_by_type=true`,
+          `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate,watts,velocity_smooth`,
           `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate&key_by_type=true`,
           `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate`,
         ];
@@ -1205,15 +1246,25 @@ async function fetchHrStream(activityId, settings, source = "intervals", stravaE
 
     if (!result) {
       const auth = `Basic ${btoa(`API_KEY:${settings.apiKey}`)}`;
-      const res = await fetch(
-        `https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/streams?types=heartrate,time`,
+      let res = await fetch(
+        `https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/streams?types=heartrate,time,watts,velocity,pace,gap`,
         { headers: { Authorization: auth, Accept: "application/json" } }
       );
+      if (!res.ok && res.status === 400) {
+        res = await fetch(
+          `https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/streams?types=heartrate,time`,
+          { headers: { Authorization: auth, Accept: "application/json" } }
+        );
+      }
       if (!res.ok) throw new Error(`Streams request failed (${res.status})`);
       const raw = await res.json();
       result = {
-        time:      (raw.find((s) => s.type === "time")?.data)      || [],
-        heartrate: (raw.find((s) => s.type === "heartrate")?.data) || [],
+        time: extractStreamArray(raw, ["time"]),
+        heartrate: extractStreamArray(raw, ["heartrate"]),
+        watts: extractStreamArray(raw, ["watts", "power"]),
+        velocity: extractStreamArray(raw, ["velocity_smooth", "velocity", "speed"]),
+        pace: extractStreamArray(raw, ["pace"]),
+        gap: extractStreamArray(raw, ["grade_adjusted_pace", "gap"]),
       };
     }
   }
@@ -1241,18 +1292,95 @@ function sliceHrStream(stream, startIndex, movingTimeS) {
   return points;
 }
 
-function renderHrStreamChart(points, item) {
+function sliceMetricStream(stream, values, startIndex, movingTimeS, transform = (v) => v) {
+  const safeStart = Number(startIndex) || 0;
+  const endIndex = safeStart + (Number(movingTimeS) || 0);
+  const timeArr = Array.isArray(stream?.time) ? stream.time : [];
+  const dataArr = Array.isArray(values) ? values : [];
+  const points = [];
+  for (let i = 0; i < timeArr.length && i < dataArr.length; i++) {
+    const t = Number(timeArr[i]);
+    const raw = dataArr[i];
+    if (!Number.isFinite(t) || t < safeStart || t >= endIndex) continue;
+    const value = transform(raw);
+    if (Number.isFinite(value)) points.push([(t - safeStart) / 60, value]);
+  }
+  return points;
+}
+
+function normalizeExplicitPaceValue(value) {
+  const v = Number(value);
+  if (!Number.isFinite(v) || v <= 0) return null;
+  if (v > 20) return v / 60;   // seconds per km -> min/km
+  if (v >= 2 && v <= 20) return v; // already min/km
+  return null;
+}
+
+function buildSecondaryStreamSeries(stream, startIndex, movingTimeS) {
+  const wattsPoints = sliceMetricStream(stream, stream?.watts, startIndex, movingTimeS, (v) => Number(v));
+  if (wattsPoints.length) {
+    return {
+      kind: "watts",
+      name: "Watts",
+      unit: "W",
+      points: wattsPoints,
+    };
+  }
+
+  const gapPoints = sliceMetricStream(stream, stream?.gap, startIndex, movingTimeS, normalizeExplicitPaceValue);
+  if (gapPoints.length) {
+    return {
+      kind: "pace",
+      name: "GAP",
+      unit: "min/km",
+      points: gapPoints,
+    };
+  }
+
+  const pacePoints = sliceMetricStream(stream, stream?.pace, startIndex, movingTimeS, normalizeExplicitPaceValue);
+  if (pacePoints.length) {
+    return {
+      kind: "pace",
+      name: "Pace",
+      unit: "min/km",
+      points: pacePoints,
+    };
+  }
+
+  const velocityPoints = sliceMetricStream(
+    stream,
+    stream?.velocity,
+    startIndex,
+    movingTimeS,
+    (v) => {
+      const speed = Number(v);
+      return Number.isFinite(speed) && speed > 0 ? (1000 / speed) / 60 : null;
+    }
+  );
+  if (velocityPoints.length) {
+    return {
+      kind: "pace",
+      name: "Pace",
+      unit: "min/km",
+      points: velocityPoints,
+    };
+  }
+
+  return null;
+}
+
+function renderHrStreamChart(points, item, secondarySeries = null) {
   const avg  = Math.round(item.avg_hr || 0);
   const max  = Math.round(item.max_hr || 0);
   const model = getSelectedZoneModel();
   // Build visualMap pieces for HR zone colour bands
   const pieces = model ? model.hr_zones.map((upper, i) => {
     const lower = i === 0 ? 0 : model.hr_zones[i - 1];
-    return { gte: lower, lt: upper, color: ZONE_COLORS[i + 1] || "#94a3b8", label: model.hr_zone_names[i] || `Z${i+1}` };
+    return { gte: lower, lt: upper, color: ZONE_COLORS[i + 1] || "#94a3b8", label: `Z${i+1}` };
   }).concat([{
     gte: model.hr_zones[model.hr_zones.length - 1],
     color: ZONE_COLORS[model.hr_zones.length] || "#ef4444",
-    label: model.hr_zone_names[model.hr_zones.length - 1] || `Z${model.hr_zones.length}`,
+    label: `Z${model.hr_zones.length}`,
   }]) : null;
 
   // Compute a sensible Y axis min: 10 bpm below the minimum HR value, rounded down to 10
@@ -1268,18 +1396,48 @@ function renderHrStreamChart(points, item) {
     },
     tooltip: {
       trigger: "axis",
-      formatter: (p) => `${Number(p[0].value[0]).toFixed(1)} min · HR ${p[0].value[1]} bpm`,
+      formatter: (params) => {
+        const lines = [`${Number(params[0]?.value?.[0] || 0).toFixed(1)} min`];
+        for (const p of params) {
+          if (p.seriesName === "HR") lines.push(`HR ${Math.round(p.value[1])} bpm`);
+          else if (secondarySeries?.kind === "watts") lines.push(`${p.seriesName} ${Math.round(p.value[1])} W`);
+          else lines.push(`${p.seriesName} ${formatPaceMinutes(p.value[1])} min/km`);
+        }
+        return lines.join(" · ");
+      },
     },
     ...(pieces ? { visualMap: { show: false, type: "piecewise", dimension: 1, seriesIndex: 0, pieces } } : {}),
-    grid: { left: 42, right: 20, top: 52, bottom: 28 },
+    grid: { left: 42, right: secondarySeries ? 52 : 20, top: 52, bottom: 28 },
     xAxis: { type: "value", name: "min", nameLocation: "end" },
-    yAxis: { type: "value", name: "bpm", min: yMin },
-    series: [{
-      type: "line", smooth: true, showSymbol: false,
-      lineStyle: { width: 2 },
-      areaStyle: { opacity: 0.18 },
-      data: points,
-    }],
+    yAxis: [
+      { type: "value", name: "bpm", min: yMin },
+      ...(secondarySeries ? [{
+        type: "value",
+        name: secondarySeries.unit,
+        alignTicks: true,
+        inverse: secondarySeries.kind === "pace",
+        axisLabel: secondarySeries.kind === "pace"
+          ? { formatter: (v) => formatPaceMinutes(v) }
+          : { formatter: (v) => Math.round(v) },
+      }] : []),
+    ],
+    series: [
+      {
+        type: "line", name: "HR", smooth: true, showSymbol: false,
+        lineStyle: { width: 2 },
+        areaStyle: { opacity: 0.18 },
+        data: points,
+      },
+      ...(secondarySeries ? [{
+        type: "line",
+        name: secondarySeries.name,
+        yAxisIndex: 1,
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 2, type: "dashed" },
+        data: secondarySeries.points,
+      }] : []),
+    ],
   });
 }
 
@@ -1299,6 +1457,7 @@ function computeZoneHistogram(points, model) {
 
 function renderZoneHistogram(points, item, model) {
   const counts = computeZoneHistogram(points, model);
+  const labels = shortZoneLabels(model.hr_zones.length);
   const c = mkChart("zones");
   c.setOption({
     title: {
@@ -1311,7 +1470,7 @@ function renderZoneHistogram(points, item, model) {
       formatter: (p) => `${p[0].name}: ${formatSeconds(p[0].value)}`,
     },
     grid: { left: 48, right: 16, top: 52, bottom: 28 },
-    xAxis: { type: "category", data: model.hr_zone_names.slice(0, model.hr_zones.length) },
+    xAxis: { type: "category", data: labels, axisLabel: { interval: 0 } },
     yAxis: { type: "value", axisLabel: { formatter: (v) => formatSeconds(v) } },
     series: [{ type: "bar", data: counts.map((v, i) => ({
       value: v, itemStyle: { color: ZONE_COLORS[i + 1] || "#94a3b8" },
@@ -1329,7 +1488,7 @@ function renderZoneFallback(item) {
       top: 6, textStyle: { fontSize: 12 }, subtextStyle: { fontSize: 10, color: "#94a3b8" },
     },
     grid: { left: 36, right: 16, top: 52, bottom: 28 },
-    xAxis: { type: "category", data: [1,2,3,4,5].map((v) => `Z${v}`) },
+    xAxis: { type: "category", data: [1,2,3,4,5].map((v) => `Z${v}`), axisLabel: { interval: 0 } },
     yAxis: { type: "value" },
     series: [{ type: "bar", data: [1,2,3,4,5].map((v) => ({
       value: v === z ? 1 : 0, itemStyle: { color: ZONE_COLORS[v] || "#94a3b8" },
@@ -1424,6 +1583,10 @@ async function renderRow2(item) {
       activity_start_local: item.activity_start_local || "",
       stream_time_len: Array.isArray(stream?.time) ? stream.time.length : 0,
       stream_hr_len: Array.isArray(stream?.heartrate) ? stream.heartrate.length : 0,
+      stream_watts_len: Array.isArray(stream?.watts) ? stream.watts.length : 0,
+      stream_velocity_len: Array.isArray(stream?.velocity) ? stream.velocity.length : 0,
+      stream_pace_len: Array.isArray(stream?.pace) ? stream.pace.length : 0,
+      stream_gap_len: Array.isArray(stream?.gap) ? stream.gap.length : 0,
       stream_scope: stream?.__stream_scope || "unknown",
       stream_path: stream?.__stream_path || "",
     };
@@ -1468,6 +1631,7 @@ async function renderRow2(item) {
     }
 
     const points = sliceHrStream(stream, startIndex, item.moving_time_s);
+    const secondarySeries = buildSecondaryStreamSeries(stream, startIndex, item.moving_time_s);
     diag.computed_start_s = startIndex;
     diag.points_count = points.length;
     diag.points_first = points[0] || null;
@@ -1484,6 +1648,12 @@ async function renderRow2(item) {
     } else {
       diag.points_avg_hr = null;
     }
+    diag.secondary_series = secondarySeries ? {
+      kind: secondarySeries.kind,
+      name: secondarySeries.name,
+      points_count: secondarySeries.points.length,
+      sample: secondarySeries.points.slice(0, 10),
+    } : null;
     writeHrDiagnostics(diag);
 
     // Zone chart — histogram from HR stream if model available, fallback otherwise
@@ -1496,7 +1666,7 @@ async function renderRow2(item) {
 
     // HR stream chart
     if (points.length > 0) {
-      renderHrStreamChart(points, item);
+      renderHrStreamChart(points, item, secondarySeries);
     } else {
       loadPlaceholder("hr-stream", `HR stream: ${item.date}`, "No HR data in stream");
     }
@@ -1533,6 +1703,8 @@ function renderCompare() {
 
   const sorted = state.compareSource;
   const dates  = sorted.map((x) => x.date);
+  const stravaOnly = sorted.length > 0 && sorted.every((x) => x.source === "strava");
+  const durationAxis = computeNiceDurationAxis(sorted.map((x) => x.moving_time_s));
 
   function axisFormatter(params) {
     const item = sorted[params[0]?.dataIndex ?? 0];
@@ -1548,11 +1720,31 @@ function renderCompare() {
     legend: { top: 28, textStyle: { fontSize: 11 } },
     grid:   { left: 44, right: 44, top: 68, bottom: 32 },
     xAxis:  { type: "category", data: dates },
-    yAxis:  [{ type: "value", name: "W" }, { type: "value", name: "Load" }],
+    yAxis:  [
+      { type: "value", name: "W" },
+      stravaOnly
+        ? {
+          type: "value",
+          name: "Time",
+          min: durationAxis.min,
+          max: durationAxis.max,
+          interval: durationAxis.interval,
+          axisLabel: { formatter: (v) => formatSeconds(v) },
+        }
+        : { type: "value", name: "Load" },
+    ],
     series: [
       { type: "line", name: "Avg W",      smooth: true, data: sorted.map((x) => x.avg_watts) },
       { type: "line", name: "Weighted W", smooth: true, data: sorted.map((x) => x.weighted_watts) },
-      { type: "line", name: "Load", yAxisIndex: 1, smooth: true, data: sorted.map((x) => +((x.training_load||0).toFixed(2))) },
+      {
+        type: "line",
+        name: stravaOnly ? "Seg time" : "Load",
+        yAxisIndex: 1,
+        smooth: true,
+        data: stravaOnly
+          ? sorted.map((x) => Number(x.moving_time_s || 0))
+          : sorted.map((x) => +((x.training_load || 0).toFixed(2))),
+      },
     ],
   });
   attachRow1Click("progression", (p) => p.dataIndex);

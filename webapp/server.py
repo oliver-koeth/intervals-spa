@@ -73,13 +73,22 @@ def _normalize_type(value: str) -> str:
     return "".join(value.split()).lower()
 
 
-def run_streams(activity_id: str, api_key: str) -> dict[str, list[int]]:
+def run_streams(activity_id: str, api_key: str) -> dict[str, list[int | float]]:
     auth = "Basic " + base64.b64encode(f"API_KEY:{api_key}".encode()).decode("ascii")
-    url = f"{API_BASE}/activity/{quote(activity_id)}/streams?types=heartrate,time"
-    raw = _api_get(url, auth)
+    url = f"{API_BASE}/activity/{quote(activity_id)}/streams?types=heartrate,time,watts,velocity,pace,gap"
+    try:
+        raw = _api_get(url, auth)
+    except HTTPError as exc:
+        if exc.code != HTTPStatus.BAD_REQUEST:
+            raise
+        raw = _api_get(f"{API_BASE}/activity/{quote(activity_id)}/streams?types=heartrate,time", auth)
     return {
         "time":      next((s["data"] for s in raw if s.get("type") == "time"),      []),
         "heartrate": next((s["data"] for s in raw if s.get("type") == "heartrate"), []),
+        "watts":     next((s["data"] for s in raw if s.get("type") in {"watts", "power"}), []),
+        "velocity":  next((s["data"] for s in raw if s.get("type") in {"velocity_smooth", "velocity", "speed"}), []),
+        "pace":      next((s["data"] for s in raw if s.get("type") == "pace"), []),
+        "gap":       next((s["data"] for s in raw if s.get("type") in {"gap", "grade_adjusted_pace"}), []),
     }
 
 
