@@ -15,6 +15,7 @@
         <button class="nav-btn" data-screen-target="intervals">Intervals</button>
         <button class="nav-btn" data-screen-target="compare">Compare</button>
         <button class="nav-btn" data-screen-target="settings">Settings</button>
+        <button class="nav-btn" data-screen-target="manual">Manual</button>
       </nav>
       <div class="row">
         <a
@@ -436,7 +437,131 @@
         </div>
       </section>
 
+      <!-- ── Manual ─────────────────────────────────────────────────────────── -->
+      <section id="screen-manual" class="screen">
+        <div class="card manual-content">
+          <h1>Manual</h1>
+          <p class="muted">
+            This guide explains setup and usage from configuration to comparison.
+            Click any screenshot thumbnail to open the full-size image.
+          </p>
+
+          <h2>1. Configuration first</h2>
+          <p>Before searching, collect your connection data from Strava and Intervals.icu.</p>
+
+          <h3>Strava</h3>
+          <p>
+            Open <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener">Strava API settings</a>,
+            click <strong>Edit</strong>, and set <strong>Authorization Callback Domain</strong> to
+            <code>oliver-koeth.github.io</code>.
+          </p>
+          <p>Then note: <strong>Client ID</strong>, <strong>Client Secret</strong>, <strong>Access Token</strong>, <strong>Refresh Token</strong>.</p>
+          <div class="manual-gallery">
+            <figure class="manual-shot">
+              <a href="./manual-assets/strava_api_settings_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/strava_api_settings_grayscale.png" data-caption="Strava API settings">
+                <img src="./manual-assets/strava_api_settings_grayscale.png" alt="Strava API settings" loading="lazy" />
+              </a>
+              <figcaption>Strava API settings</figcaption>
+            </figure>
+            <figure class="manual-shot">
+              <a href="./manual-assets/strava_edit_application_callback_domain_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/strava_edit_application_callback_domain_grayscale.png" data-caption="Strava edit app dialog with callback domain">
+                <img src="./manual-assets/strava_edit_application_callback_domain_grayscale.png" alt="Strava edit application callback domain dialog" loading="lazy" />
+              </a>
+              <figcaption>Set callback domain</figcaption>
+            </figure>
+          </div>
+
+          <h3>Intervals.icu</h3>
+          <p>
+            Open <a href="https://intervals.icu/settings" target="_blank" rel="noopener">intervals.icu settings</a>,
+            scroll to <strong>Developer Settings</strong>, and note your <strong>Athlete ID</strong> and <strong>API Key</strong>.
+          </p>
+          <div class="manual-gallery">
+            <figure class="manual-shot">
+              <a href="./manual-assets/intervals_icu_developer_settings_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/intervals_icu_developer_settings_grayscale.png" data-caption="Intervals.icu developer settings">
+                <img src="./manual-assets/intervals_icu_developer_settings_grayscale.png" alt="Intervals.icu developer settings" loading="lazy" />
+              </a>
+              <figcaption>Intervals.icu developer settings</figcaption>
+            </figure>
+          </div>
+
+          <h2>2. Enter settings in Intervals SPA</h2>
+          <p>
+            In <strong>Settings</strong>, fill Intervals.icu and Strava fields, click <strong>Save</strong>, then
+            <strong>Connect Strava</strong>. If needed, set <strong>OAuth Redirect URI</strong> to exactly the callback URL from your Strava app.
+          </p>
+          <div class="manual-gallery">
+            <figure class="manual-shot">
+              <a href="./manual-assets/intervals_settings_connections_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/intervals_settings_connections_grayscale.png" data-caption="Intervals SPA settings connections">
+                <img src="./manual-assets/intervals_settings_connections_grayscale.png" alt="Intervals SPA settings with connection fields" loading="lazy" />
+              </a>
+              <figcaption>Settings: connection fields</figcaption>
+            </figure>
+            <figure class="manual-shot">
+              <a href="./manual-assets/intervals_settings_connected_hr_zones_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/intervals_settings_connected_hr_zones_grayscale.png" data-caption="Connected state and HR zone setup">
+                <img src="./manual-assets/intervals_settings_connected_hr_zones_grayscale.png" alt="Connected state and HR zones in settings" loading="lazy" />
+              </a>
+              <figcaption>Connected state + HR zones</figcaption>
+            </figure>
+          </div>
+
+          <h2>3. Search and save results</h2>
+          <p>
+            Use <strong>Search Intervals</strong> or <strong>Search Strava Segments</strong>, review preview results, then click
+            <strong>Add all to intervals</strong> to store them in your browser.
+          </p>
+          <div class="manual-gallery">
+            <figure class="manual-shot">
+              <a href="./manual-assets/search_page_results_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/search_page_results_grayscale.png" data-caption="Search page and results preview">
+                <img src="./manual-assets/search_page_results_grayscale.png" alt="Search page and results preview" loading="lazy" />
+              </a>
+              <figcaption>Search and preview</figcaption>
+            </figure>
+          </div>
+
+          <h2>4. Work with stored intervals</h2>
+          <p>
+            On the <strong>Intervals</strong> page, apply filters, select rows, and click <strong>Compare selected</strong>.
+          </p>
+          <div class="manual-gallery">
+            <figure class="manual-shot">
+              <a href="./manual-assets/intervals_page_filters_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/intervals_page_filters_grayscale.png" data-caption="Intervals page with filter controls">
+                <img src="./manual-assets/intervals_page_filters_grayscale.png" alt="Intervals page filters and list" loading="lazy" />
+              </a>
+              <figcaption>Intervals list and filters</figcaption>
+            </figure>
+          </div>
+
+          <h2>5. Compare in dashboard</h2>
+          <p>
+            In <strong>Compare</strong>, click a top-chart point to pin the lower charts (zone distribution and HR stream) to one interval.
+          </p>
+          <div class="manual-gallery">
+            <figure class="manual-shot">
+              <a href="./manual-assets/comparison_dashboard_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/comparison_dashboard_grayscale.png" data-caption="Comparison dashboard">
+                <img src="./manual-assets/comparison_dashboard_grayscale.png" alt="Comparison dashboard" loading="lazy" />
+              </a>
+              <figcaption>Comparison dashboard</figcaption>
+            </figure>
+          </div>
+
+          <h2>Quick summary</h2>
+          <ol>
+            <li>Get Strava and Intervals.icu credentials.</li>
+            <li>Save credentials in Settings and connect Strava.</li>
+            <li>Optionally load HR zones.</li>
+            <li>Search, preview, and add results to Intervals.</li>
+            <li>Filter, select, and compare intervals.</li>
+          </ol>
+        </div>
+      </section>
+
     </main>
+    <div id="manual-lightbox" class="manual-lightbox hidden" role="dialog" aria-modal="true" aria-label="Manual screenshot">
+      <button id="manual-lightbox-close" type="button" class="manual-lightbox-close" aria-label="Close image viewer">×</button>
+      <img id="manual-lightbox-image" src="" alt="" />
+      <p id="manual-lightbox-caption" class="muted"></p>
+    </div>
     <footer class="footer">
       <div class="footer-inner">
         <span>© Oliver Koeth</span>

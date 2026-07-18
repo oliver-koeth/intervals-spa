@@ -81,6 +81,42 @@ function parseStravaEffortId(intervalId) {
   return m ? m[1] : "";
 }
 
+function initManualGallery() {
+  const lightbox = document.getElementById("manual-lightbox");
+  const img = document.getElementById("manual-lightbox-image");
+  const caption = document.getElementById("manual-lightbox-caption");
+  const closeBtn = document.getElementById("manual-lightbox-close");
+  if (!lightbox || !img || !caption || !closeBtn) return;
+
+  const close = () => {
+    lightbox.classList.add("hidden");
+    img.src = "";
+    img.alt = "";
+    caption.textContent = "";
+  };
+
+  document.querySelectorAll(".manual-thumb-link").forEach((link) => {
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      const src = link.getAttribute("data-full-image") || link.getAttribute("href") || "";
+      const text = link.getAttribute("data-caption") || "";
+      if (!src) return;
+      img.src = src;
+      img.alt = text;
+      caption.textContent = text;
+      lightbox.classList.remove("hidden");
+    });
+  });
+
+  closeBtn.addEventListener("click", close);
+  lightbox.addEventListener("click", (e) => {
+    if (e.target === lightbox) close();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !lightbox.classList.contains("hidden")) close();
+  });
+}
+
 function isDark() { return document.body.classList.contains("theme-dark"); }
 
 function normalizeActivityType(type) {
@@ -1687,6 +1723,7 @@ function init() {
   loadSettingsToForm();
   updateSettingsCallouts();
   handleStravaOAuthCallback();
+  initManualGallery();
   setScreen("search");
 
   document.getElementById("search-form").addEventListener("submit", handleSearchSubmit);

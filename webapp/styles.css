@@ -262,6 +262,95 @@ tr:hover td { background: rgba(148,163,184,0.07); }
   word-break: break-word;
 }
 
+/* ── Manual ──────────────────────────────────────────────────────────────── */
+.manual-content {
+  max-width: 980px;
+}
+.manual-content h2 {
+  margin-top: 1.25rem;
+  margin-bottom: 0.35rem;
+  font-size: 1.02rem;
+}
+.manual-content h3 {
+  margin-top: 0.9rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.92rem;
+}
+.manual-content p,
+.manual-content li {
+  line-height: 1.55;
+}
+.manual-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.75rem;
+  margin: 0.55rem 0 1rem;
+}
+.manual-shot {
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.45rem;
+  background: rgba(148,163,184,0.05);
+}
+.manual-shot img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 0.35rem;
+  border: 1px solid var(--border);
+  display: block;
+}
+.manual-shot figcaption {
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.manual-thumb-link {
+  display: block;
+  cursor: zoom-in;
+}
+.manual-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(2, 6, 23, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.manual-lightbox img {
+  max-width: min(92vw, 1600px);
+  max-height: 82vh;
+  width: auto;
+  height: auto;
+  border-radius: 0.4rem;
+  border: 1px solid #334155;
+}
+.manual-lightbox p {
+  margin-top: 0.5rem;
+  color: #cbd5e1;
+}
+.manual-lightbox-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.9rem;
+  background: transparent;
+  border: 1px solid #64748b;
+  color: #e2e8f0;
+  border-radius: 0.35rem;
+  width: 2rem;
+  height: 2rem;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.manual-lightbox-close:hover {
+  border-color: #cbd5e1;
+}
+
 /* ── Footer ──────────────────────────────────────────────────────────────── */
 .footer {
   border-top: 1px solid var(--border);
