@@ -247,6 +247,10 @@ a.btn { text-decoration: none; display: inline-block; }
 #screen-search sl-button[variant="primary"]::part(base):hover {
   filter: brightness(1.03);
 }
+#screen-search input.search-date-input {
+  height: 32px;
+  cursor: pointer;
+}
 
 /* flatpickr theme alignment (search page dates) */
 .flatpickr-calendar {

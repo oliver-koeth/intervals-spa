@@ -162,9 +162,7 @@ function initSearchDatePickers() {
   if (typeof flatpickr === "undefined") return;
   const ids = ["search-from", "search-to", "strava-search-from", "strava-search-to"];
   ids.forEach((id) => {
-    const host = document.getElementById(id);
-    if (!host) return;
-    const input = host.shadowRoot?.querySelector("input");
+    const input = document.getElementById(id);
     if (!input || input.dataset.fpAttached === "1") return;
     flatpickr(input, {
       dateFormat: "Y-m-d",
