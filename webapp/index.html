@@ -4,8 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Intervals</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/themes/light.css" />
     <link rel="stylesheet" href="./styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/echarts@6/dist/echarts.min.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/shoelace-autoloader.js"></script>
   </head>
   <body class="theme-dark">
     <header class="topbar">
@@ -38,37 +40,34 @@
 
           <form id="search-form" class="form-grid">
             <label>Label
-              <input id="search-label" type="text" placeholder="e.g. fahrtkopf" />
+              <sl-input id="search-label" placeholder="e.g. fahrtkopf"></sl-input>
             </label>
             <label>Activity type
-              <select id="search-type">
-                <option value="">All types</option>
-                <option value="Run">Run</option>
-                <option value="VirtualRun">VirtualRun</option>
-              </select>
+              <sl-select id="search-type" value="">
+                <sl-option value="">All types</sl-option>
+                <sl-option value="Run">Run</sl-option>
+                <sl-option value="VirtualRun">VirtualRun</sl-option>
+              </sl-select>
             </label>
             <label>Time target (mm:ss)
-              <input id="search-time" type="text" placeholder="e.g. 03:00" />
+              <sl-input id="search-time" placeholder="e.g. 03:00"></sl-input>
             </label>
             <label>Margin (mm:ss)
-              <input id="search-margin" type="text" placeholder="e.g. 00:10" />
+              <sl-input id="search-margin" placeholder="e.g. 00:10"></sl-input>
             </label>
             <label>Date from
-              <input id="search-from" type="date" />
+              <sl-input id="search-from" type="date"></sl-input>
             </label>
             <label>Date to
-              <input id="search-to" type="date" />
+              <sl-input id="search-to" type="date"></sl-input>
             </label>
-            <label class="checkbox-label">
+            <div class="checkbox-label">
               <span>&nbsp;</span>
-              <span class="checkbox-wrap">
-                <input id="search-exclude-recovery" type="checkbox" checked />
-                Exclude recovery intervals
-              </span>
-            </label>
+              <sl-checkbox id="search-exclude-recovery" checked>Exclude recovery intervals</sl-checkbox>
+            </div>
             <div class="form-actions search-actions">
-              <button type="submit" id="search-submit" class="btn primary">Search</button>
-              <button type="reset" class="btn secondary">Reset</button>
+              <sl-button type="submit" id="search-submit" variant="primary">Search</sl-button>
+              <sl-button type="reset" variant="default">Reset</sl-button>
             </div>
           </form>
           <p id="search-status" class="muted" style="margin-top:.75rem"></p>
@@ -95,8 +94,8 @@
               </table>
             </div>
             <div class="search-preview-actions">
-              <button id="search-preview-cancel" type="button" class="btn secondary">Cancel</button>
-              <button id="search-preview-add" type="button" class="btn primary">Add all to intervals</button>
+              <sl-button id="search-preview-cancel" type="button" variant="default">Cancel</sl-button>
+              <sl-button id="search-preview-add" type="button" variant="primary">Add all to intervals</sl-button>
             </div>
           </div>
         </div>
@@ -106,37 +105,34 @@
           <p class="muted">Searches your Strava segment efforts and maps results to interval rows.</p>
           <form id="strava-search-form" class="form-grid">
             <label>Label
-              <input id="strava-search-label" type="text" placeholder="e.g. hill, segment name" />
+              <sl-input id="strava-search-label" placeholder="e.g. hill, segment name"></sl-input>
             </label>
             <label>Activity type
-              <select id="strava-search-type">
-                <option value="">All types</option>
-                <option value="Run">Run</option>
-                <option value="Ride">Ride</option>
-              </select>
+              <sl-select id="strava-search-type" value="">
+                <sl-option value="">All types</sl-option>
+                <sl-option value="Run">Run</sl-option>
+                <sl-option value="Ride">Ride</sl-option>
+              </sl-select>
             </label>
             <label>Date from
-              <input id="strava-search-from" type="date" />
+              <sl-input id="strava-search-from" type="date"></sl-input>
             </label>
             <label>Date to
-              <input id="strava-search-to" type="date" />
+              <sl-input id="strava-search-to" type="date"></sl-input>
             </label>
-            <label class="checkbox-label">
+            <div class="checkbox-label">
               <span>&nbsp;</span>
-              <span class="checkbox-wrap">
-                <input id="strava-search-starred" type="checkbox" checked />
-                Starred segment only
-              </span>
-            </label>
-            <label class="checkbox-label" id="strava-nonstarred-warn-wrap" style="display:none">
+              <sl-checkbox id="strava-search-starred" checked>Starred segment only</sl-checkbox>
+            </div>
+            <div class="checkbox-label" id="strava-nonstarred-warn-wrap" style="display:none">
               <span>&nbsp;</span>
               <span class="callout callout-warn" style="margin:0;font-size:.8rem;padding:.4rem .6rem">
                 ⚠ Without "Starred segment only" results may be incomplete — Strava limits activity scanning to the last 30 activities.
               </span>
-            </label>
+            </div>
             <div class="form-actions search-actions">
-              <button type="submit" id="strava-search-submit" class="btn primary">Search</button>
-              <button type="reset" class="btn secondary">Reset</button>
+              <sl-button type="submit" id="strava-search-submit" variant="primary">Search</sl-button>
+              <sl-button type="reset" variant="default">Reset</sl-button>
             </div>
           </form>
           <p id="strava-search-status" class="muted" style="margin-top:.75rem"></p>
@@ -163,8 +159,8 @@
               </table>
             </div>
             <div class="search-preview-actions">
-              <button id="strava-search-preview-cancel" type="button" class="btn secondary">Cancel</button>
-              <button id="strava-search-preview-add" type="button" class="btn primary">Add all to intervals</button>
+              <sl-button id="strava-search-preview-cancel" type="button" variant="default">Cancel</sl-button>
+              <sl-button id="strava-search-preview-add" type="button" variant="primary">Add all to intervals</sl-button>
             </div>
           </div>
         </div>

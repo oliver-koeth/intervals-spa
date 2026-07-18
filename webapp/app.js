@@ -2001,10 +2001,13 @@ function init() {
     hideSearchPreview("strava");
     document.getElementById("strava-search-status").textContent = "";
   });
-  document.getElementById("strava-search-starred").addEventListener("change", (e) => {
+  const stravaStarredEl = document.getElementById("strava-search-starred");
+  const syncStarredWarning = () => {
     document.getElementById("strava-nonstarred-warn-wrap").style.display =
-      e.target.checked ? "none" : "";
-  });
+      stravaStarredEl.checked ? "none" : "";
+  };
+  stravaStarredEl.addEventListener("change", syncStarredWarning);
+  stravaStarredEl.addEventListener("sl-change", syncStarredWarning);
   document.getElementById("strava-search-preview-cancel").addEventListener("click", () => {
     hideSearchPreview("strava");
     document.getElementById("strava-search-status").textContent = "Strava preview canceled.";
