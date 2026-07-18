@@ -162,92 +162,92 @@ a.btn { text-decoration: none; display: inline-block; }
   margin: 1.25rem 0 0.25rem;
 }
 
-/* ── Shoelace (search page only) ─────────────────────────────────────────── */
-#screen-search {
+/* ── Shoelace form controls ───────────────────────────────────────────────── */
+.shoelace-forms {
   --sl-input-height-medium: 32px;
   --sl-input-border-radius-medium: 8px;
   --sl-border-radius-medium: 8px;
   --sl-font-size-small: 0.85rem;
 }
-#screen-search sl-input,
-#screen-search sl-select,
-#screen-search sl-checkbox,
-#screen-search sl-button {
+.shoelace-forms sl-input,
+.shoelace-forms sl-select,
+.shoelace-forms sl-checkbox,
+.shoelace-forms sl-button {
   font-size: 0.85rem;
 }
-#screen-search sl-input::part(form-control-label),
-#screen-search sl-select::part(form-control-label) {
+.shoelace-forms sl-input::part(form-control-label),
+.shoelace-forms sl-select::part(form-control-label) {
   color: var(--text);
 }
-#screen-search sl-input::part(base),
-#screen-search sl-select::part(combobox) {
+.shoelace-forms sl-input::part(base),
+.shoelace-forms sl-select::part(combobox) {
   border-color: var(--border);
   background: transparent;
   color: var(--text);
   box-shadow: none;
 }
-#screen-search sl-input::part(input),
-#screen-search sl-select::part(display-input) {
+.shoelace-forms sl-input::part(input),
+.shoelace-forms sl-select::part(display-input) {
   color: var(--text);
 }
-#screen-search sl-select::part(listbox),
-#screen-search sl-select::part(menu) {
+.shoelace-forms sl-select::part(listbox),
+.shoelace-forms sl-select::part(menu) {
   background: var(--surface);
   color: var(--text);
   border-color: var(--border);
 }
-#screen-search sl-select {
+.shoelace-forms sl-select {
   --sl-color-neutral-0: var(--surface);
   --sl-color-neutral-100: var(--surface);
   --sl-color-neutral-200: rgba(148, 163, 184, 0.22);
   --sl-color-primary-600: #0284c7;
   --sl-color-primary-700: #0369a1;
 }
-#screen-search sl-option::part(base) {
+.shoelace-forms sl-option::part(base) {
   color: var(--text);
   opacity: 1;
   background: var(--surface);
 }
-#screen-search sl-option::part(label) {
+.shoelace-forms sl-option::part(label) {
   color: var(--text);
 }
-#screen-search sl-option::part(base):focus,
-#screen-search sl-option[aria-current="true"]::part(base) {
+.shoelace-forms sl-option::part(base):focus,
+.shoelace-forms sl-option[aria-current="true"]::part(base) {
   background: rgba(148, 163, 184, 0.22);
   color: var(--text);
 }
-#screen-search sl-option[aria-selected="true"]::part(base) {
+.shoelace-forms sl-option[aria-selected="true"]::part(base) {
   background: #0284c7;
   color: #f8fafc;
 }
-#screen-search sl-option[aria-selected="true"]::part(label) {
+.shoelace-forms sl-option[aria-selected="true"]::part(label) {
   color: #f8fafc;
 }
-#screen-search sl-option::part(base):hover {
+.shoelace-forms sl-option::part(base):hover {
   background: rgba(148, 163, 184, 0.26);
   color: var(--text);
 }
-#screen-search sl-checkbox::part(label) {
+.shoelace-forms sl-checkbox::part(label) {
   color: var(--text);
 }
-#screen-search sl-button::part(base) {
+.shoelace-forms sl-button::part(base) {
   border-radius: 0.5rem;
   font-size: 0.85rem;
 }
-#screen-search sl-button[variant="default"]::part(base) {
+.shoelace-forms sl-button[variant="default"]::part(base) {
   background: transparent;
   border-color: var(--border);
   color: var(--text);
 }
-#screen-search sl-button[variant="primary"]::part(base) {
+.shoelace-forms sl-button[variant="primary"]::part(base) {
   background: var(--primary);
   border-color: transparent;
   color: var(--primary-text);
 }
-#screen-search sl-button[variant="primary"]::part(base):hover {
+.shoelace-forms sl-button[variant="primary"]::part(base):hover {
   filter: brightness(1.03);
 }
-#screen-search input.search-date-input {
+.shoelace-forms input.search-date-input {
   height: 32px;
   cursor: pointer;
 }

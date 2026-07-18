@@ -35,7 +35,7 @@
     <main class="container">
 
       <!-- ── Search ───────────────────────────────────────────────────────── -->
-      <section id="screen-search" class="screen active">
+      <section id="screen-search" class="screen active shoelace-forms">
         <div class="card">
           <h1>Search Intervals</h1>
           <p class="muted">Searches intervals.icu and returns matching intervals.</p>
@@ -169,7 +169,7 @@
       </section>
 
       <!-- ── Intervals ─────────────────────────────────────────────────────── -->
-      <section id="screen-intervals" class="screen">
+      <section id="screen-intervals" class="screen shoelace-forms">
         <div class="card">
           <div class="row space-between">
             <h1>Intervals</h1>
@@ -178,33 +178,33 @@
 
           <div class="filters">
             <label>Label
-              <input id="filter-label" type="text" placeholder="e.g. fahrtkopf" />
+              <sl-input id="filter-label" placeholder="e.g. fahrtkopf"></sl-input>
             </label>
             <label>Source
-              <select id="filter-source">
-                <option value="">All sources</option>
-                <option value="intervals">Intervals.icu</option>
-                <option value="strava">Strava</option>
-              </select>
+              <sl-select id="filter-source" value="">
+                <sl-option value="">All sources</sl-option>
+                <sl-option value="intervals">Intervals.icu</sl-option>
+                <sl-option value="strava">Strava</sl-option>
+              </sl-select>
             </label>
             <label>Activity type
-              <select id="filter-type">
-                <option value="">All types</option>
-                <option value="Run">Run</option>
-                <option value="VirtualRun">VirtualRun</option>
-              </select>
+              <sl-select id="filter-type" value="">
+                <sl-option value="">All types</sl-option>
+                <sl-option value="Run">Run</sl-option>
+                <sl-option value="VirtualRun">VirtualRun</sl-option>
+              </sl-select>
             </label>
             <label>Time from (mm:ss)
-              <input id="filter-time-from" type="text" placeholder="22:00" />
+              <sl-input id="filter-time-from" placeholder="22:00"></sl-input>
             </label>
             <label>Time to (mm:ss)
-              <input id="filter-time-to" type="text" placeholder="27:00" />
+              <sl-input id="filter-time-to" placeholder="27:00"></sl-input>
             </label>
             <label>Date from
-              <input id="filter-date-from" type="date" />
+              <input id="filter-date-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
             </label>
             <label>Date to
-              <input id="filter-date-to" type="date" />
+              <input id="filter-date-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
             </label>
             <div class="form-actions">
               <button id="apply-filters" class="btn secondary" type="button">Apply</button>
@@ -272,7 +272,7 @@
       </section>
 
       <!-- ── Settings ──────────────────────────────────────────────────────── -->
-      <section id="screen-settings" class="screen">
+      <section id="screen-settings" class="screen shoelace-forms">
         <div class="card">
           <h1>Settings</h1>
           <div class="settings-group">
@@ -313,10 +313,10 @@
             </div>
             <form id="settings-form" class="form-grid">
               <label>Athlete ID
-                <input id="settings-athlete-id" type="text" placeholder="e.g. i75074" />
+                <sl-input id="settings-athlete-id" placeholder="e.g. i75074"></sl-input>
               </label>
               <label>API Key
-                <input id="settings-api-key" type="password" placeholder="intervals.icu API key" />
+                <sl-input id="settings-api-key" type="password" placeholder="intervals.icu API key"></sl-input>
               </label>
               <div class="form-actions save-actions">
                 <button type="submit" class="btn primary">Save</button>
@@ -347,16 +347,16 @@
             </div>
             <div class="form-grid">
               <label>Client ID
-                <input id="settings-strava-client-id" type="text" placeholder="e.g. 29670" />
+                <sl-input id="settings-strava-client-id" placeholder="e.g. 29670"></sl-input>
               </label>
               <label>Client Secret
-                <input id="settings-strava-client-secret" type="password" placeholder="Strava client secret" />
+                <sl-input id="settings-strava-client-secret" type="password" placeholder="Strava client secret"></sl-input>
               </label>
               <label>Access Token
-                <input id="settings-strava-access-token" type="password" placeholder="Strava access token" />
+                <sl-input id="settings-strava-access-token" type="password" placeholder="Strava access token"></sl-input>
               </label>
               <label>OAuth Redirect URI (optional)
-                <input id="settings-strava-redirect-uri" type="text" placeholder="e.g. https://oliver-koeth.github.io/intervals-spa" />
+                <sl-input id="settings-strava-redirect-uri" placeholder="e.g. https://oliver-koeth.github.io/intervals-spa"></sl-input>
               </label>
               <div class="form-actions save-actions">
                 <button type="button" id="settings-save-strava" class="btn primary">Save</button>
@@ -382,11 +382,11 @@
             </div>
             <div class="form-grid">
               <label>API mode
-                <select id="settings-api-mode">
-                  <option value="auto">Auto (recommended)</option>
-                  <option value="proxy">Local proxy (/api/search)</option>
-                  <option value="direct">Direct intervals.icu</option>
-                </select>
+                <sl-select id="settings-api-mode" value="auto">
+                  <sl-option value="auto">Auto (recommended)</sl-option>
+                  <sl-option value="proxy">Local proxy (/api/search)</sl-option>
+                  <sl-option value="direct">Direct intervals.icu</sl-option>
+                </sl-select>
               </label>
               <div class="form-actions save-actions">
                 <button type="button" id="settings-save-mode" class="btn primary">Save</button>
@@ -410,9 +410,9 @@
             </div>
             <div class="form-grid">
               <label>Zone model
-                <select id="settings-zone-model">
-                  <option value="">Default (Z1–Z5)</option>
-                </select>
+                <sl-select id="settings-zone-model" value="">
+                  <sl-option value="">Default (Z1–Z5)</sl-option>
+                </sl-select>
               </label>
               <div class="form-actions">
                 <button type="button" id="load-zone-models" class="btn secondary">Load from intervals.icu</button>

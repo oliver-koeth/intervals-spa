@@ -160,7 +160,11 @@ function initManualGallery() {
 
 function initSearchDatePickers() {
   if (typeof flatpickr === "undefined") return;
-  const ids = ["search-from", "search-to", "strava-search-from", "strava-search-to"];
+  const ids = [
+    "search-from", "search-to",
+    "strava-search-from", "strava-search-to",
+    "filter-date-from", "filter-date-to",
+  ];
   ids.forEach((id) => {
     const input = document.getElementById(id);
     if (!input || input.dataset.fpAttached === "1") return;
@@ -371,9 +375,9 @@ function zoneModelLabel(m) {
 function populateZoneModelSelect(models, selectedId) {
   const sel = document.getElementById("settings-zone-model");
   // Preserve the default option then replace model options
-  sel.innerHTML = '<option value="">Default (Z1–Z5)</option>';
+  sel.innerHTML = '<sl-option value="">Default (Z1–Z5)</sl-option>';
   models.forEach((m) => {
-    const opt = document.createElement("option");
+    const opt = document.createElement("sl-option");
     opt.value = String(m.id);
     opt.textContent = zoneModelLabel(m);
     if (String(m.id) === String(selectedId)) opt.selected = true;
@@ -2062,12 +2066,15 @@ function init() {
       document.getElementById(id)?.classList.add("hidden");
     });
   });
-  document.getElementById("settings-zone-model").addEventListener("change", (e) => {
+  const zoneModelEl = document.getElementById("settings-zone-model");
+  const onZoneModelChange = (e) => {
     localStorage.setItem("intervals_zone_model_id", e.target.value);
     const s = getSettings();
     renderZoneModelPreview(s.zoneModels.find((m) => String(m.id) === e.target.value) || null);
     updateSettingsCallouts();
-  });
+  };
+  zoneModelEl.addEventListener("change", onZoneModelChange);
+  zoneModelEl.addEventListener("sl-change", onZoneModelChange);
   document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
   document.getElementById("back-to-list").addEventListener("click", () => setScreen("intervals"));
   document.getElementById("go-compare").addEventListener("click", () => setScreen("compare"));
