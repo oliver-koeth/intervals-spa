@@ -196,16 +196,36 @@ a.btn { text-decoration: none; display: inline-block; }
   color: var(--text);
   border-color: var(--border);
 }
+#screen-search sl-select {
+  --sl-color-neutral-0: var(--surface);
+  --sl-color-neutral-100: var(--surface);
+  --sl-color-neutral-200: rgba(148, 163, 184, 0.22);
+  --sl-color-primary-600: #0284c7;
+  --sl-color-primary-700: #0369a1;
+}
 #screen-search sl-option::part(base) {
   color: var(--text);
   opacity: 1;
+  background: var(--surface);
 }
 #screen-search sl-option::part(label) {
   color: var(--text);
 }
-#screen-search sl-option[aria-selected="true"]::part(base),
-#screen-search sl-option::part(base):hover {
+#screen-search sl-option::part(base):focus,
+#screen-search sl-option[aria-current="true"]::part(base) {
+  background: rgba(148, 163, 184, 0.22);
+  color: var(--text);
+}
+#screen-search sl-option[aria-selected="true"]::part(base) {
+  background: #0284c7;
   color: #f8fafc;
+}
+#screen-search sl-option[aria-selected="true"]::part(label) {
+  color: #f8fafc;
+}
+#screen-search sl-option::part(base):hover {
+  background: rgba(148, 163, 184, 0.26);
+  color: var(--text);
 }
 #screen-search sl-checkbox::part(label) {
   color: var(--text);
