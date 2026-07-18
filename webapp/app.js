@@ -28,7 +28,7 @@ const stravaActivityStartCache = {};
 const stravaEffortStartCache = {};
 
 const INTERVALS_CACHE_KEY   = "intervals_cached_intervals_v1";
-const HR_STREAM_LS_PREFIX   = "intervals_hr_stream_v2:";   // localStorage key prefix for HR streams
+const HR_STREAM_LS_PREFIX   = "intervals_hr_stream_v3:";   // localStorage key prefix for HR streams
 
 /** Persist a stream object to localStorage (silently skips on quota errors). */
 function saveHrStreamToStorage(cacheKey, stream) {
@@ -49,7 +49,7 @@ function loadHrStreamFromStorage(cacheKey) {
 function clearHrStreamCache() {
   for (const k of Object.keys(hrStreamCache)) delete hrStreamCache[k];
   const toRemove = [];
-  const prefixes = [HR_STREAM_LS_PREFIX, "intervals_hr_stream:"];
+  const prefixes = [HR_STREAM_LS_PREFIX, "intervals_hr_stream:", "intervals_hr_stream_v2:"];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
     if (k && prefixes.some((prefix) => k.startsWith(prefix))) toRemove.push(k);
@@ -1147,6 +1147,9 @@ function normalizeStravaStream(raw) {
     time: extractStreamArray(raw, ["time"]),
     heartrate: extractStreamArray(raw, ["heartrate"]),
     watts: extractStreamArray(raw, ["watts"]),
+    distance: extractStreamArray(raw, ["distance"]),
+    altitude: extractStreamArray(raw, ["altitude"]),
+    grade: extractStreamArray(raw, ["grade_smooth"]),
     velocity: extractStreamArray(raw, ["velocity_smooth"]),
     pace: extractStreamArray(raw, ["pace"]),
     gap: extractStreamArray(raw, ["grade_adjusted_pace", "gap"]),
@@ -1188,8 +1191,8 @@ async function fetchHrStream(activityId, settings, source = "intervals", stravaE
     if (!token) throw new Error("No Strava access token. Use Connect Strava first.");
     try {
       const activityCandidates = [
-        `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate,watts,velocity_smooth&key_by_type=true`,
-        `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate,watts,velocity_smooth`,
+        `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate,watts,velocity_smooth,distance,altitude,grade_smooth&key_by_type=true`,
+        `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate,watts,velocity_smooth,distance,altitude,grade_smooth`,
         `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate&key_by_type=true`,
         `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate`,
       ];
@@ -1198,6 +1201,13 @@ async function fetchHrStream(activityId, settings, source = "intervals", stravaE
       result = {
         time: normalized.time,
         heartrate: normalized.heartrate,
+        watts: normalized.watts,
+        distance: normalized.distance,
+        altitude: normalized.altitude,
+        grade: normalized.grade,
+        velocity: normalized.velocity,
+        pace: normalized.pace,
+        gap: normalized.gap,
         __stream_scope: "activity",
         __stream_path: path,
       };
@@ -1208,8 +1218,8 @@ async function fetchHrStream(activityId, settings, source = "intervals", stravaE
       }
       if (msg.includes("404") && stravaEffortId) {
         const effortCandidates = [
-          `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate,watts,velocity_smooth&key_by_type=true`,
-          `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate,watts,velocity_smooth`,
+          `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate,watts,velocity_smooth,distance,altitude,grade_smooth&key_by_type=true`,
+          `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate,watts,velocity_smooth,distance,altitude,grade_smooth`,
           `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate&key_by_type=true`,
           `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate`,
         ];
@@ -1218,6 +1228,13 @@ async function fetchHrStream(activityId, settings, source = "intervals", stravaE
         result = {
           time: normalized.time,
           heartrate: normalized.heartrate,
+          watts: normalized.watts,
+          distance: normalized.distance,
+          altitude: normalized.altitude,
+          grade: normalized.grade,
+          velocity: normalized.velocity,
+          pace: normalized.pace,
+          gap: normalized.gap,
           __stream_scope: "segment_effort",
           __segment_effort_id: stravaEffortId,
           __stream_path: path,
@@ -1247,7 +1264,7 @@ async function fetchHrStream(activityId, settings, source = "intervals", stravaE
     if (!result) {
       const auth = `Basic ${btoa(`API_KEY:${settings.apiKey}`)}`;
       let res = await fetch(
-        `https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/streams?types=heartrate,time,watts,velocity,pace,gap`,
+        `https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/streams?types=heartrate,time,watts,velocity,pace,gap,distance,altitude,grade`,
         { headers: { Authorization: auth, Accept: "application/json" } }
       );
       if (!res.ok && res.status === 400) {
@@ -1262,6 +1279,9 @@ async function fetchHrStream(activityId, settings, source = "intervals", stravaE
         time: extractStreamArray(raw, ["time"]),
         heartrate: extractStreamArray(raw, ["heartrate"]),
         watts: extractStreamArray(raw, ["watts", "power"]),
+        distance: extractStreamArray(raw, ["distance"]),
+        altitude: extractStreamArray(raw, ["altitude"]),
+        grade: extractStreamArray(raw, ["grade_smooth", "grade"]),
         velocity: extractStreamArray(raw, ["velocity_smooth", "velocity", "speed"]),
         pace: extractStreamArray(raw, ["pace"]),
         gap: extractStreamArray(raw, ["grade_adjusted_pace", "gap"]),
@@ -1316,6 +1336,30 @@ function normalizeExplicitPaceValue(value) {
   return null;
 }
 
+function buildPaceFromDistance(stream, startIndex, movingTimeS) {
+  const safeStart = Number(startIndex) || 0;
+  const endIndex = safeStart + (Number(movingTimeS) || 0);
+  const timeArr = Array.isArray(stream?.time) ? stream.time : [];
+  const distArr = Array.isArray(stream?.distance) ? stream.distance : [];
+  const points = [];
+  for (let i = 1; i < timeArr.length && i < distArr.length; i++) {
+    const t = Number(timeArr[i]);
+    const prevT = Number(timeArr[i - 1]);
+    const d = Number(distArr[i]);
+    const prevD = Number(distArr[i - 1]);
+    if (!Number.isFinite(t) || !Number.isFinite(prevT) || t < safeStart || t >= endIndex) continue;
+    if (!Number.isFinite(d) || !Number.isFinite(prevD) || d <= prevD) continue;
+    const deltaMeters = d - prevD;
+    const deltaSeconds = t - prevT;
+    if (deltaMeters <= 0 || deltaSeconds <= 0) continue;
+    const paceMinPerKm = (deltaSeconds / deltaMeters) * 1000 / 60;
+    if (Number.isFinite(paceMinPerKm) && paceMinPerKm > 0) {
+      points.push([(t - safeStart) / 60, paceMinPerKm]);
+    }
+  }
+  return points;
+}
+
 function buildSecondaryStreamSeries(stream, startIndex, movingTimeS) {
   const wattsPoints = sliceMetricStream(stream, stream?.watts, startIndex, movingTimeS, (v) => Number(v));
   if (wattsPoints.length) {
@@ -1363,6 +1407,16 @@ function buildSecondaryStreamSeries(stream, startIndex, movingTimeS) {
       name: "Pace",
       unit: "min/km",
       points: velocityPoints,
+    };
+  }
+
+  const distancePacePoints = buildPaceFromDistance(stream, startIndex, movingTimeS);
+  if (distancePacePoints.length) {
+    return {
+      kind: "pace",
+      name: "Pace",
+      unit: "min/km",
+      points: distancePacePoints,
     };
   }
 
@@ -1584,6 +1638,9 @@ async function renderRow2(item) {
       stream_time_len: Array.isArray(stream?.time) ? stream.time.length : 0,
       stream_hr_len: Array.isArray(stream?.heartrate) ? stream.heartrate.length : 0,
       stream_watts_len: Array.isArray(stream?.watts) ? stream.watts.length : 0,
+      stream_distance_len: Array.isArray(stream?.distance) ? stream.distance.length : 0,
+      stream_altitude_len: Array.isArray(stream?.altitude) ? stream.altitude.length : 0,
+      stream_grade_len: Array.isArray(stream?.grade) ? stream.grade.length : 0,
       stream_velocity_len: Array.isArray(stream?.velocity) ? stream.velocity.length : 0,
       stream_pace_len: Array.isArray(stream?.pace) ? stream.pace.length : 0,
       stream_gap_len: Array.isArray(stream?.gap) ? stream.gap.length : 0,
