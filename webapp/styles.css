@@ -61,6 +61,11 @@ body:not(.theme-dark) .topbar {
   border-color: var(--primary);
   box-shadow: inset 0 0 0 1px var(--primary);
 }
+.topbar-menu-toggle { display: none; }
+.topbar-menu {
+  display: flex;
+  margin-left: auto;
+}
 
 /* ── Layout ──────────────────────────────────────────────────────────────── */
 .container {
@@ -389,6 +394,41 @@ tr:hover td { background: rgba(148,163,184,0.07); }
   line-height: 1.35;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+@media (max-width: 900px), (hover: none) and (pointer: coarse) {
+  .topbar {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .nav {
+    order: 3;
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0.1rem;
+  }
+  .topbar-menu-toggle {
+    display: inline-block;
+    margin-left: auto;
+  }
+  .topbar-menu {
+    display: none;
+    order: 4;
+    width: 100%;
+    margin-left: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .topbar.menu-open .topbar-menu {
+    display: flex;
+  }
+  .topbar.menu-open .topbar-menu .btn {
+    width: 100%;
+    text-align: center;
+  }
 }
 
 /* ── Manual ──────────────────────────────────────────────────────────────── */

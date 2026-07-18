@@ -210,6 +210,14 @@ function compareIntervalsChronologically(a, b) {
 }
 
 /* ─── Navigation ─────────────────────────────────────────────────────────── */
+function closeTopbarMenu() {
+  const topbar = document.querySelector(".topbar");
+  const toggle = document.getElementById("topbar-menu-toggle");
+  if (!topbar || !toggle) return;
+  topbar.classList.remove("menu-open");
+  toggle.setAttribute("aria-expanded", "false");
+}
+
 function setScreen(name) {
   state.screen = name;
   document.querySelectorAll(".screen").forEach((el) => {
@@ -2076,6 +2084,13 @@ function init() {
   zoneModelEl.addEventListener("change", onZoneModelChange);
   zoneModelEl.addEventListener("sl-change", onZoneModelChange);
   document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
+  const topbar = document.querySelector(".topbar");
+  const topbarMenuToggle = document.getElementById("topbar-menu-toggle");
+  topbarMenuToggle?.addEventListener("click", () => {
+    if (!topbar) return;
+    const isOpen = topbar.classList.toggle("menu-open");
+    topbarMenuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  });
   document.getElementById("back-to-list").addEventListener("click", () => setScreen("intervals"));
   document.getElementById("go-compare").addEventListener("click", () => setScreen("compare"));
   document.getElementById("select-all").addEventListener("click", () => {
@@ -2088,7 +2103,10 @@ function init() {
   });
 
   document.querySelectorAll("[data-screen-target]").forEach((btn) => {
-    btn.addEventListener("click", () => setScreen(btn.dataset.screenTarget));
+    btn.addEventListener("click", () => {
+      setScreen(btn.dataset.screenTarget);
+      closeTopbarMenu();
+    });
   });
 
   document.getElementById("apply-filters").addEventListener("click", applyLocalFilters);

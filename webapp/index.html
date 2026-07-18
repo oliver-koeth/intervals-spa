@@ -6,7 +6,7 @@
     <title>Intervals</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/themes/light.css" />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260718-1" />
     <script src="https://cdn.jsdelivr.net/npm/echarts@6/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/shoelace-autoloader.js"></script>
@@ -21,7 +21,15 @@
         <button class="nav-btn" data-screen-target="settings">Settings</button>
         <button class="nav-btn" data-screen-target="manual">Manual</button>
       </nav>
-      <div class="row">
+      <button
+        id="topbar-menu-toggle"
+        class="btn secondary topbar-menu-toggle"
+        type="button"
+        aria-label="Toggle menu"
+        aria-expanded="false"
+        aria-controls="topbar-menu"
+      >☰</button>
+      <div id="topbar-menu" class="row topbar-menu">
         <a
           href="https://github.com/oliver-koeth/intervals-spa/issues"
           target="_blank"
@@ -569,6 +577,6 @@
         <a href="https://github.com/oliver-koeth/intervals-spa" target="_blank" rel="noopener noreferrer">Source</a>
       </div>
     </footer>
-    <script src="./app.js"></script>
+    <script src="./app.js?v=20260718-1"></script>
   </body>
 </html>
