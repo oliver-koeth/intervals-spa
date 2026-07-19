@@ -1770,10 +1770,40 @@ async function renderRow2(item) {
 function attachRow1Click(chartName, indexFn) {
   const c = state.charts[chartName];
   if (!c) return;
-  c.on("click", (params) => {
-    const item = state.compareSource[indexFn(params)] ?? null;
+  let lastIndex = -1;
+  let lastPickAt = 0;
+
+  function selectByIndex(index) {
+    const idx = Number(index);
+    if (!Number.isFinite(idx)) return;
+    const rounded = Math.round(idx);
+    const now = Date.now();
+    if (rounded === lastIndex && now - lastPickAt < 250) return;
+    lastIndex = rounded;
+    lastPickAt = now;
+    const item = state.compareSource[rounded] ?? null;
+    if (!item) return;
     state.pinnedInterval = item;
     renderRow2(item);
+  }
+
+  c.on("click", (params) => {
+    selectByIndex(indexFn(params));
+  });
+
+  // Touch devices may not emit a useful series click for dense line charts.
+  // Fallback: map tap position on the plot to nearest x-axis data index.
+  const zr = c.getZr?.();
+  zr?.on("click", (evt) => {
+    if (!evt) return;
+    const opt = c.getOption?.() || {};
+    const xAxis = Array.isArray(opt.xAxis) ? opt.xAxis[0] : opt.xAxis;
+    if (!xAxis || xAxis.type !== "category") return;
+    const pixel = [evt.offsetX, evt.offsetY];
+    if (!c.containPixel({ gridIndex: 0 }, pixel)) return;
+    const dataPoint = c.convertFromPixel({ xAxisIndex: 0 }, pixel);
+    const rawIndex = Array.isArray(dataPoint) ? dataPoint[0] : dataPoint;
+    selectByIndex(rawIndex);
   });
 }
 
