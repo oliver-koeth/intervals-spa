@@ -206,6 +206,53 @@ def run_search(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return results
 
 
+def run_activity_search(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    athlete_id = str(payload.get("athlete_id", "")).strip()
+    api_key = str(payload.get("api_key", "")).strip()
+    label = str(payload.get("label", "")).strip().lower()
+    activity_type = str(payload.get("activity_type", "")).strip()
+    start_date = str(payload.get("start_date", "")).strip()
+    end_date = str(payload.get("end_date", "")).strip()
+
+    if not athlete_id or not api_key or not start_date or not end_date:
+        raise ValueError("athlete_id, api_key, start_date, and end_date are required")
+
+    auth = "Basic " + base64.b64encode(f"API_KEY:{api_key}".encode()).decode("ascii")
+    fields = quote("id,name,start_date_local,type,moving_time,distance")
+    activities_url = (
+        f"{API_BASE}/athlete/{quote(athlete_id)}/activities"
+        f"?oldest={quote(start_date)}&newest={quote(end_date)}&fields={fields}"
+    )
+    activities = _api_get(activities_url, auth)
+    target_type = _normalize_type(activity_type)
+    results: list[dict[str, Any]] = []
+
+    for activity in activities:
+        if target_type and _normalize_type(str(activity.get("type", ""))) != target_type:
+            continue
+        name = str(activity.get("name", ""))
+        if label and label not in name.lower():
+            continue
+        start_local = str(activity.get("start_date_local", ""))
+        date = start_local[:10]
+        if date and (date < start_date or date > end_date):
+            continue
+        results.append(
+            {
+                "activity_id": activity.get("id"),
+                "activity_start_local": start_local,
+                "date": date,
+                "activity_name": name,
+                "activity_type": activity.get("type", ""),
+                "source": "intervals",
+                "moving_time_s": int(activity.get("moving_time") or 0),
+                "distance_m": float(activity.get("distance") or 0),
+            }
+        )
+
+    return results
+
+
 def run_strava_token(payload: dict[str, Any]) -> dict[str, Any]:
     client_id = str(payload.get("client_id", "")).strip()
     client_secret = str(payload.get("client_secret", "")).strip()
@@ -336,7 +383,7 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path not in ("/api/search", "/api/strava/token"):
+        if self.path not in ("/api/search", "/api/activity-search", "/api/strava/token"):
             _json_response(self, HTTPStatus.NOT_FOUND, {"error": "Not found"})
             return
 
@@ -346,6 +393,9 @@ class Handler(SimpleHTTPRequestHandler):
             payload = json.loads(body or "{}")
             if self.path == "/api/search":
                 results = run_search(payload)
+                _json_response(self, HTTPStatus.OK, {"results": results})
+            elif self.path == "/api/activity-search":
+                results = run_activity_search(payload)
                 _json_response(self, HTTPStatus.OK, {"results": results})
             else:
                 token_payload = run_strava_token(payload)

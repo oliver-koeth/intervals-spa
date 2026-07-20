@@ -7,9 +7,11 @@ const TOOLTIP_CSS = "background:#1e293b;border:1px solid #334155;border-radius:8
 
 /* ─── State ─────────────────────────────────────────────────────────────── */
 const state = {
+  activities: [],
   intervals: [],
   filtered: [],
   selected: new Set(),
+  pendingActivityResults: [],
   pendingIntervalsResults: [],
   pendingIntervalsParams: null,
   pendingStravaResults: [],
@@ -27,6 +29,7 @@ const stravaActivityStartCache = {};
 /** In-memory Strava effort start-time cache — keyed by effort_id. */
 const stravaEffortStartCache = {};
 
+const ACTIVITIES_CACHE_KEY  = "intervals_cached_activities_v1";
 const INTERVALS_CACHE_KEY   = "intervals_cached_intervals_v1";
 const HR_STREAM_LS_PREFIX   = "intervals_hr_stream_v3:";   // localStorage key prefix for HR streams
 
@@ -161,6 +164,7 @@ function initManualGallery() {
 function initSearchDatePickers() {
   if (typeof flatpickr === "undefined") return;
   const ids = [
+    "activity-search-from", "activity-search-to",
     "search-from", "search-to",
     "strava-search-from", "strava-search-to",
     "filter-date-from", "filter-date-to",
@@ -207,6 +211,14 @@ function compareIntervalsChronologically(a, b) {
   const byOffset = (Number(a.start_index) || 0) - (Number(b.start_index) || 0);
   if (byOffset !== 0) return byOffset;
   return (Number(a.interval_id) || 0) - (Number(b.interval_id) || 0);
+}
+
+function compareActivitiesChronologically(a, b) {
+  const aStart = String(a.activity_start_local || a.date || "");
+  const bStart = String(b.activity_start_local || b.date || "");
+  const byStart = aStart.localeCompare(bStart);
+  if (byStart !== 0) return byStart;
+  return String(a.activity_id || "").localeCompare(String(b.activity_id || ""));
 }
 
 /* ─── Navigation ─────────────────────────────────────────────────────────── */
@@ -325,17 +337,20 @@ function saveStravaSettings() {
 function clearSettings() {
   [
     "intervals_athlete_id", "intervals_api_key", "intervals_api_mode",
-    "intervals_zone_model_id", "intervals_zone_models", INTERVALS_CACHE_KEY,
+    "intervals_zone_model_id", "intervals_zone_models", ACTIVITIES_CACHE_KEY, INTERVALS_CACHE_KEY,
     "intervals_strava_client_id", "intervals_strava_client_secret",
     "intervals_strava_access_token", "intervals_strava_redirect_uri", "intervals_strava_scope",
     "intervals_strava_refresh_token", "intervals_strava_expires_at_epoch",
     "intervals_strava_granted_scope", "intervals_strava_oauth_state", "intervals_strava_oauth_redirect_uri",
   ].forEach((k) => localStorage.removeItem(k));
+  state.activities = [];
   state.intervals = [];
   state.filtered = [];
   state.selected.clear();
+  hideActivitySearchPreview();
   hideSearchPreview("intervals");
   hideSearchPreview("strava");
+  renderActivities();
   renderIntervals();
   loadSettingsToForm();
   document.getElementById("settings-status").textContent = "";
@@ -872,6 +887,21 @@ function saveIntervalsCache(intervals) {
   localStorage.setItem(INTERVALS_CACHE_KEY, JSON.stringify(intervals));
 }
 
+function saveActivitiesCache(activities) {
+  localStorage.setItem(ACTIVITIES_CACHE_KEY, JSON.stringify(activities));
+}
+
+function loadActivitiesCache() {
+  try {
+    const raw = localStorage.getItem(ACTIVITIES_CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function loadIntervalsCache() {
   try {
     const raw = localStorage.getItem(INTERVALS_CACHE_KEY);
@@ -885,6 +915,38 @@ function loadIntervalsCache() {
 
 function clearIntervalsCache() {
   localStorage.removeItem(INTERVALS_CACHE_KEY);
+}
+
+function clearActivitiesCache() {
+  localStorage.removeItem(ACTIVITIES_CACHE_KEY);
+}
+
+function hideActivitySearchPreview() {
+  const box = document.getElementById("activity-search-preview");
+  box.classList.add("hidden");
+  document.getElementById("activity-search-preview-body").innerHTML = "";
+  document.getElementById("activity-search-preview-summary").textContent = "";
+  document.getElementById("activity-search-preview-add").disabled = false;
+  state.pendingActivityResults = [];
+}
+
+function renderActivitySearchPreview(results) {
+  const body = document.getElementById("activity-search-preview-body");
+  body.innerHTML = "";
+  results.forEach((item) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${item.date || ""}</td>
+      <td>${item.activity_type || ""}</td>
+      <td title="${item.activity_name || ""}">${(item.activity_name || "").slice(0, 42)}</td>
+      <td class="right">${formatSeconds(item.moving_time_s)}</td>
+    `;
+    body.appendChild(tr);
+  });
+  document.getElementById("activity-search-preview-summary").textContent =
+    `${results.length} activity(s) found`;
+  document.getElementById("activity-search-preview-add").disabled = results.length === 0;
+  document.getElementById("activity-search-preview").classList.remove("hidden");
 }
 
 function hideSearchPreview(kind) {
@@ -953,6 +1015,47 @@ function mergeIntervals(existing, incoming) {
   return { items: [...byId.values()], added, updated };
 }
 
+function activityIdentity(item) {
+  return [
+    item.source || "intervals",
+    item.activity_id || "",
+    String(item.activity_start_local || item.date || ""),
+  ].join("|");
+}
+
+function mergeActivities(existing, incoming) {
+  const byId = new Map();
+  existing.forEach((item) => byId.set(activityIdentity(item), item));
+  let added = 0;
+  let updated = 0;
+  incoming.forEach((raw) => {
+    const item = { ...raw, source: raw.source || "intervals" };
+    const key = activityIdentity(item);
+    if (byId.has(key)) {
+      byId.set(key, item);
+      updated += 1;
+    } else {
+      byId.set(key, item);
+      added += 1;
+    }
+  });
+  return { items: [...byId.values()], added, updated };
+}
+
+function commitActivities(results) {
+  const merged = mergeActivities(state.activities, results);
+  state.activities = merged.items.sort(compareActivitiesChronologically);
+  renderActivities();
+  saveActivitiesCache(state.activities);
+  document.getElementById("activity-search-status").textContent = merged.updated
+    ? `Added ${merged.added} activity(s), updated ${merged.updated} duplicate(s).`
+    : `Added ${merged.added} activity(s).`;
+  hideActivitySearchPreview();
+  hideSearchPreview("intervals");
+  hideSearchPreview("strava");
+  setScreen("activities");
+}
+
 function commitIntervals(results, params) {
   const merged = mergeIntervals(state.intervals, results);
   state.intervals = merged.items.sort(compareIntervalsChronologically);
@@ -978,12 +1081,26 @@ function commitIntervals(results, params) {
     document.getElementById("filter-date-from").value = params.startDate;
     document.getElementById("filter-date-to").value   = params.endDate;
   }
+  hideActivitySearchPreview();
   hideSearchPreview("intervals");
   hideSearchPreview("strava");
   setScreen("intervals");
 }
 
 /* ─── Map API response → internal interval object ─────────────────────────── */
+function mapActivity(activity) {
+  return {
+    activity_id: activity.id,
+    activity_start_local: activity.start_date_local || "",
+    date: String(activity.start_date_local || "").slice(0, 10),
+    activity_name: activity.name || "",
+    activity_type: activity.type || "",
+    source: "intervals",
+    moving_time_s: Number(activity.moving_time || 0),
+    distance_m: Number(activity.distance || 0),
+  };
+}
+
 function mapInterval(activity, interval) {
   return {
     interval_id:    interval.id,
@@ -1050,6 +1167,31 @@ async function runDirectSearch(params, athleteId, apiKey) {
   return results;
 }
 
+async function runDirectActivitySearch(params, athleteId, apiKey) {
+  const auth = `Basic ${btoa(`API_KEY:${apiKey}`)}`;
+  const hdrs = { Authorization: auth, Accept: "application/json" };
+  const fields = encodeURIComponent("id,name,start_date_local,type,moving_time,distance");
+  const url = `https://intervals.icu/api/v1/athlete/${encodeURIComponent(athleteId)}/activities` +
+    `?oldest=${encodeURIComponent(params.startDate)}&newest=${encodeURIComponent(params.endDate)}` +
+    `&fields=${fields}`;
+  const res = await fetch(url, { headers: hdrs });
+  if (!res.ok) throw new Error(`Activities request failed (${res.status})`);
+  const activities = await res.json();
+  const labelNeedle = params.label.toLowerCase();
+  const typeNeedle = normalizeActivityType(params.activityType);
+  return (Array.isArray(activities) ? activities : [])
+    .filter((activity) => {
+      if (typeNeedle && normalizeActivityType(activity.type) !== typeNeedle) return false;
+      if (labelNeedle && !String(activity.name || "").toLowerCase().includes(labelNeedle)) return false;
+      const date = String(activity.start_date_local || "").slice(0, 10);
+      if (params.startDate && date < params.startDate) return false;
+      if (params.endDate && date > params.endDate) return false;
+      return true;
+    })
+    .map(mapActivity)
+    .sort(compareActivitiesChronologically);
+}
+
 /* ─── API: proxy (browser → local server) ───────────────────────────────── */
 async function runProxySearch(params, athleteId, apiKey) {
   const res = await fetch("./api/search", {
@@ -1070,6 +1212,40 @@ async function runProxySearch(params, athleteId, apiKey) {
   if (!res.ok) throw new Error(`Proxy search failed (${res.status})`);
   const data = await res.json();
   return Array.isArray(data.results) ? data.results : [];
+}
+
+async function runProxyActivitySearch(params, athleteId, apiKey) {
+  const res = await fetch("./api/activity-search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      athlete_id: athleteId,
+      api_key: apiKey,
+      label: params.label,
+      activity_type: params.activityType,
+      start_date: params.startDate,
+      end_date: params.endDate,
+    }),
+  });
+  if (!res.ok) throw new Error(`Proxy activity search failed (${res.status})`);
+  const data = await res.json();
+  return Array.isArray(data.results) ? data.results : [];
+}
+
+function renderActivities() {
+  const body = document.getElementById("activities-body");
+  body.innerHTML = "";
+  state.activities.forEach((item) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${item.date || ""}</td>
+      <td>${item.activity_type || ""}</td>
+      <td title="${item.activity_name || ""}">${(item.activity_name || "").slice(0, 48)}</td>
+      <td class="right">${formatSeconds(item.moving_time_s)}</td>
+    `;
+    body.appendChild(tr);
+  });
+  document.getElementById("activities-summary").textContent = `${state.activities.length} activities`;
 }
 
 /* ─── Render intervals table ─────────────────────────────────────────────── */
@@ -1962,11 +2138,63 @@ async function handleSearchSubmit(e) {
     const sorted = results.sort(compareIntervalsChronologically);
     state.pendingIntervalsResults = sorted;
     state.pendingIntervalsParams = params;
+    hideActivitySearchPreview();
     renderSearchPreview(sorted, "intervals");
     hideSearchPreview("strava");
     setStatus(`Search complete. ${sorted.length} interval(s) ready to add.`);
   } catch (err) {
     setStatus(`Search failed: ${err.message}`, true);
+  } finally {
+    submit.disabled = false;
+  }
+}
+
+async function handleActivitySearchSubmit(e) {
+  e.preventDefault();
+  const settings = getSettings();
+  if (!settings.athleteId || !settings.apiKey) {
+    document.getElementById("activity-search-status").textContent =
+      "Set athlete ID and API key in Settings first.";
+    setScreen("settings");
+    return;
+  }
+  const defaultRange = defaultDateRange();
+  const resolvedStartDate = document.getElementById("activity-search-from").value || defaultRange.from;
+  const resolvedEndDate = document.getElementById("activity-search-to").value || defaultRange.to;
+  document.getElementById("activity-search-from").value = resolvedStartDate;
+  document.getElementById("activity-search-to").value = resolvedEndDate;
+  const params = {
+    label: document.getElementById("activity-search-label").value.trim(),
+    activityType: document.getElementById("activity-search-type").value,
+    startDate: resolvedStartDate,
+    endDate: resolvedEndDate,
+  };
+  const submit = document.getElementById("activity-search-submit");
+  const status = document.getElementById("activity-search-status");
+  submit.disabled = true;
+  status.textContent = "Searching activities…";
+  try {
+    const mode = resolveApiMode(settings.apiMode);
+    let results;
+    if (mode === "proxy") {
+      try {
+        results = await runProxyActivitySearch(params, settings.athleteId, settings.apiKey);
+      } catch (err) {
+        if (!isAutoProxyMode(settings.apiMode)) throw err;
+        status.textContent = "Local proxy unavailable, retrying direct…";
+        results = await runDirectActivitySearch(params, settings.athleteId, settings.apiKey);
+      }
+    } else {
+      results = await runDirectActivitySearch(params, settings.athleteId, settings.apiKey);
+    }
+    const sorted = [...results].sort(compareActivitiesChronologically);
+    state.pendingActivityResults = sorted;
+    renderActivitySearchPreview(sorted);
+    hideSearchPreview("intervals");
+    hideSearchPreview("strava");
+    status.textContent = `Search complete. ${sorted.length} activity(s) ready to add.`;
+  } catch (err) {
+    status.textContent = `Activity search failed: ${err.message}`;
   } finally {
     submit.disabled = false;
   }
@@ -1996,6 +2224,7 @@ async function handleStravaSearchSubmit(e) {
       status.textContent = text;
     });
     state.pendingStravaResults = results;
+    hideActivitySearchPreview();
     renderSearchPreview(results, "strava");
     hideSearchPreview("intervals");
     status.textContent = `${results.length} segment effort(s) ready to add.`;
@@ -2015,14 +2244,18 @@ function init() {
   }
 
   const range = defaultDateRange();
+  document.getElementById("activity-search-from").value = range.from;
+  document.getElementById("activity-search-to").value = range.to;
   document.getElementById("search-from").value = range.from;
   document.getElementById("search-to").value   = range.to;
   document.getElementById("strava-search-from").value = range.from;
   document.getElementById("strava-search-to").value = range.to;
 
+  state.activities = loadActivitiesCache().sort(compareActivitiesChronologically);
   const cached = loadIntervalsCache().sort(compareIntervalsChronologically);
   state.intervals = cached;
   state.filtered = [...cached];
+  renderActivities();
   renderIntervals();
 
   loadSettingsToForm();
@@ -2032,6 +2265,22 @@ function init() {
   initSearchDatePickers();
   setScreen("search");
 
+  document.getElementById("activity-search-form").addEventListener("submit", handleActivitySearchSubmit);
+  document.getElementById("activity-search-form").addEventListener("reset", () => {
+    const resetRange = defaultDateRange();
+    document.getElementById("activity-search-from").value = resetRange.from;
+    document.getElementById("activity-search-to").value = resetRange.to;
+    hideActivitySearchPreview();
+    document.getElementById("activity-search-status").textContent = "";
+  });
+  document.getElementById("activity-search-preview-cancel").addEventListener("click", () => {
+    hideActivitySearchPreview();
+    document.getElementById("activity-search-status").textContent = "Activity search preview canceled.";
+  });
+  document.getElementById("activity-search-preview-add").addEventListener("click", () => {
+    if (!state.pendingActivityResults.length) return;
+    commitActivities(state.pendingActivityResults);
+  });
   document.getElementById("search-form").addEventListener("submit", handleSearchSubmit);
   document.getElementById("search-form").addEventListener("reset", () => {
     const resetRange = defaultDateRange();
@@ -2126,6 +2375,11 @@ function init() {
   document.getElementById("select-all").addEventListener("click", () => {
     state.filtered.forEach((x) => state.selected.add(String(x.interval_id)));
     renderIntervals();
+  });
+  document.getElementById("clear-activities").addEventListener("click", () => {
+    state.activities = [];
+    clearActivitiesCache();
+    renderActivities();
   });
   document.getElementById("select-none").addEventListener("click", () => {
     state.selected.clear();

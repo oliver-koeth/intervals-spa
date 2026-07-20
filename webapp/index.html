@@ -6,7 +6,7 @@
     <title>Intervals</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/themes/light.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260718-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260720-1" />
     <script src="https://cdn.jsdelivr.net/npm/echarts@6/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/shoelace-autoloader.js"></script>
@@ -16,6 +16,7 @@
       <div class="brand">Intervals</div>
       <nav class="nav">
         <button class="nav-btn" data-screen-target="search">Search</button>
+        <button class="nav-btn" data-screen-target="activities">Activities</button>
         <button class="nav-btn" data-screen-target="intervals">Intervals</button>
         <button class="nav-btn" data-screen-target="compare">Compare</button>
         <button class="nav-btn" data-screen-target="settings">Settings</button>
@@ -44,6 +45,60 @@
 
       <!-- ── Search ───────────────────────────────────────────────────────── -->
       <section id="screen-search" class="screen active shoelace-forms">
+        <div class="card" style="margin-bottom:.75rem">
+          <h1>Search Activities</h1>
+          <p class="muted">Searches intervals.icu activities and lets you add matches to your local activities list.</p>
+
+          <form id="activity-search-form" class="form-grid">
+            <label>Name / label
+              <sl-input id="activity-search-label" placeholder="e.g. Long run"></sl-input>
+            </label>
+            <label>Activity type
+              <sl-select id="activity-search-type" value="">
+                <sl-option value="">All types</sl-option>
+                <sl-option value="Run">Run</sl-option>
+                <sl-option value="VirtualRun">VirtualRun</sl-option>
+                <sl-option value="Ride">Ride</sl-option>
+              </sl-select>
+            </label>
+            <label>Date from
+              <input id="activity-search-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+            </label>
+            <label>Date to
+              <input id="activity-search-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+            </label>
+            <div class="form-actions search-actions">
+              <sl-button type="submit" id="activity-search-submit" variant="primary">Search</sl-button>
+              <sl-button type="reset" variant="default">Reset</sl-button>
+            </div>
+          </form>
+          <p id="activity-search-status" class="muted" style="margin-top:.75rem"></p>
+
+          <div id="activity-search-preview" class="search-preview hidden">
+            <div class="row space-between">
+              <h2 style="margin:.25rem 0">Activity result preview</h2>
+              <div id="activity-search-preview-summary" class="muted"></div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Activity</th>
+                    <th class="right">Time</th>
+                  </tr>
+                </thead>
+                <tbody id="activity-search-preview-body"></tbody>
+              </table>
+            </div>
+            <div class="search-preview-actions">
+              <sl-button id="activity-search-preview-cancel" type="button" variant="default">Cancel</sl-button>
+              <sl-button id="activity-search-preview-add" type="button" variant="primary">Add all to activities</sl-button>
+            </div>
+          </div>
+        </div>
+
         <div class="card">
           <h1>Search Intervals</h1>
           <p class="muted">Searches intervals.icu and returns matching intervals.</p>
@@ -172,6 +227,33 @@
               <sl-button id="strava-search-preview-cancel" type="button" variant="default">Cancel</sl-button>
               <sl-button id="strava-search-preview-add" type="button" variant="primary">Add all to intervals</sl-button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Activities ────────────────────────────────────────────────────── -->
+      <section id="screen-activities" class="screen">
+        <div class="card">
+          <div class="row space-between">
+            <h1>Activities</h1>
+            <div class="selection-bar" style="margin:0">
+              <div id="activities-summary" class="muted"></div>
+              <button id="clear-activities" class="btn secondary" type="button">Clear list</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Activity</th>
+                  <th class="right">Time</th>
+                </tr>
+              </thead>
+              <tbody id="activities-body"></tbody>
+            </table>
           </div>
         </div>
       </section>
@@ -577,6 +659,6 @@
         <a href="https://github.com/oliver-koeth/intervals-spa" target="_blank" rel="noopener noreferrer">Source</a>
       </div>
     </footer>
-    <script src="./app.js?v=20260718-1"></script>
+    <script src="./app.js?v=20260720-1"></script>
   </body>
 </html>
