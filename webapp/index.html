@@ -6,7 +6,7 @@
     <title>Intervals</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/themes/light.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260720-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260720-2" />
     <script src="https://cdn.jsdelivr.net/npm/echarts@6/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/shoelace-autoloader.js"></script>
@@ -232,13 +232,43 @@
       </section>
 
       <!-- ── Activities ────────────────────────────────────────────────────── -->
-      <section id="screen-activities" class="screen">
+      <section id="screen-activities" class="screen shoelace-forms">
         <div class="card">
           <div class="row space-between">
             <h1>Activities</h1>
             <div class="selection-bar" style="margin:0">
               <div id="activities-summary" class="muted"></div>
               <button id="clear-activities" class="btn secondary" type="button">Clear list</button>
+            </div>
+          </div>
+
+          <div class="filters">
+            <label>Label
+              <sl-input id="activities-filter-label" placeholder="e.g. Long run"></sl-input>
+            </label>
+            <label>Source
+              <sl-select id="activities-filter-source" value="">
+                <sl-option value="">All sources</sl-option>
+                <sl-option value="intervals">Intervals.icu</sl-option>
+              </sl-select>
+            </label>
+            <label>Activity type
+              <sl-select id="activities-filter-type" value="">
+                <sl-option value="">All types</sl-option>
+                <sl-option value="Run">Run</sl-option>
+                <sl-option value="VirtualRun">VirtualRun</sl-option>
+                <sl-option value="Ride">Ride</sl-option>
+              </sl-select>
+            </label>
+            <label>Date from
+              <input id="activities-filter-date-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+            </label>
+            <label>Date to
+              <input id="activities-filter-date-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+            </label>
+            <div class="form-actions">
+              <button id="apply-activities-filters" class="btn secondary" type="button">Apply</button>
+              <button id="clear-activities-filters" class="btn secondary" type="button">Clear</button>
             </div>
           </div>
 
@@ -659,6 +689,6 @@
         <a href="https://github.com/oliver-koeth/intervals-spa" target="_blank" rel="noopener noreferrer">Source</a>
       </div>
     </footer>
-    <script src="./app.js?v=20260720-1"></script>
+    <script src="./app.js?v=20260720-2"></script>
   </body>
 </html>

@@ -8,6 +8,7 @@ const TOOLTIP_CSS = "background:#1e293b;border:1px solid #334155;border-radius:8
 /* ─── State ─────────────────────────────────────────────────────────────── */
 const state = {
   activities: [],
+  activitiesFiltered: [],
   intervals: [],
   filtered: [],
   selected: new Set(),
@@ -165,6 +166,7 @@ function initSearchDatePickers() {
   if (typeof flatpickr === "undefined") return;
   const ids = [
     "activity-search-from", "activity-search-to",
+    "activities-filter-date-from", "activities-filter-date-to",
     "search-from", "search-to",
     "strava-search-from", "strava-search-to",
     "filter-date-from", "filter-date-to",
@@ -344,6 +346,7 @@ function clearSettings() {
     "intervals_strava_granted_scope", "intervals_strava_oauth_state", "intervals_strava_oauth_redirect_uri",
   ].forEach((k) => localStorage.removeItem(k));
   state.activities = [];
+  state.activitiesFiltered = [];
   state.intervals = [];
   state.filtered = [];
   state.selected.clear();
@@ -1045,6 +1048,7 @@ function mergeActivities(existing, incoming) {
 function commitActivities(results) {
   const merged = mergeActivities(state.activities, results);
   state.activities = merged.items.sort(compareActivitiesChronologically);
+  state.activitiesFiltered = [...state.activities];
   renderActivities();
   saveActivitiesCache(state.activities);
   document.getElementById("activity-search-status").textContent = merged.updated
@@ -1235,7 +1239,7 @@ async function runProxyActivitySearch(params, athleteId, apiKey) {
 function renderActivities() {
   const body = document.getElementById("activities-body");
   body.innerHTML = "";
-  state.activities.forEach((item) => {
+  state.activitiesFiltered.forEach((item) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${item.date || ""}</td>
@@ -1245,7 +1249,25 @@ function renderActivities() {
     `;
     body.appendChild(tr);
   });
-  document.getElementById("activities-summary").textContent = `${state.activities.length} activities`;
+  document.getElementById("activities-summary").textContent = `${state.activitiesFiltered.length} activities`;
+}
+
+function applyActivitiesFilters() {
+  const labelNeedle = document.getElementById("activities-filter-label").value.trim().toLowerCase();
+  const sourceNeedle = document.getElementById("activities-filter-source").value;
+  const typeNeedle = normalizeActivityType(document.getElementById("activities-filter-type").value);
+  const dFrom = document.getElementById("activities-filter-date-from").value;
+  const dTo = document.getElementById("activities-filter-date-to").value;
+
+  state.activitiesFiltered = state.activities.filter((item) => {
+    if (labelNeedle && !String(item.activity_name || "").toLowerCase().includes(labelNeedle)) return false;
+    if (sourceNeedle && (item.source || "intervals") !== sourceNeedle) return false;
+    if (typeNeedle && normalizeActivityType(item.activity_type) !== typeNeedle) return false;
+    if (dFrom && item.date < dFrom) return false;
+    if (dTo && item.date > dTo) return false;
+    return true;
+  });
+  renderActivities();
 }
 
 /* ─── Render intervals table ─────────────────────────────────────────────── */
@@ -2252,6 +2274,7 @@ function init() {
   document.getElementById("strava-search-to").value = range.to;
 
   state.activities = loadActivitiesCache().sort(compareActivitiesChronologically);
+  state.activitiesFiltered = [...state.activities];
   const cached = loadIntervalsCache().sort(compareIntervalsChronologically);
   state.intervals = cached;
   state.filtered = [...cached];
@@ -2378,7 +2401,22 @@ function init() {
   });
   document.getElementById("clear-activities").addEventListener("click", () => {
     state.activities = [];
+    state.activitiesFiltered = [];
     clearActivitiesCache();
+    renderActivities();
+  });
+  document.getElementById("apply-activities-filters").addEventListener("click", applyActivitiesFilters);
+  document.getElementById("clear-activities-filters").addEventListener("click", () => {
+    [
+      "activities-filter-label",
+      "activities-filter-date-from",
+      "activities-filter-date-to",
+    ].forEach((id) => {
+      document.getElementById(id).value = "";
+    });
+    document.getElementById("activities-filter-source").value = "";
+    document.getElementById("activities-filter-type").value = "";
+    state.activitiesFiltered = [...state.activities];
     renderActivities();
   });
   document.getElementById("select-none").addEventListener("click", () => {
