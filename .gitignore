@@ -39,3 +39,6 @@ data/
 
 # Tool output artefacts
 tools/output/
+
+# graphify-axet
+.graphify/

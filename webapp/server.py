@@ -75,14 +75,17 @@ def _normalize_type(value: str) -> str:
 
 def run_streams(activity_id: str, api_key: str) -> dict[str, list[int | float]]:
     auth = "Basic " + base64.b64encode(f"API_KEY:{api_key}".encode()).decode("ascii")
-    stream_types = "heartrate,time,watts,velocity,pace,gap,distance,altitude,grade"
+    stream_types = "heartrate,time,velocity_smooth,watts,distance,altitude,grade"
     url = f"{API_BASE}/activity/{quote(activity_id)}/streams?types={stream_types}"
     try:
         raw = _api_get(url, auth)
     except HTTPError as exc:
-        if exc.code != HTTPStatus.BAD_REQUEST:
+        if exc.code not in {HTTPStatus.BAD_REQUEST, HTTPStatus.UNPROCESSABLE_ENTITY}:
             raise
-        fallback_url = f"{API_BASE}/activity/{quote(activity_id)}/streams?types=heartrate,time"
+        fallback_url = (
+            f"{API_BASE}/activity/{quote(activity_id)}/streams"
+            "?types=heartrate,time,velocity_smooth,altitude"
+        )
         raw = _api_get(fallback_url, auth)
     return {
         "time":      next((s["data"] for s in raw if s.get("type") == "time"),      []),

@@ -1,36 +1,37 @@
 /* Design tokens — see docs/STYLEGUIDE.md */
 :root {
-  --bg: #f8fafc;
-  --surface: #ffffff;
-  --surface-muted: #f1f5f9;
-  --border: #e2e8f0;
-  --text: #1e293b;
+  --bg: #f5f7fb;
+  --surface: rgba(255, 255, 255, 0.86);
+  --surface-muted: rgba(226, 232, 240, 0.42);
+  --border: rgba(148, 163, 184, 0.36);
+  --text: #182234;
   --text-secondary: #475569;
-  --text-muted: #64748b;
+  --text-muted: #66758a;
 
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --info: #06b6d4;
+  --success: #54e0a1;
+  --warning: #ffb85c;
+  --danger: #ff647c;
+  --info: #51b8ff;
 
-  --radius-card: 12px;
+  --radius-card: 14px;
   --radius-control: 8px;
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.08);
+  --shadow-card: 0 12px 34px rgba(15, 23, 42, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.68);
 
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  font-size: 15px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Segoe UI", sans-serif;
+  font-size: 14px;
   color: var(--text);
   background-color: var(--bg);
 }
 
 .dark {
-  --bg: #020617;
-  --surface: #0f172a;
-  --surface-muted: #1e293b;
-  --border: #1e293b;
-  --text: #f8fafc;
+  --bg: #03070d;
+  --surface: rgba(16, 22, 30, 0.82);
+  --surface-muted: rgba(44, 56, 66, 0.54);
+  --border: rgba(122, 143, 157, 0.22);
+  --text: #eef4f8;
   --text-secondary: #cbd5e1;
-  --text-muted: #94a3b8;
+  --text-muted: #a2afbd;
+  --shadow-card: 0 16px 46px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 *,
@@ -43,7 +44,10 @@
 
 body {
   min-height: 100vh;
-  background-color: var(--bg);
+  background:
+    radial-gradient(circle at 72% -12%, rgba(44, 181, 139, 0.18), transparent 34rem),
+    radial-gradient(circle at 18% 0%, rgba(56, 139, 202, 0.14), transparent 30rem),
+    var(--bg);
   color: var(--text);
 }
 

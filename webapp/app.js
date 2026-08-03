@@ -1,29 +1,47 @@
 /* ─── Constants ────────────────────────────────────────────────────────── */
 const ZONE_COLORS = {
-  1:"#10b981", 2:"#06b6d4", 3:"#f59e0b", 4:"#f97316", 5:"#ef4444",
-  6:"#8b5cf6", 7:"#ec4899",
+  1:"#54e0a1", 2:"#51b8ff", 3:"#ffb85c", 4:"#ff8a58", 5:"#ff647c",
+  6:"#a78bfa", 7:"#f472b6",
 };
-const TOOLTIP_CSS = "background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.55);color:#f1f5f9;font-size:12px;max-width:260px";
+const TOOLTIP_CSS = "background:#101820;border:1px solid rgba(148,163,184,0.34);border-radius:10px;padding:10px 14px;box-shadow:0 16px 48px rgba(0,0,0,0.48);color:#eef4f8;font-size:12px;max-width:260px";
 
 /* ─── State ─────────────────────────────────────────────────────────────── */
 const state = {
   activities: [],
   activitiesFiltered: [],
+  openActivityTabs: [],    // [{id, activity}]
+  activeActivityTabId: null,
   intervals: [],
   filtered: [],
   selected: new Set(),
+  intervalsGrouped: false,
+  collapsedIntervalGroups: new Set(),
   pendingActivityResults: [],
   pendingIntervalsResults: [],
   pendingIntervalsParams: null,
   pendingStravaResults: [],
   screen: "search",
   charts: {},
+  activityLabCharts: {},
   compareSource: [],
   pinnedInterval: null,
   dismissedCallouts: new Set(),
+  activityLab: {
+    requestToken: 0,
+    tabActivityId: null,
+    focusActivityId: null,
+    streamActivities: [],
+    workIntervalsByActivity: {},
+    workIntervals: [],
+    visibleSeries: {
+      hr: true,
+      pace: true,
+      elevation: true,
+    },
+  },
 };
 
-/** In-memory HR stream cache — keyed by "source:activity_id". */
+/** In-memory activity stream cache — keyed by "source:activity_id". */
 const hrStreamCache = {};
 /** In-memory Strava activity start-time cache — keyed by activity_id. */
 const stravaActivityStartCache = {};
@@ -32,7 +50,7 @@ const stravaEffortStartCache = {};
 
 const ACTIVITIES_CACHE_KEY  = "intervals_cached_activities_v1";
 const INTERVALS_CACHE_KEY   = "intervals_cached_intervals_v1";
-const HR_STREAM_LS_PREFIX   = "intervals_hr_stream_v3:";   // localStorage key prefix for HR streams
+const HR_STREAM_LS_PREFIX   = "intervals_hr_stream_v5:";   // localStorage key prefix for activity streams
 
 /** Persist a stream object to localStorage (silently skips on quota errors). */
 function saveHrStreamToStorage(cacheKey, stream) {
@@ -53,7 +71,7 @@ function loadHrStreamFromStorage(cacheKey) {
 function clearHrStreamCache() {
   for (const k of Object.keys(hrStreamCache)) delete hrStreamCache[k];
   const toRemove = [];
-  const prefixes = [HR_STREAM_LS_PREFIX, "intervals_hr_stream:", "intervals_hr_stream_v2:"];
+  const prefixes = [HR_STREAM_LS_PREFIX, "intervals_hr_stream:", "intervals_hr_stream_v2:", "intervals_hr_stream_v3:", "intervals_hr_stream_v4:"];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
     if (k && prefixes.some((prefix) => k.startsWith(prefix))) toRemove.push(k);
@@ -187,6 +205,34 @@ function isDark() { return document.body.classList.contains("theme-dark"); }
 
 function normalizeActivityType(type) {
   return type ? type.replace(/\s+/g, "").toLowerCase() : "";
+}
+
+function activityMainType(type) {
+  const t = normalizeActivityType(type);
+  if (!t) return "";
+  if (t.includes("run")) return "run";
+  if (t.includes("ride") || t.includes("cycling") || t.includes("bike")) return "ride";
+  if (t.includes("swim")) return "swim";
+  if (t.includes("walk") || t.includes("hike")) return "walk";
+  return t;
+}
+
+function addDays(dateIso, days) {
+  const d = new Date(`${dateIso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function formatIsoDate(iso) {
+  return String(iso || "").slice(0, 10);
+}
+
+function isStreamFallbackStatus(status) {
+  return status === 400 || status === 422;
+}
+
+function isStreamUnavailableStatus(status) {
+  return status === 400 || status === 404 || status === 422;
 }
 
 function intervalTooltip(item) {
@@ -347,6 +393,13 @@ function clearSettings() {
   ].forEach((k) => localStorage.removeItem(k));
   state.activities = [];
   state.activitiesFiltered = [];
+  state.openActivityTabs = [];
+  state.activeActivityTabId = null;
+  state.activityLab.tabActivityId = null;
+  state.activityLab.focusActivityId = null;
+  state.activityLab.streamActivities = [];
+  state.activityLab.workIntervalsByActivity = {};
+  state.activityLab.workIntervals = [];
   state.intervals = [];
   state.filtered = [];
   state.selected.clear();
@@ -1241,12 +1294,15 @@ function renderActivities() {
   body.innerHTML = "";
   state.activitiesFiltered.forEach((item) => {
     const tr = document.createElement("tr");
+    tr.style.cursor = "pointer";
+    tr.title = "Open activity";
     tr.innerHTML = `
       <td>${item.date || ""}</td>
       <td>${item.activity_type || ""}</td>
       <td title="${item.activity_name || ""}">${(item.activity_name || "").slice(0, 48)}</td>
       <td class="right">${formatSeconds(item.moving_time_s)}</td>
     `;
+    tr.addEventListener("click", () => openActivityTab(item));
     body.appendChild(tr);
   });
   document.getElementById("activities-summary").textContent = `${state.activitiesFiltered.length} activities`;
@@ -1270,45 +1326,776 @@ function applyActivitiesFilters() {
   renderActivities();
 }
 
-/* ─── Render intervals table ─────────────────────────────────────────────── */
+/* ─── Activity tabs ──────────────────────────────────────────────────────── */
+function formatDuration(seconds) {
+  if (!seconds) return "-";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  return h > 0
+    ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+    : `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function formatDistance(meters) {
+  if (!meters) return "-";
+  return (meters / 1000).toFixed(2) + " km";
+}
+
+function formatAvgPace(movingTimeS, distanceM) {
+  const secs = Number(movingTimeS || 0);
+  const meters = Number(distanceM || 0);
+  if (secs <= 0 || meters <= 0) return "-";
+  const minPerKm = (secs / 60) / (meters / 1000);
+  return `${formatPaceMinutes(minPerKm)} /km`;
+}
+
+function renderActivityTabBar() {
+  const bar = document.getElementById("activity-tab-bar");
+  bar.innerHTML = "";
+  if (state.openActivityTabs.length === 0) {
+    bar.classList.add("hidden");
+    return;
+  }
+  bar.classList.remove("hidden");
+  state.openActivityTabs.forEach(({ id, activity }) => {
+    const tab = document.createElement("button");
+    tab.className = "activity-tab" + (id === state.activeActivityTabId ? " active" : "");
+    tab.dataset.tabId = id;
+    const label = activity.date || id;
+    tab.innerHTML = `<span class="activity-tab-label">${label}</span>`
+      + `<span class="activity-tab-close" data-close-tab="${id}" title="Close">×</span>`;
+    bar.appendChild(tab);
+  });
+}
+
+function renderActivityDetail(tabActivity, focusActivity) {
+  const card = document.getElementById("activity-detail-card");
+  const activity = focusActivity || tabActivity;
+  const tabId = String(tabActivity?.activity_id || "");
+  const focusId = String(activity?.activity_id || "");
+  const fields = [
+    { label: "Date", value: activity.date || "-" },
+    { label: "Type", value: activity.activity_type || "-" },
+    { label: "Duration", value: formatDuration(activity.moving_time_s) },
+    { label: "Distance", value: formatDistance(activity.distance_m) },
+    { label: "Avg Pace", value: formatAvgPace(activity.moving_time_s, activity.distance_m) },
+    { label: "Source", value: activity.source || "intervals.icu" },
+  ];
+  card.innerHTML = `
+    <div class="row space-between activity-detail-head">
+      <h2 style="margin:0">${activity.activity_name || activity.date || "Activity"}</h2>
+      <span class="muted">
+        ${focusId === tabId ? "Tab activity" : "Viewing similar activity"}
+      </span>
+    </div>
+    <div class="activity-detail-grid">
+      ${fields.map((f) => `
+        <div class="activity-detail-field">
+          <div class="adf-label">${f.label}</div>
+          <div class="adf-value">${f.value}</div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderActivityLabStreamList() {
+  const wrap = document.getElementById("activity-lab-stream-list");
+  const summary = document.getElementById("activity-lab-stream-summary");
+  const tabId = String(state.activityLab.tabActivityId || "");
+  const focusId = String(state.activityLab.focusActivityId || "");
+  const items = state.activityLab.streamActivities || [];
+  summary.textContent = `${items.length} activities`;
+  wrap.innerHTML = "";
+  items.forEach((activity) => {
+    const id = String(activity.activity_id || "");
+    const row = document.createElement("div");
+    row.className = "activity-lab-stream-item";
+    if (id === tabId) row.classList.add("is-tab-activity");
+    if (id === focusId) row.classList.add("is-focus-activity");
+    row.dataset.activityLabSelect = id;
+    row.innerHTML = `
+      <div class="activity-lab-stream-main">
+        <strong>${activity.date || "-"}</strong>
+        <span>${formatDuration(activity.moving_time_s)}</span>
+      </div>
+      <div class="activity-lab-stream-sub">
+        ${(activity.activity_type || "-")} · ${(activity.activity_name || "").slice(0, 44)}
+      </div>
+    `;
+    wrap.appendChild(row);
+  });
+}
+
+function mkActivityLabChart(name) {
+  if (state.activityLabCharts[name]) state.activityLabCharts[name].dispose();
+  state.activityLabCharts[name] = echarts.init(
+    document.getElementById(`chart-${name}`),
+    isDark() ? "dark" : null
+  );
+  return state.activityLabCharts[name];
+}
+
+function updateActivityLabValueToggleButtons() {
+  document.querySelectorAll(".activity-lab-series-toggle").forEach((btn) => {
+    const key = btn.dataset.activityLabLabel;
+    const shown = !!state.activityLab.visibleSeries[key];
+    btn.classList.toggle("is-active", shown);
+    btn.setAttribute("aria-pressed", String(shown));
+  });
+}
+
+function chartLabelOpt(show, formatter = undefined) {
+  return show ? { show: true, fontSize: 9, formatter } : { show: false };
+}
+
+function buildFullMetricPoints(stream, metricKind) {
+  const time = Array.isArray(stream?.time) ? stream.time : [];
+  const hr = Array.isArray(stream?.heartrate) ? stream.heartrate : [];
+  if (!time.length || !hr.length) return [];
+  const clamp = Math.min(time.length, hr.length);
+  const points = [];
+  for (let i = 0; i < clamp; i++) {
+    const t = Number(time[i]);
+    const hrv = Number(hr[i]);
+    if (!Number.isFinite(t) || !Number.isFinite(hrv)) continue;
+    let metric = null;
+    if (metricKind === "watts") {
+      const watts = Number(stream?.watts?.[i]);
+      if (Number.isFinite(watts) && watts > 0) metric = watts;
+    } else {
+      metric = normalizeExplicitPaceValue(stream?.gap?.[i]);
+      if (!Number.isFinite(metric)) metric = normalizeExplicitPaceValue(stream?.pace?.[i]);
+      if (!Number.isFinite(metric)) {
+        const v = Number(stream?.velocity?.[i]);
+        if (Number.isFinite(v) && v > 0) metric = (1000 / v) / 60;
+      }
+    }
+    if (!Number.isFinite(metric)) continue;
+    points.push([metric, hrv]);
+  }
+  if (points.length <= 700) return points;
+  const stride = Math.ceil(points.length / 700);
+  return points.filter((_, i) => i % stride === 0);
+}
+
+async function loadActivityLabStreamActivities(tabActivity) {
+  const tabDate = formatIsoDate(tabActivity.date || new Date().toISOString());
+  const startDate = addDays(tabDate, -13);
+  const endDate = tabDate;
+  const mainType = activityMainType(tabActivity.activity_type);
+
+  const local = state.activities.filter((a) => {
+    const date = formatIsoDate(a.date);
+    return date >= startDate
+      && date <= endDate
+      && activityMainType(a.activity_type) === mainType;
+  });
+
+  const byIdentity = new Map();
+  local.forEach((a) => byIdentity.set(activityIdentity(a), a));
+  byIdentity.set(activityIdentity(tabActivity), tabActivity);
+
+  const settings = getSettings();
+  const canLoadRemote = tabActivity.source !== "strava"
+    && settings.athleteId
+    && settings.apiKey;
+
+  if (canLoadRemote) {
+    const params = {
+      label: "",
+      activityType: "",
+      startDate,
+      endDate,
+    };
+    try {
+      const mode = resolveApiMode(settings.apiMode);
+      let remote;
+      if (mode === "proxy") {
+        try {
+          remote = await runProxyActivitySearch(params, settings.athleteId, settings.apiKey);
+        } catch (err) {
+          if (!isAutoProxyMode(settings.apiMode)) throw err;
+          remote = await runDirectActivitySearch(params, settings.athleteId, settings.apiKey);
+        }
+      } else {
+        remote = await runDirectActivitySearch(params, settings.athleteId, settings.apiKey);
+      }
+      remote
+        .filter((a) => activityMainType(a.activity_type) === mainType)
+        .forEach((a) => byIdentity.set(activityIdentity(a), a));
+    } catch (err) {
+      if (!isAutoProxyMode(settings.apiMode)) {
+        console.warn("Activity stream remote load failed:", err);
+      }
+    }
+  }
+
+  return [...byIdentity.values()].sort((a, b) => {
+    const byDate = String(b.activity_start_local || b.date || "")
+      .localeCompare(String(a.activity_start_local || a.date || ""));
+    if (byDate !== 0) return byDate;
+    return String(b.activity_id || "").localeCompare(String(a.activity_id || ""));
+  });
+}
+
+async function loadWorkIntervals(activity) {
+  const key = String(activity.activity_id || "");
+  if (state.activityLab.workIntervalsByActivity[key]) {
+    return state.activityLab.workIntervalsByActivity[key];
+  }
+  if (activity.source === "strava") {
+    state.activityLab.workIntervalsByActivity[key] = [];
+    return [];
+  }
+
+  const settings = getSettings();
+  if (!settings.apiKey) {
+    state.activityLab.workIntervalsByActivity[key] = [];
+    return [];
+  }
+  const auth = `Basic ${btoa(`API_KEY:${settings.apiKey}`)}`;
+  const res = await fetch(
+    `https://intervals.icu/api/v1/activity/${encodeURIComponent(activity.activity_id)}/intervals`,
+    { headers: { Authorization: auth, Accept: "application/json" } }
+  );
+  if (!res.ok) throw new Error(`Intervals request failed (${res.status})`);
+  const data = await res.json();
+  const rawIntervals = Array.isArray(data?.icu_intervals) ? data.icu_intervals : [];
+  const workIntervals = rawIntervals
+    .filter((it) => Number(it?.moving_time || 0) > 0)
+    .filter((it) => !["RECOVERY", "WARMUP", "COOLDOWN"].includes(String(it?.type || "").toUpperCase()))
+    .map((it) => ({
+      label: String(it.label || it.type || "Interval"),
+      type: String(it.type || ""),
+      duration: Number(it.moving_time || 0),
+      startIndex: Number(it.start_index || 0),
+      avgWatts: Number(it.average_watts || 0),
+      avgHr: Number(it.average_heartrate || 0),
+      maxHr: Number(it.max_heartrate || 0),
+      zone: it.zone ?? null,
+    }));
+  state.activityLab.workIntervalsByActivity[key] = workIntervals;
+  return workIntervals;
+}
+
+function renderWorkIntervalsList(workIntervals) {
+  const node = document.getElementById("activity-lab-work-intervals");
+  if (!workIntervals.length) {
+    node.innerHTML = "No work intervals found for this activity.";
+    return;
+  }
+  const rows = workIntervals.map((it) => `
+    <tr>
+      <td>${it.label || "-"}</td>
+      <td>${it.type || "-"}</td>
+      <td class="right">${formatSeconds(it.startIndex)}</td>
+      <td class="right">${formatDuration(it.duration)}</td>
+      <td class="right">${it.avgWatts ? Math.round(it.avgWatts) : "-"}</td>
+      <td class="right">${it.avgHr ? Math.round(it.avgHr) : "-"}</td>
+      <td class="right">${it.maxHr ? Math.round(it.maxHr) : "-"}</td>
+      <td class="right">${it.zone ? `Z${it.zone}` : "-"}</td>
+    </tr>
+  `).join("");
+  node.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Label</th>
+            <th>Type</th>
+            <th class="right">Start</th>
+            <th class="right">Time</th>
+            <th class="right">Avg W</th>
+            <th class="right">Avg HR</th>
+            <th class="right">Max HR</th>
+            <th class="right">Zone</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderActivityLabPlaceholder(chartName, title, subtext) {
+  const c = mkActivityLabChart(chartName);
+  c.setOption({
+    title: { text: title, subtext, top: 6, textStyle: { fontSize: 12 }, subtextStyle: { fontSize: 10 } },
+    xAxis: { show: false },
+    yAxis: { show: false },
+    series: [],
+  });
+}
+
+function computeElevationAxisBounds(points) {
+  let values = points
+    .map((p) => Number(p?.[1]))
+    .filter((v) => Number.isFinite(v));
+  if (!values.length) return {};
+
+  const positiveValues = values.filter((v) => v > 0);
+  if (positiveValues.length >= Math.max(3, values.length * 0.8)) {
+    values = positiveValues;
+  }
+
+  if (values.length >= 8) {
+    const sorted = [...values].sort((a, b) => a - b);
+    const q1 = sorted[Math.floor((sorted.length - 1) * 0.25)];
+    const q3 = sorted[Math.floor((sorted.length - 1) * 0.75)];
+    const iqr = q3 - q1;
+    if (iqr > 0) {
+      const lowerFence = q1 - 1.5 * iqr;
+      const upperFence = q3 + 1.5 * iqr;
+      const inliers = values.filter((v) => v >= lowerFence && v <= upperFence);
+      if (inliers.length >= Math.max(3, values.length * 0.8)) {
+        values = inliers;
+      }
+    }
+  }
+
+  let min = Math.min(...values);
+  let max = Math.max(...values);
+  if (min === max) {
+    min -= 5;
+    max += 5;
+  }
+  return { min: Math.floor(min), max: Math.ceil(max) };
+}
+
+function renderActivityLabTimeSeries(stream, focusActivity) {
+  const time = Array.isArray(stream?.time) ? stream.time : [];
+  const hr = sliceMetricStream(stream, stream?.heartrate, 0, Number.MAX_SAFE_INTEGER, (v) => Number(v));
+  const pace = sliceMetricStream(
+    stream,
+    stream?.velocity,
+    0,
+    Number.MAX_SAFE_INTEGER,
+    (v) => {
+      const speed = Number(v);
+      if (!Number.isFinite(speed) || speed <= 0) return null;
+      const minPerKm = (1000 / speed) / 60;
+      return minPerKm <= 20 ? minPerKm : null;
+    }
+  );
+  const elevation = sliceMetricStream(stream, stream?.altitude, 0, Number.MAX_SAFE_INTEGER, (v) => Number(v));
+  const showHr = !!state.activityLab.visibleSeries.hr;
+  const showPace = !!state.activityLab.visibleSeries.pace && pace.length > 0;
+  const showElevation = !!state.activityLab.visibleSeries.elevation && elevation.length > 0;
+
+  if (!time.length) {
+    renderActivityLabPlaceholder("lab-hr", "Heart rate, pace, elevation", "No stream data available");
+    return;
+  }
+
+  const model = getSelectedZoneModel();
+  const pieces = model ? model.hr_zones.map((upper, i) => {
+    const lower = i === 0 ? 0 : model.hr_zones[i - 1];
+    return {
+      gte: lower,
+      lt: upper,
+      color: ZONE_COLORS[i + 1] || "#94a3b8",
+      label: `Z${i + 1}`,
+    };
+  }).concat([{
+    gte: model.hr_zones[model.hr_zones.length - 1],
+    color: ZONE_COLORS[model.hr_zones.length] || "#ef4444",
+    label: `Z${model.hr_zones.length}`,
+  }]) : null;
+  const yMin = 80;
+  const paceAxisIndex = showPace ? 1 : -1;
+  const elevationAxisIndex = showPace ? 2 : 1;
+  const elevationAxisOffset = showHr ? 42 : 0;
+  const elevationAxisBounds = showElevation ? computeElevationAxisBounds(elevation) : {};
+  const useHrZoneColors = !!pieces && showHr && !showPace;
+
+  const hrChart = mkActivityLabChart("lab-hr");
+  hrChart.setOption({
+    title: {
+      text: "Heart rate, pace, elevation",
+      subtext: `${focusActivity.date || ""} · ${focusActivity.activity_name || ""} · pace from velocity_smooth`,
+      top: 6,
+      textStyle: { fontSize: 12 },
+      subtextStyle: { fontSize: 10 },
+    },
+    tooltip: {
+      trigger: "axis",
+      formatter: (params) => {
+        const lines = [`${Number(params[0]?.value?.[0] || 0).toFixed(1)} min`];
+        for (const p of params) {
+          if (p.seriesName === "HR") lines.push(`HR ${Math.round(p.value[1])} bpm`);
+          else if (p.seriesName === "Pace") lines.push(`Pace ${formatPaceMinutes(p.value[1])} min/km`);
+          else if (p.seriesName === "Elevation") lines.push(`Elevation ${Math.round(p.value[1])} m`);
+        }
+        return lines.join(" · ");
+      },
+    },
+    ...(useHrZoneColors ? { visualMap: { show: false, type: "piecewise", dimension: 1, seriesIndex: 0, pieces } } : {}),
+    grid: { left: showElevation ? 58 : showHr ? 42 : 16, right: showPace ? 58 : 16, top: 52, bottom: 28 },
+    xAxis: { type: "value", name: "min" },
+    yAxis: [
+      { type: "value", name: "bpm", min: yMin, show: showHr },
+      ...(showPace ? [{
+        type: "value",
+        name: "min/km",
+        alignTicks: true,
+        inverse: true,
+        max: 20,
+        axisLabel: { formatter: (v) => formatPaceMinutes(v) },
+      }] : []),
+      ...(showElevation ? [{
+        type: "value",
+        name: "m",
+        position: "left",
+        offset: elevationAxisOffset,
+        ...elevationAxisBounds,
+        axisLabel: { formatter: (v) => Math.round(v) },
+        splitLine: { show: false },
+      }] : []),
+    ],
+    series: [
+      ...(showHr ? [{
+        type: "line",
+        name: "HR",
+        smooth: true,
+        showSymbol: false,
+        z: 3,
+        lineStyle: { width: 1, ...(useHrZoneColors ? {} : { color: "#ef4444" }) },
+        itemStyle: useHrZoneColors ? undefined : { color: "#ef4444" },
+        areaStyle: { opacity: 0.16 },
+        data: hr,
+      }] : []),
+      ...(showPace ? [{
+        type: "line",
+        name: "Pace",
+        yAxisIndex: paceAxisIndex,
+        smooth: true,
+        showSymbol: false,
+        z: 2,
+        lineStyle: { width: 1 },
+        data: pace,
+      }] : []),
+      ...(showElevation ? [{
+        type: "line",
+        name: "Elevation",
+        yAxisIndex: elevationAxisIndex,
+        smooth: true,
+        showSymbol: false,
+        z: 0,
+        lineStyle: { width: 0.5, color: "#64748b", opacity: 0.45 },
+        areaStyle: { color: "#64748b", opacity: 0.16 },
+        data: elevation,
+      }] : []),
+    ],
+  });
+}
+
+async function renderActivityLabScatter(tabActivity) {
+  const settings = getSettings();
+  const scatter = mkActivityLabChart("lab-scatter");
+  scatter.setOption({
+    title: { text: "HR vs Pace / GAP / Watts", top: 6, textStyle: { fontSize: 12 } },
+    xAxis: { show: false },
+    yAxis: { show: false },
+    series: [],
+  });
+  const historyPoints = [];
+  const currentPacePoints = [];
+  const currentPowerPoints = [];
+  for (const activity of state.activityLab.streamActivities) {
+    if (!activity?.activity_id) continue;
+    try {
+      const stream = await fetchHrStream(activity.activity_id, settings, activity.source || "intervals");
+      const pacePts = buildFullMetricPoints(stream, "pace");
+      const powerPts = buildFullMetricPoints(stream, "watts");
+      if (String(activity.activity_id) === String(tabActivity.activity_id)) {
+        currentPacePoints.push(...pacePts);
+        currentPowerPoints.push(...powerPts);
+      } else {
+        historyPoints.push(...pacePts.slice(0, 120));
+      }
+    } catch (err) {
+      if (!String(err?.message || "").includes("No stream data available")) {
+        console.warn("Scatter stream load failed:", err);
+      }
+    }
+  }
+  const showValues = false;
+  scatter.setOption({
+    legend: { top: 28, textStyle: { fontSize: 11 } },
+    tooltip: {
+      formatter: (p) => `${p.seriesName}<br>X: ${Number(p.value[0]).toFixed(2)}<br>HR: ${Math.round(p.value[1])} bpm`,
+    },
+    grid: { left: 44, right: 16, top: 68, bottom: 32 },
+    xAxis: { type: "value", name: "Pace (min/km) / Power (W)" },
+    yAxis: { type: "value", name: "HR (bpm)" },
+    series: [
+      {
+        type: "scatter",
+        name: "History (pace/gap)",
+        symbolSize: 7,
+        itemStyle: { color: "#64748b" },
+        label: chartLabelOpt(showValues, (p) => `${p.value[0].toFixed(2)}, ${Math.round(p.value[1])}`),
+        data: historyPoints,
+      },
+      {
+        type: "scatter",
+        name: "This activity pace/gap",
+        symbolSize: 9,
+        itemStyle: { color: "#22c55e" },
+        label: chartLabelOpt(showValues, (p) => formatPaceMinutes(p.value[0])),
+        data: currentPacePoints,
+      },
+      {
+        type: "scatter",
+        name: "This activity watts",
+        symbolSize: 9,
+        itemStyle: { color: "#f59e0b" },
+        label: chartLabelOpt(showValues, (p) => Math.round(p.value[0])),
+        data: currentPowerPoints,
+      },
+    ],
+  });
+}
+
+async function renderActivityLabFocus(tabActivity, focusActivity, forceRefresh = false) {
+  renderActivityDetail(tabActivity, focusActivity);
+  updateActivityLabValueToggleButtons();
+  renderActivityLabPlaceholder("lab-hr", "Heart rate + pace stream", "Loading streams…");
+  try {
+    const settings = getSettings();
+    const stream = await fetchHrStream(
+      focusActivity.activity_id,
+      settings,
+      focusActivity.source || "intervals",
+      "",
+      forceRefresh
+    );
+    renderActivityLabTimeSeries(stream, focusActivity);
+  } catch (err) {
+    const detail = String(err?.message || "Unknown stream error");
+    renderActivityLabPlaceholder("lab-hr", "Heart rate, pace, elevation", detail);
+  }
+  try {
+    const workIntervals = await loadWorkIntervals(focusActivity);
+    state.activityLab.workIntervals = workIntervals;
+    renderWorkIntervalsList(workIntervals);
+  } catch (err) {
+    document.getElementById("activity-lab-work-intervals").textContent =
+      `Failed to load work intervals: ${err.message}`;
+  }
+}
+
+async function openActivityLab(tabActivity, options = {}) {
+  const token = ++state.activityLab.requestToken;
+  state.activityLab.tabActivityId = String(tabActivity.activity_id || "");
+  state.activityLab.focusActivityId = String(options.focusActivityId || tabActivity.activity_id || "");
+  setScreen("activity-detail");
+  const streamActivities = await loadActivityLabStreamActivities(tabActivity);
+  if (token !== state.activityLab.requestToken) return;
+  state.activityLab.streamActivities = streamActivities;
+  if (!streamActivities.some((a) => String(a.activity_id) === String(state.activityLab.focusActivityId))) {
+    state.activityLab.focusActivityId = String(tabActivity.activity_id || "");
+  }
+  renderActivityLabStreamList();
+  const focusActivity = streamActivities.find(
+    (a) => String(a.activity_id) === String(state.activityLab.focusActivityId)
+  ) || tabActivity;
+  await renderActivityLabFocus(tabActivity, focusActivity, !!options.forceRefresh);
+}
+
+function getActiveTabActivity() {
+  const active = state.openActivityTabs.find((t) => t.id === state.activeActivityTabId);
+  return active ? active.activity : null;
+}
+
+function openActivityTab(activity) {
+  const id = String(activity.activity_id || activity.date || Math.random());
+  const existing = state.openActivityTabs.find((t) => t.id === id);
+  if (!existing) {
+    state.openActivityTabs.push({ id, activity });
+  } else {
+    existing.activity = activity;
+  }
+  state.activeActivityTabId = id;
+  renderActivityTabBar();
+  openActivityLab(activity);
+}
+
+function closeActivityTab(id) {
+  const idx = state.openActivityTabs.findIndex((t) => t.id === id);
+  if (idx === -1) return;
+  state.openActivityTabs.splice(idx, 1);
+
+  if (state.activeActivityTabId === id) {
+    if (state.openActivityTabs.length > 0) {
+      const next = state.openActivityTabs[Math.max(0, idx - 1)];
+      state.activeActivityTabId = next.id;
+      renderActivityTabBar();
+      openActivityLab(next.activity);
+    } else {
+      state.activeActivityTabId = null;
+      renderActivityTabBar();
+      setScreen("activities");
+    }
+  } else {
+    renderActivityTabBar();
+  }
+}
+
+
 function renderIntervals() {
   const body = document.getElementById("intervals-body");
   body.innerHTML = "";
-  state.filtered.forEach((item) => {
-    const id = String(item.interval_id);
-    const z  = item.zone;
-    const source = item.source || "intervals";
-    const sourceIcon = source === "strava"
-      ? '<span style="color:#f59e0b;font-weight:700">S</span>'
-      : '<span style="color:#ef4444;font-weight:700">I</span>';
-    const sourceLabel = source === "strava" ? "Strava" : "Intervals.icu";
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td class="center"><input type="checkbox" data-select-id="${id}" ${state.selected.has(id) ? "checked" : ""} /></td>
-      <td class="center" title="${sourceLabel}">${sourceIcon}</td>
-      <td>${item.date || ""}</td>
-      <td>${item.activity_type || ""}</td>
-      <td title="${item.activity_name || ""}">${(item.activity_name || "").slice(0, 34)}</td>
-      <td>${item.label || ""}</td>
-      <td class="right">${formatSeconds(item.moving_time_s)}</td>
-      <td class="right">${Math.round(item.avg_watts || 0)}</td>
-      <td class="right">${(item.avg_watts_kg || 0).toFixed(2)}</td>
-      <td class="right">${Math.round(item.avg_hr || 0)}</td>
-      <td class="right">${Math.round(item.max_hr || 0)}</td>
-      <td class="right">${(item.training_load || 0).toFixed(1)}</td>
-      <td class="right" style="color:${ZONE_COLORS[z] || "inherit"}">${z ? `Z${z}` : "-"}</td>
-      <td class="right">${(item.decoupling || 0).toFixed(1)}%</td>
-    `;
-    body.appendChild(tr);
-  });
+  if (state.intervalsGrouped) {
+    renderGroupedIntervals(body);
+  } else {
+    state.filtered.forEach((item) => body.appendChild(renderIntervalRow(item)));
+  }
   document.getElementById("result-summary").textContent = `${state.filtered.length} intervals`;
   document.getElementById("selected-count").textContent = `${state.selected.size} selected`;
+  const groupBtn = document.getElementById("group-intervals");
+  if (groupBtn) {
+    groupBtn.classList.toggle("is-active", state.intervalsGrouped);
+    groupBtn.setAttribute("aria-pressed", String(state.intervalsGrouped));
+    groupBtn.textContent = state.intervalsGrouped ? "Ungroup" : "Group";
+  }
   body.querySelectorAll("input[data-select-id]").forEach((cb) => {
     cb.addEventListener("change", (e) => {
       const id = e.target.getAttribute("data-select-id");
       if (e.target.checked) state.selected.add(id); else state.selected.delete(id);
       document.getElementById("selected-count").textContent = `${state.selected.size} selected`;
     });
+  });
+  body.querySelectorAll("[data-group-toggle]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.groupToggle;
+      if (!key) return;
+      if (state.collapsedIntervalGroups.has(key)) {
+        state.collapsedIntervalGroups.delete(key);
+      } else {
+        state.collapsedIntervalGroups.add(key);
+      }
+      renderIntervals();
+    });
+  });
+}
+
+function renderIntervalRow(item, groupKey = "") {
+  const id = String(item.interval_id);
+  const z  = item.zone;
+  const source = item.source || "intervals";
+  const sourceIcon = source === "strava"
+    ? '<span style="color:#f59e0b;font-weight:700">S</span>'
+    : '<span style="color:#ef4444;font-weight:700">I</span>';
+  const sourceLabel = source === "strava" ? "Strava" : "Intervals.icu";
+  const tr = document.createElement("tr");
+  if (groupKey) tr.className = "interval-child-row";
+  tr.innerHTML = `
+    <td class="center"><input type="checkbox" data-select-id="${id}" ${state.selected.has(id) ? "checked" : ""} /></td>
+    <td class="center" title="${sourceLabel}">${sourceIcon}</td>
+    <td>${item.date || ""}</td>
+    <td>${item.activity_type || ""}</td>
+    <td title="${item.activity_name || ""}">${(item.activity_name || "").slice(0, 34)}</td>
+    <td>${item.label || ""}</td>
+    <td class="right">${formatSeconds(item.moving_time_s)}</td>
+    <td class="right">${Math.round(item.avg_watts || 0)}</td>
+    <td class="right">${(item.avg_watts_kg || 0).toFixed(2)}</td>
+    <td class="right">${Math.round(item.avg_hr || 0)}</td>
+    <td class="right">${Math.round(item.max_hr || 0)}</td>
+    <td class="right">${(item.training_load || 0).toFixed(1)}</td>
+    <td class="right" style="color:${ZONE_COLORS[z] || "inherit"}">${z ? `Z${z}` : "-"}</td>
+    <td class="right">${(item.decoupling || 0).toFixed(1)}%</td>
+  `;
+  return tr;
+}
+
+function intervalGroupName(item) {
+  return String(item.label || item.interval_type || item.activity_name || "Unnamed interval").trim()
+    || "Unnamed interval";
+}
+
+function intervalGroupKey(name) {
+  return encodeURIComponent(name.toLowerCase());
+}
+
+function averageMetric(items, field) {
+  const values = items
+    .map((item) => Number(item[field]))
+    .filter((value) => Number.isFinite(value));
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function uniqueDisplayValue(items, field) {
+  const values = [...new Set(items.map((item) => String(item[field] || "").trim()).filter(Boolean))];
+  if (!values.length) return "-";
+  return values.length === 1 ? values[0] : "Mixed";
+}
+
+function groupDateRange(items) {
+  const dates = items.map((item) => String(item.date || "").slice(0, 10)).filter(Boolean).sort();
+  if (!dates.length) return "-";
+  return dates[0] === dates[dates.length - 1] ? dates[0] : `${dates[0]}..${dates[dates.length - 1]}`;
+}
+
+function averageZone(items) {
+  const avg = averageMetric(items, "zone");
+  if (avg === null || avg <= 0) return "-";
+  return `Z${avg.toFixed(1)}`;
+}
+
+function renderGroupedIntervals(body) {
+  const groups = new Map();
+  for (const item of state.filtered) {
+    const name = intervalGroupName(item);
+    const key = intervalGroupKey(name);
+    if (!groups.has(key)) groups.set(key, { key, name, items: [] });
+    groups.get(key).items.push(item);
+  }
+  const sortedGroups = [...groups.values()].sort((a, b) => {
+    const byName = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    if (byName !== 0) return byName;
+    return groupDateRange(a.items).localeCompare(groupDateRange(b.items));
+  });
+
+  sortedGroups.forEach((group) => {
+    const items = [...group.items].sort(compareIntervalsChronologically);
+    const collapsed = state.collapsedIntervalGroups.has(group.key);
+    const groupRow = document.createElement("tr");
+    groupRow.className = "interval-group-row";
+    const avgTime = averageMetric(items, "moving_time_s");
+    const avgWatts = averageMetric(items, "avg_watts");
+    const avgWattsKg = averageMetric(items, "avg_watts_kg");
+    const avgHr = averageMetric(items, "avg_hr");
+    const avgMaxHr = averageMetric(items, "max_hr");
+    const avgLoad = averageMetric(items, "training_load");
+    const avgDecoupling = averageMetric(items, "decoupling");
+    groupRow.innerHTML = `
+      <td class="center">
+        <button class="interval-group-toggle" type="button" data-group-toggle="${group.key}" aria-label="${collapsed ? "Expand" : "Collapse"} ${group.name}">
+          ${collapsed ? "▸" : "▾"}
+        </button>
+      </td>
+      <td class="center interval-group-muted">-</td>
+      <td>${groupDateRange(items)}</td>
+      <td>${uniqueDisplayValue(items, "activity_type")}</td>
+      <td class="interval-group-muted">Average</td>
+      <td class="interval-group-name">${group.name} (${items.length})</td>
+      <td class="right">${avgTime === null ? "-" : formatSeconds(avgTime)}</td>
+      <td class="right">${avgWatts === null ? "-" : Math.round(avgWatts)}</td>
+      <td class="right">${avgWattsKg === null ? "-" : avgWattsKg.toFixed(2)}</td>
+      <td class="right">${avgHr === null ? "-" : Math.round(avgHr)}</td>
+      <td class="right">${avgMaxHr === null ? "-" : Math.round(avgMaxHr)}</td>
+      <td class="right">${avgLoad === null ? "-" : avgLoad.toFixed(1)}</td>
+      <td class="right">${averageZone(items)}</td>
+      <td class="right">${avgDecoupling === null ? "-" : `${avgDecoupling.toFixed(1)}%`}</td>
+    `;
+    body.appendChild(groupRow);
+    if (!collapsed) {
+      items.forEach((item) => body.appendChild(renderIntervalRow(item, group.key)));
+    }
   });
 }
 
@@ -1345,7 +2132,10 @@ function mkChart(name) {
   return state.charts[name];
 }
 
-function resizeAll() { Object.values(state.charts).forEach((c) => c && c.resize()); }
+function resizeAll() {
+  Object.values(state.charts).forEach((c) => c && c.resize());
+  Object.values(state.activityLabCharts).forEach((c) => c && c.resize());
+}
 
 function mockHrStream(item) {
   const avg = Number(item.avg_hr || 150);
@@ -1396,17 +2186,30 @@ async function fetchStravaStreamFromCandidates(candidates, settings, token) {
   throw lastErr || new Error("Strava stream request failed.");
 }
 
-async function fetchHrStream(activityId, settings, source = "intervals", stravaEffortId = "") {
+async function fetchHrStream(
+  activityId,
+  settings,
+  source = "intervals",
+  stravaEffortId = "",
+  forceRefresh = false
+) {
   const activityCacheKey = `${source}:${activityId}`;
   const effortCacheKey = source === "strava" && stravaEffortId ? `strava-effort:${stravaEffortId}` : "";
 
   const cacheCandidates = [activityCacheKey, effortCacheKey].filter(Boolean);
-  for (const key of cacheCandidates) {
-    if (hrStreamCache[key]) return hrStreamCache[key];
-    const stored = loadHrStreamFromStorage(key);
-    if (stored && Array.isArray(stored.time) && Array.isArray(stored.heartrate)) {
-      hrStreamCache[key] = stored;
-      return stored;
+  if (forceRefresh) {
+    for (const key of cacheCandidates) {
+      delete hrStreamCache[key];
+      localStorage.removeItem(HR_STREAM_LS_PREFIX + key);
+    }
+  } else {
+    for (const key of cacheCandidates) {
+      if (hrStreamCache[key]) return hrStreamCache[key];
+      const stored = loadHrStreamFromStorage(key);
+      if (stored && Array.isArray(stored.time) && Array.isArray(stored.heartrate)) {
+        hrStreamCache[key] = stored;
+        return stored;
+      }
     }
   }
 
@@ -1416,10 +2219,8 @@ async function fetchHrStream(activityId, settings, source = "intervals", stravaE
     if (!token) throw new Error("No Strava access token. Use Connect Strava first.");
     try {
       const activityCandidates = [
-        `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate,watts,velocity_smooth,distance,altitude,grade_smooth&key_by_type=true`,
-        `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate,watts,velocity_smooth,distance,altitude,grade_smooth`,
-        `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate&key_by_type=true`,
-        `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate`,
+        `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate,velocity_smooth,altitude&key_by_type=true`,
+        `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate,velocity_smooth,altitude`,
       ];
       const { raw, path } = await fetchStravaStreamFromCandidates(activityCandidates, settings, token);
       const normalized = normalizeStravaStream(raw);
@@ -1443,10 +2244,8 @@ async function fetchHrStream(activityId, settings, source = "intervals", stravaE
       }
       if (msg.includes("404") && stravaEffortId) {
         const effortCandidates = [
-          `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate,watts,velocity_smooth,distance,altitude,grade_smooth&key_by_type=true`,
-          `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate,watts,velocity_smooth,distance,altitude,grade_smooth`,
-          `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate&key_by_type=true`,
-          `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate`,
+          `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate,velocity_smooth,altitude&key_by_type=true`,
+          `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate,velocity_smooth,altitude`,
         ];
         const { raw: fallbackRaw, path } = await fetchStravaStreamFromCandidates(effortCandidates, settings, token);
         const normalized = normalizeStravaStream(fallbackRaw);
@@ -1488,15 +2287,19 @@ async function fetchHrStream(activityId, settings, source = "intervals", stravaE
 
     if (!result) {
       const auth = `Basic ${btoa(`API_KEY:${settings.apiKey}`)}`;
+      const fullStreamTypes = "heartrate,time,velocity_smooth,altitude";
       let res = await fetch(
-        `https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/streams?types=heartrate,time,watts,velocity,pace,gap,distance,altitude,grade`,
+        `https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/streams?types=${fullStreamTypes}`,
         { headers: { Authorization: auth, Accept: "application/json" } }
       );
-      if (!res.ok && res.status === 400) {
+      if (!res.ok && isStreamFallbackStatus(res.status)) {
         res = await fetch(
-          `https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/streams?types=heartrate,time`,
+          `https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/streams?types=heartrate,time,velocity_smooth,altitude`,
           { headers: { Authorization: auth, Accept: "application/json" } }
         );
+      }
+      if (!res.ok && isStreamUnavailableStatus(res.status)) {
+        throw new Error(`No stream data available (${res.status})`);
       }
       if (!res.ok) throw new Error(`Streams request failed (${res.status})`);
       const raw = await res.json();
@@ -1586,16 +2389,6 @@ function buildPaceFromDistance(stream, startIndex, movingTimeS) {
 }
 
 function buildSecondaryStreamSeries(stream, startIndex, movingTimeS) {
-  const wattsPoints = sliceMetricStream(stream, stream?.watts, startIndex, movingTimeS, (v) => Number(v));
-  if (wattsPoints.length) {
-    return {
-      kind: "watts",
-      name: "Watts",
-      unit: "W",
-      points: wattsPoints,
-    };
-  }
-
   const gapPoints = sliceMetricStream(stream, stream?.gap, startIndex, movingTimeS, normalizeExplicitPaceValue);
   if (gapPoints.length) {
     return {
@@ -1623,7 +2416,9 @@ function buildSecondaryStreamSeries(stream, startIndex, movingTimeS) {
     movingTimeS,
     (v) => {
       const speed = Number(v);
-      return Number.isFinite(speed) && speed > 0 ? (1000 / speed) / 60 : null;
+      if (!Number.isFinite(speed) || speed <= 0) return null;
+      const minPerKm = (1000 / speed) / 60;
+      return minPerKm <= 20 ? minPerKm : null;
     }
   );
   if (velocityPoints.length) {
@@ -1642,6 +2437,16 @@ function buildSecondaryStreamSeries(stream, startIndex, movingTimeS) {
       name: "Pace",
       unit: "min/km",
       points: distancePacePoints,
+    };
+  }
+
+  const wattsPoints = sliceMetricStream(stream, stream?.watts, startIndex, movingTimeS, (v) => Number(v));
+  if (wattsPoints.length) {
+    return {
+      kind: "watts",
+      name: "Watts",
+      unit: "W",
+      points: wattsPoints,
     };
   }
 
@@ -1695,6 +2500,7 @@ function renderHrStreamChart(points, item, secondarySeries = null) {
         name: secondarySeries.unit,
         alignTicks: true,
         inverse: secondarySeries.kind === "pace",
+        ...(secondarySeries.kind === "pace" ? { max: 20 } : {}),
         axisLabel: secondarySeries.kind === "pace"
           ? { formatter: (v) => formatPaceMinutes(v) }
           : { formatter: (v) => Math.round(v) },
@@ -2105,6 +2911,13 @@ function toggleTheme() {
   document.getElementById("theme-toggle").textContent = dark ? "Light mode" : "Dark mode";
   localStorage.setItem("webapp-theme", dark ? "dark" : "light");
   if (state.screen === "compare") renderCompare();
+  if (state.screen === "activity-detail") {
+    const tabActivity = getActiveTabActivity();
+    if (tabActivity) {
+      const focusId = state.activityLab.focusActivityId || tabActivity.activity_id;
+      openActivityLab(tabActivity, { focusActivityId: focusId });
+    }
+  }
 }
 
 /* ─── Search ─────────────────────────────────────────────────────────────── */
@@ -2395,6 +3208,66 @@ function init() {
   });
   document.getElementById("back-to-list").addEventListener("click", () => setScreen("intervals"));
   document.getElementById("go-compare").addEventListener("click", () => setScreen("compare"));
+
+  // Activity tab bar — delegated click handler
+  document.getElementById("activity-tab-bar").addEventListener("click", (e) => {
+    const closeBtn = e.target.closest("[data-close-tab]");
+    if (closeBtn) {
+      e.stopPropagation();
+      closeActivityTab(closeBtn.dataset.closeTab);
+      return;
+    }
+    const tab = e.target.closest(".activity-tab");
+    if (tab) {
+      const id = tab.dataset.tabId;
+      const entry = state.openActivityTabs.find((t) => t.id === id);
+      if (entry) {
+        state.activeActivityTabId = id;
+        renderActivityTabBar();
+        openActivityLab(entry.activity);
+      }
+    }
+  });
+
+  document.getElementById("activity-lab-stream-list").addEventListener("click", (e) => {
+    const row = e.target.closest("[data-activity-lab-select]");
+    if (!row) return;
+    const focusId = row.dataset.activityLabSelect;
+    const tabActivity = getActiveTabActivity();
+    if (!tabActivity || !focusId) return;
+    state.activityLab.focusActivityId = String(focusId);
+    renderActivityLabStreamList();
+    const focusActivity = state.activityLab.streamActivities.find(
+      (a) => String(a.activity_id) === String(focusId)
+    ) || tabActivity;
+    renderActivityLabFocus(tabActivity, focusActivity);
+  });
+
+  document.getElementById("activity-lab-refresh").addEventListener("click", () => {
+    const tabActivity = getActiveTabActivity();
+    if (!tabActivity) return;
+    const focusActivity = state.activityLab.streamActivities.find(
+      (a) => String(a.activity_id) === String(state.activityLab.focusActivityId || "")
+    ) || tabActivity;
+    delete state.activityLab.workIntervalsByActivity[String(focusActivity.activity_id || "")];
+    renderActivityLabFocus(tabActivity, focusActivity, true);
+  });
+
+  document.querySelectorAll(".activity-lab-series-toggle").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.activityLabLabel;
+      if (!key) return;
+      state.activityLab.visibleSeries[key] = !state.activityLab.visibleSeries[key];
+      const tabActivity = getActiveTabActivity();
+      if (!tabActivity) return;
+      const focusActivity = state.activityLab.streamActivities.find(
+        (a) => String(a.activity_id) === String(state.activityLab.focusActivityId || "")
+      ) || tabActivity;
+      renderActivityLabFocus(tabActivity, focusActivity);
+    });
+  });
+
+
   document.getElementById("select-all").addEventListener("click", () => {
     state.filtered.forEach((x) => state.selected.add(String(x.interval_id)));
     renderIntervals();
@@ -2421,6 +3294,11 @@ function init() {
   });
   document.getElementById("select-none").addEventListener("click", () => {
     state.selected.clear();
+    renderIntervals();
+  });
+  document.getElementById("group-intervals").addEventListener("click", () => {
+    state.intervalsGrouped = !state.intervalsGrouped;
+    if (!state.intervalsGrouped) state.collapsedIntervalGroups.clear();
     renderIntervals();
   });
 
