@@ -51,7 +51,7 @@ intervals-spa/
 
 ### Frontend
 
-1. Install [Node.js](https://nodejs.org/) 20+ and [pnpm](https://pnpm.io/).
+1. Install [Node.js](https://nodejs.org/) 20+ and [pnpm](https://pnpm.io/) (on macOS: `brew install pnpm`).
 2. Install dependencies:
    ```bash
    cd frontend && pnpm install

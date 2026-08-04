@@ -5,10 +5,19 @@ const ZONE_COLORS = {
 };
 const TOOLTIP_CSS = "background:#101820;border:1px solid rgba(148,163,184,0.34);border-radius:10px;padding:10px 14px;box-shadow:0 16px 48px rgba(0,0,0,0.48);color:#eef4f8;font-size:12px;max-width:260px";
 
+/* Tri-state series toggle (Activity Lab chart): on → dimmed → off → on, cycling on each click. */
+const SERIES_TOGGLE_CYCLE = { on: "dimmed", dimmed: "off", off: "on" };
+const SERIES_DIMMED_COLOR = "#94a3b8";
+
 /* ─── State ─────────────────────────────────────────────────────────────── */
 const state = {
   activities: [],
   activitiesFiltered: [],
+  glucose: [],
+  glucoseFiltered: [],
+  glucosePage: 1,
+  openGlucoseTabs: [],     // [{id, label, from, to, points}]
+  activeGlucoseTabId: null,
   openActivityTabs: [],    // [{id, activity}]
   activeActivityTabId: null,
   intervals: [],
@@ -34,9 +43,10 @@ const state = {
     workIntervalsByActivity: {},
     workIntervals: [],
     visibleSeries: {
-      hr: true,
-      pace: true,
-      elevation: true,
+      hr: "on",
+      pace: "on",
+      elevation: "on",
+      glucose: "on",
     },
   },
 };
@@ -50,6 +60,8 @@ const stravaEffortStartCache = {};
 
 const ACTIVITIES_CACHE_KEY  = "intervals_cached_activities_v1";
 const INTERVALS_CACHE_KEY   = "intervals_cached_intervals_v1";
+const GLUCOSE_CACHE_KEY     = "intervals_cached_glucose_v1";
+const GLUCOSE_PAGE_SIZE     = 100;
 const HR_STREAM_LS_PREFIX   = "intervals_hr_stream_v5:";   // localStorage key prefix for activity streams
 
 /** Persist a stream object to localStorage (silently skips on quota errors). */
@@ -188,6 +200,7 @@ function initSearchDatePickers() {
     "search-from", "search-to",
     "strava-search-from", "strava-search-to",
     "filter-date-from", "filter-date-to",
+    "glucose-filter-from", "glucose-filter-to",
   ];
   ids.forEach((id) => {
     const input = document.getElementById(id);
@@ -386,6 +399,7 @@ function clearSettings() {
   [
     "intervals_athlete_id", "intervals_api_key", "intervals_api_mode",
     "intervals_zone_model_id", "intervals_zone_models", ACTIVITIES_CACHE_KEY, INTERVALS_CACHE_KEY,
+    GLUCOSE_CACHE_KEY,
     "intervals_strava_client_id", "intervals_strava_client_secret",
     "intervals_strava_access_token", "intervals_strava_redirect_uri", "intervals_strava_scope",
     "intervals_strava_refresh_token", "intervals_strava_expires_at_epoch",
@@ -393,6 +407,11 @@ function clearSettings() {
   ].forEach((k) => localStorage.removeItem(k));
   state.activities = [];
   state.activitiesFiltered = [];
+  state.glucose = [];
+  state.glucoseFiltered = [];
+  state.glucosePage = 1;
+  state.openGlucoseTabs = [];
+  state.activeGlucoseTabId = null;
   state.openActivityTabs = [];
   state.activeActivityTabId = null;
   state.activityLab.tabActivityId = null;
@@ -408,6 +427,8 @@ function clearSettings() {
   hideSearchPreview("strava");
   renderActivities();
   renderIntervals();
+  applyGlucoseFilters();
+  renderGlucoseTabBar();
   loadSettingsToForm();
   document.getElementById("settings-status").textContent = "";
   document.getElementById("settings-strava-status").textContent = "";
@@ -977,6 +998,551 @@ function clearActivitiesCache() {
   localStorage.removeItem(ACTIVITIES_CACHE_KEY);
 }
 
+/* ─── Glucose ────────────────────────────────────────────────────────────── */
+function saveGlucoseCache(records) {
+  localStorage.setItem(GLUCOSE_CACHE_KEY, JSON.stringify(records));
+}
+
+function loadGlucoseCache() {
+  try {
+    const raw = localStorage.getItem(GLUCOSE_CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function clearGlucoseCache() {
+  localStorage.removeItem(GLUCOSE_CACHE_KEY);
+}
+
+/** Parses a single CSV line into fields, honoring double-quoted values (incl. embedded commas/quotes). */
+function parseCsvLine(line) {
+  const out = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cur += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      out.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+/** Parses a "DD-MM-YYYY HH:MM" device timestamp into a sortable/dedup key plus date/time parts. */
+function parseGlucoseDeviceTimestamp(raw) {
+  const m = /^(\d{2})-(\d{2})-(\d{4})\s+(\d{2}):(\d{2})$/.exec(String(raw || "").trim());
+  if (!m) return null;
+  const [, dd, mm, yyyy, HH, MM] = m;
+  return {
+    key: `${yyyy}-${mm}-${dd} ${HH}:${MM}`,
+    date: `${yyyy}-${mm}-${dd}`,
+    time: `${HH}:${MM}`,
+  };
+}
+
+/** Parses a LibreView-style glucose export (CSV/TXT) into {key, date, time, value, type} rows. */
+function parseGlucoseCsv(text) {
+  const lines = String(text || "")
+    .split(/\r\n|\n|\r/)
+    .filter((line) => line.trim().length > 0);
+
+  let headerIdx = -1;
+  let columns = null;
+  for (let i = 0; i < lines.length; i++) {
+    const fields = parseCsvLine(lines[i]);
+    if (fields.includes("Device Timestamp") && fields.includes("Record Type")) {
+      headerIdx = i;
+      columns = fields;
+      break;
+    }
+  }
+  if (headerIdx === -1) {
+    throw new Error("Unrecognized file — no 'Device Timestamp' / 'Record Type' header row found.");
+  }
+
+  const idxTimestamp = columns.indexOf("Device Timestamp");
+  const idxHistoric = columns.indexOf("Historic Glucose mg/dL");
+  const idxScan = columns.indexOf("Scan Glucose mg/dL");
+
+  const records = [];
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const fields = parseCsvLine(lines[i]);
+    if (fields.length <= idxTimestamp) continue;
+    const parsedTs = parseGlucoseDeviceTimestamp(fields[idxTimestamp]);
+    if (!parsedTs) continue;
+
+    const historicRaw = idxHistoric >= 0 ? String(fields[idxHistoric] || "").trim() : "";
+    const scanRaw = idxScan >= 0 ? String(fields[idxScan] || "").trim() : "";
+    let value = null;
+    let type = null;
+    if (historicRaw !== "") {
+      value = Number(historicRaw);
+      type = "historic";
+    } else if (scanRaw !== "") {
+      value = Number(scanRaw);
+      type = "scan";
+    }
+    if (value === null || !Number.isFinite(value)) continue;
+
+    records.push({ key: parsedTs.key, date: parsedTs.date, time: parsedTs.time, value, type });
+  }
+  return records;
+}
+
+/** Merges incoming glucose records into existing ones, overwriting entries with a matching timestamp key. */
+function mergeGlucoseRecords(existing, incoming) {
+  const map = new Map(existing.map((r) => [r.key, r]));
+  let added = 0;
+  let updated = 0;
+  incoming.forEach((rec) => {
+    if (map.has(rec.key)) updated++;
+    else added++;
+    map.set(rec.key, rec);
+  });
+  return { merged: Array.from(map.values()), added, updated };
+}
+
+/** Returns true if a "YYYY-MM-DD HH:MM" key falls within an optional [from, to] date range (inclusive, whole days). */
+function isGlucoseKeyInRange(key, from, to) {
+  if (from && key < `${from} 00:00`) return false;
+  if (to && key > `${to} 23:59`) return false;
+  return true;
+}
+
+function applyGlucoseFilters() {
+  const from = document.getElementById("glucose-filter-from").value;
+  const to = document.getElementById("glucose-filter-to").value;
+  state.glucoseFiltered = state.glucose
+    .filter((item) => isGlucoseKeyInRange(item.key, from, to))
+    .sort((a, b) => b.key.localeCompare(a.key));
+  state.glucosePage = 1;
+  renderGlucoseTable();
+}
+
+function renderGlucoseTable() {
+  const body = document.getElementById("glucose-body");
+  const total = state.glucoseFiltered.length;
+  const totalPages = Math.max(1, Math.ceil(total / GLUCOSE_PAGE_SIZE));
+  state.glucosePage = Math.min(Math.max(1, state.glucosePage), totalPages);
+
+  const startIdx = (state.glucosePage - 1) * GLUCOSE_PAGE_SIZE;
+  const pageItems = state.glucoseFiltered.slice(startIdx, startIdx + GLUCOSE_PAGE_SIZE);
+
+  body.innerHTML = "";
+  pageItems.forEach((item) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${item.date}</td>
+      <td>${item.time}</td>
+      <td class="right">${item.value}</td>
+      <td>${item.type === "scan" ? "Scan" : "Historic"}</td>
+    `;
+    body.appendChild(tr);
+  });
+
+  document.getElementById("glucose-summary").textContent =
+    total === 0 ? "No glucose readings." : `${total} readings`;
+
+  const rangeStart = total === 0 ? 0 : startIdx + 1;
+  const rangeEnd = Math.min(total, startIdx + GLUCOSE_PAGE_SIZE);
+  document.getElementById("glucose-page-info").textContent =
+    total === 0 ? "" : `${rangeStart}–${rangeEnd} of ${total} · Page ${state.glucosePage} of ${totalPages}`;
+  document.getElementById("glucose-prev-page").disabled = state.glucosePage <= 1;
+  document.getElementById("glucose-next-page").disabled = state.glucosePage >= totalPages;
+}
+
+function handleGlucoseFileUpload(event) {
+  const input = event.target;
+  const file = input.files && input.files[0];
+  const statusEl = document.getElementById("glucose-upload-status");
+  if (!file) return;
+
+  statusEl.textContent = "Reading file…";
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = parseGlucoseCsv(String(reader.result || ""));
+      if (parsed.length === 0) {
+        statusEl.textContent = `No glucose readings found in "${file.name}".`;
+        return;
+      }
+      const { merged, added, updated } = mergeGlucoseRecords(state.glucose, parsed);
+      state.glucose = merged;
+      saveGlucoseCache(merged);
+      applyGlucoseFilters();
+      statusEl.textContent =
+        `Imported ${parsed.length} readings from "${file.name}" — ${added} added, ${updated} updated ` +
+        `(${merged.length} stored total).`;
+    } catch (err) {
+      statusEl.textContent = `Import failed: ${err.message || err}`;
+    } finally {
+      input.value = "";
+    }
+  };
+  reader.onerror = () => {
+    statusEl.textContent = "Could not read the selected file.";
+    input.value = "";
+  };
+  reader.readAsText(file);
+}
+
+/* ─── Glucose chart tabs ─────────────────────────────────────────────────── */
+const GLUCOSE_TARGET_LOW = 80;
+const GLUCOSE_TARGET_HIGH = 150;
+const GLUCOSE_BORDER_MARGIN = 15;    // width (mg/dL) of the red↔green gradient zone on each side
+const GLUCOSE_AXIS_MIN = 50;
+const GLUCOSE_AXIS_MAX = 200;
+const GLUCOSE_COLOR_GREEN = [0x54, 0xe0, 0xa1];  // matches ZONE_COLORS[1]
+const GLUCOSE_COLOR_RED   = [0xff, 0x64, 0x7c];  // matches ZONE_COLORS[5]
+
+function lerpRgb(a, b, t) {
+  return a.map((channel, i) => Math.round(channel + (b[i] - channel) * t));
+}
+
+function rgbToHex([r, g, b]) {
+  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/**
+ * Builds a fine-grained piecewise visualMap covering [GLUCOSE_AXIS_MIN, GLUCOSE_AXIS_MAX]:
+ * flat red below/above the target range, flat green inside it, and a smooth red↔green
+ * gradient (in 1 mg/dL steps) across the border margins in between.
+ */
+function buildGlucoseColorPieces() {
+  const lowBorderStart = GLUCOSE_TARGET_LOW - GLUCOSE_BORDER_MARGIN;
+  const highBorderEnd = GLUCOSE_TARGET_HIGH + GLUCOSE_BORDER_MARGIN;
+  const pieces = [];
+
+  pieces.push({ min: -Infinity, max: lowBorderStart, color: rgbToHex(GLUCOSE_COLOR_RED) });
+  for (let v = lowBorderStart; v < GLUCOSE_TARGET_LOW; v += 1) {
+    const t = (v - lowBorderStart) / GLUCOSE_BORDER_MARGIN;
+    pieces.push({ gt: v, lte: v + 1, color: rgbToHex(lerpRgb(GLUCOSE_COLOR_RED, GLUCOSE_COLOR_GREEN, t)) });
+  }
+  pieces.push({ gt: GLUCOSE_TARGET_LOW, lte: GLUCOSE_TARGET_HIGH, color: rgbToHex(GLUCOSE_COLOR_GREEN) });
+  for (let v = GLUCOSE_TARGET_HIGH; v < highBorderEnd; v += 1) {
+    const t = (v - GLUCOSE_TARGET_HIGH) / GLUCOSE_BORDER_MARGIN;
+    pieces.push({ gt: v, lte: v + 1, color: rgbToHex(lerpRgb(GLUCOSE_COLOR_GREEN, GLUCOSE_COLOR_RED, t)) });
+  }
+  pieces.push({ min: highBorderEnd, max: Infinity, color: rgbToHex(GLUCOSE_COLOR_RED) });
+  return pieces;
+}
+
+/** Builds a human-readable range label from the "YYYY-MM-DD" filter values (used as tab name). */
+function formatGlucoseRangeLabel(from, to) {
+  if (!from && !to) return "All readings";
+  if (!to) return `From ${from}`;
+  if (!from) return `Until ${to}`;
+  if (from === to) return from;
+  return `${from} → ${to}`;
+}
+
+function renderGlucoseTabBar() {
+  const bar = document.getElementById("glucose-tab-bar");
+  bar.innerHTML = "";
+  if (state.openGlucoseTabs.length === 0) {
+    bar.classList.add("hidden");
+    return;
+  }
+  bar.classList.remove("hidden");
+  state.openGlucoseTabs.forEach(({ id, label }) => {
+    const tab = document.createElement("button");
+    tab.className = "activity-tab" + (id === state.activeGlucoseTabId ? " active" : "");
+    tab.dataset.tabId = id;
+    tab.innerHTML = `<span class="activity-tab-label">${label}</span>`
+      + `<span class="activity-tab-close" data-close-tab="${id}" title="Close">×</span>`;
+    bar.appendChild(tab);
+  });
+}
+
+/** Opens (or focuses, if already open) a chart tab for the currently filtered glucose range. */
+function openGlucoseTab() {
+  const from = document.getElementById("glucose-filter-from").value;
+  const to = document.getElementById("glucose-filter-to").value;
+  if (state.glucoseFiltered.length === 0) {
+    document.getElementById("glucose-upload-status").textContent =
+      "No glucose readings in the selected range to chart.";
+    return;
+  }
+
+  const id = `${from || ""}|${to || ""}`;
+  const label = formatGlucoseRangeLabel(from, to);
+  const points = state.glucoseFiltered
+    .slice()
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .map((r) => [new Date(`${r.date}T${r.time}:00`).getTime(), r.value]);
+
+  const existing = state.openGlucoseTabs.find((t) => t.id === id);
+  if (existing) {
+    existing.label = label;
+    existing.from = from;
+    existing.to = to;
+    existing.points = points;
+  } else {
+    state.openGlucoseTabs.push({ id, label, from, to, points, selectedDay: null });
+  }
+  openGlucoseDetail(id);
+}
+
+/** Extracts the local "YYYY-MM-DD" date key from a chart timestamp (ms, local time — consistent with how points were built). */
+function dateKeyFromTimestamp(ts) {
+  const d = new Date(ts);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function renderGlucoseDetailChart(tab) {
+  document.getElementById("glucose-detail-summary").textContent =
+    `${tab.points.length} readings · target range ${GLUCOSE_TARGET_LOW}–${GLUCOSE_TARGET_HIGH} mg/dL`;
+
+  const chart = mkChart("glucose-detail");
+  chart.setOption({
+    title: {
+      text: tab.label,
+      top: 6,
+      textStyle: { fontSize: 13 },
+    },
+    tooltip: {
+      trigger: "axis",
+      formatter: (params) => {
+        const p = params[0];
+        if (!p) return "";
+        const d = new Date(p.value[0]);
+        return `${d.toLocaleString()}<br/>${Math.round(p.value[1])} mg/dL`;
+      },
+    },
+    visualMap: {
+      show: false,
+      type: "piecewise",
+      dimension: 1,
+      seriesIndex: 0,
+      pieces: buildGlucoseColorPieces(),
+    },
+    grid: { left: 52, right: 16, top: 48, bottom: 36 },
+    xAxis: { type: "time" },
+    yAxis: { type: "value", name: "mg/dL", min: GLUCOSE_AXIS_MIN, max: GLUCOSE_AXIS_MAX },
+    series: [{
+      type: "line",
+      name: "Glucose",
+      showSymbol: false,
+      smooth: true,
+      lineStyle: { width: 2 },
+      areaStyle: { opacity: 0.08 },
+      data: tab.points,
+    }],
+  });
+
+  // Use a zrender-level click + pixel→data conversion instead of the series "click" event:
+  // the series event only fires when the click lands exactly on the (thin, smoothed) line,
+  // so clicks on the area fill or empty grid space would otherwise be silently ignored.
+  chart.getZr().off("click");
+  chart.getZr().on("click", (params) => {
+    const pixel = [params.offsetX, params.offsetY];
+    if (!chart.containPixel("grid", pixel)) return;
+    const dataPoint = chart.convertFromPixel({ gridIndex: 0 }, pixel);
+    const ts = dataPoint && dataPoint[0];
+    if (!Number.isFinite(ts)) return;
+    selectGlucoseDay(tab, dateKeyFromTimestamp(ts));
+  });
+}
+
+/** Renders the second, drill-down chart: the full 00:00–23:59 view of tab.selectedDay. */
+function renderGlucoseDayChart(tab) {
+  const summaryEl = document.getElementById("glucose-day-summary");
+  if (!tab.selectedDay) {
+    summaryEl.textContent = "Click a point on the chart above to see the full day here.";
+    const chart = mkChart("glucose-day");
+    chart.setOption({ title: { show: false }, xAxis: { show: false }, yAxis: { show: false }, series: [] });
+    return;
+  }
+
+  const dayPoints = state.glucose
+    .filter((r) => r.date === tab.selectedDay)
+    .slice()
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .map((r) => [new Date(`${r.date}T${r.time}:00`).getTime(), r.value]);
+
+  const dayStart = new Date(`${tab.selectedDay}T00:00:00`).getTime();
+  const dayEnd = new Date(`${tab.selectedDay}T23:59:59`).getTime();
+  const model = getSelectedZoneModel();
+  const dayActivities = getActivitiesOnDay(tab.selectedDay);
+  const activityMarkAreas = buildGlucoseDayActivityMarkAreas(dayActivities, model);
+
+  summaryEl.textContent = `${tab.selectedDay} · ${dayPoints.length} readings`
+    + (dayActivities.length
+      ? ` · ${dayActivities.length} ${dayActivities.length === 1 ? "activity" : "activities"} (shaded, colored by avg HR zone)`
+      : " · no activities that day");
+
+  const chart = mkChart("glucose-day");
+  chart.setOption({
+    title: {
+      text: `Day view — ${tab.selectedDay}`,
+      top: 6,
+      textStyle: { fontSize: 13 },
+    },
+    tooltip: {
+      trigger: "axis",
+      formatter: (params) => {
+        const p = params[0];
+        if (!p) return "";
+        const ts = p.value[0];
+        const d = new Date(ts);
+        const lines = [
+          d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          `${Math.round(p.value[1])} mg/dL`,
+        ];
+        const match = dayActivities.find((a) => ts >= a.startMs && ts <= a.endMs);
+        if (match) {
+          const zone = zoneIndexForHr(match.activity.avg_hr, model);
+          const hrPart = match.activity.avg_hr ? ` (${Math.round(match.activity.avg_hr)} bpm avg)` : "";
+          lines.push(`🏃 ${match.activity.activity_type || "Activity"}${zone ? ` · Z${zone}` : ""}${hrPart}`);
+        }
+        return lines.join("<br/>");
+      },
+    },
+    visualMap: {
+      show: false,
+      type: "piecewise",
+      dimension: 1,
+      seriesIndex: 0,
+      pieces: buildGlucoseColorPieces(),
+    },
+    grid: { left: 52, right: 16, top: 48, bottom: 36 },
+    xAxis: {
+      type: "time",
+      min: dayStart,
+      max: dayEnd,
+      minInterval: 3600 * 1000,
+      maxInterval: 3600 * 1000,
+      axisLabel: { formatter: (value) => String(new Date(value).getHours()) },
+    },
+    yAxis: { type: "value", name: "mg/dL", min: GLUCOSE_AXIS_MIN, max: GLUCOSE_AXIS_MAX },
+    series: [{
+      type: "line",
+      name: "Glucose",
+      showSymbol: false,
+      smooth: true,
+      lineStyle: { width: 2 },
+      areaStyle: { opacity: 0.08 },
+      data: dayPoints,
+      markArea: {
+        silent: true,
+        data: activityMarkAreas,
+      },
+    }],
+  });
+}
+
+/** Returns the 1-based HR zone index for an HR value under the given zone model, or null. */
+function zoneIndexForHr(hr, model) {
+  if (!model || !Array.isArray(model.hr_zones) || !Number.isFinite(hr) || hr <= 0) return null;
+  const zones = model.hr_zones;
+  for (let i = 0; i < zones.length; i++) {
+    if (hr <= zones[i]) return i + 1;
+  }
+  return zones.length;
+}
+
+/** Returns activities from the local Activities list that started on dayKey, with absolute start/end ms. */
+function getActivitiesOnDay(dayKey) {
+  return state.activities
+    .filter((a) => a.date === dayKey && a.activity_start_local)
+    .map((activity) => {
+      const startMs = new Date(activity.activity_start_local).getTime();
+      const durationMs = Math.max(0, Number(activity.moving_time_s || 0)) * 1000;
+      return { activity, startMs, endMs: startMs + durationMs };
+    })
+    .filter((entry) => Number.isFinite(entry.startMs))
+    .sort((a, b) => a.startMs - b.startMs);
+}
+
+/** Builds ECharts markArea pairs highlighting each activity's time window, colored by avg-HR zone. */
+function buildGlucoseDayActivityMarkAreas(dayActivities, model) {
+  const MIN_VISIBLE_WIDTH_MS = 3 * 60 * 1000; // keep very short sessions visible/labelable
+  return dayActivities.map(({ activity, startMs, endMs }) => {
+    const zone = zoneIndexForHr(activity.avg_hr, model);
+    const color = zone ? (ZONE_COLORS[zone] || "#94a3b8") : "#94a3b8";
+    const label = zone
+      ? `${activity.activity_type || "Activity"} · Z${zone}`
+      : (activity.activity_type || "Activity");
+    return [
+      {
+        xAxis: startMs,
+        itemStyle: { color, opacity: 0.22, borderColor: color, borderWidth: 1, borderType: "dashed" },
+        label: {
+          show: true,
+          position: "insideTop",
+          formatter: label,
+          fontSize: 10,
+          fontWeight: 600,
+          color: "#0b1220",
+          backgroundColor: color,
+          padding: [2, 4],
+          borderRadius: 3,
+        },
+      },
+      { xAxis: Math.max(endMs, startMs + MIN_VISIBLE_WIDTH_MS) },
+    ];
+  });
+}
+
+function selectGlucoseDay(tab, dayKey) {
+  tab.selectedDay = dayKey;
+  renderGlucoseDayChart(tab);
+}
+
+function openGlucoseDetail(id) {
+  const tab = state.openGlucoseTabs.find((t) => t.id === id);
+  if (!tab) {
+    setScreen("glucose");
+    return;
+  }
+  state.activeGlucoseTabId = id;
+  renderGlucoseTabBar();
+  setScreen("glucose-detail");
+  renderGlucoseDetailChart(tab);
+  renderGlucoseDayChart(tab);
+}
+
+function closeGlucoseTab(id) {
+  const idx = state.openGlucoseTabs.findIndex((t) => t.id === id);
+  if (idx === -1) return;
+  state.openGlucoseTabs.splice(idx, 1);
+
+  if (state.activeGlucoseTabId === id) {
+    if (state.openGlucoseTabs.length > 0) {
+      const next = state.openGlucoseTabs[Math.max(0, idx - 1)];
+      openGlucoseDetail(next.id);
+    } else {
+      state.activeGlucoseTabId = null;
+      renderGlucoseTabBar();
+      setScreen("glucose");
+    }
+  } else {
+    renderGlucoseTabBar();
+  }
+}
+
 function hideActivitySearchPreview() {
   const box = document.getElementById("activity-search-preview");
   box.classList.add("hidden");
@@ -1155,6 +1721,8 @@ function mapActivity(activity) {
     source: "intervals",
     moving_time_s: Number(activity.moving_time || 0),
     distance_m: Number(activity.distance || 0),
+    avg_hr: Number(activity.average_heartrate || 0),
+    max_hr: Number(activity.max_heartrate || 0),
   };
 }
 
@@ -1227,7 +1795,9 @@ async function runDirectSearch(params, athleteId, apiKey) {
 async function runDirectActivitySearch(params, athleteId, apiKey) {
   const auth = `Basic ${btoa(`API_KEY:${apiKey}`)}`;
   const hdrs = { Authorization: auth, Accept: "application/json" };
-  const fields = encodeURIComponent("id,name,start_date_local,type,moving_time,distance");
+  const fields = encodeURIComponent(
+    "id,name,start_date_local,type,moving_time,distance,average_heartrate,max_heartrate"
+  );
   const url = `https://intervals.icu/api/v1/athlete/${encodeURIComponent(athleteId)}/activities` +
     `?oldest=${encodeURIComponent(params.startDate)}&newest=${encodeURIComponent(params.endDate)}` +
     `&fields=${fields}`;
@@ -1440,10 +2010,36 @@ function mkActivityLabChart(name) {
 function updateActivityLabValueToggleButtons() {
   document.querySelectorAll(".activity-lab-series-toggle").forEach((btn) => {
     const key = btn.dataset.activityLabLabel;
-    const shown = !!state.activityLab.visibleSeries[key];
-    btn.classList.toggle("is-active", shown);
-    btn.setAttribute("aria-pressed", String(shown));
+    const seriesState = state.activityLab.visibleSeries[key] || "off";
+    btn.classList.toggle("is-active", seriesState === "on");
+    btn.classList.toggle("is-dimmed", seriesState === "dimmed");
+    btn.setAttribute("aria-pressed", seriesState === "on" ? "true" : seriesState === "dimmed" ? "mixed" : "false");
+    btn.title = `${key}: ${seriesState} (click to cycle on → dimmed → off)`;
   });
+}
+
+/** Shows/hides the glucose series toggle button — it only ever appears when glucose data exists. */
+function setGlucoseToggleVisible(visible) {
+  const btn = document.querySelector('.activity-lab-series-toggle[data-activity-lab-label="glucose"]');
+  if (btn) btn.classList.toggle("hidden", !visible);
+}
+
+/**
+ * Returns [minutesSinceActivityStart, mg/dL] points for glucose readings that fall within
+ * the activity's start → start+moving_time_s window. Empty if the activity has no known
+ * start/duration or no glucose readings overlap it.
+ */
+function getGlucosePointsForActivity(focusActivity) {
+  const startMs = new Date(focusActivity?.activity_start_local || "").getTime();
+  if (!Number.isFinite(startMs)) return [];
+  const durationMs = Math.max(0, Number(focusActivity?.moving_time_s || 0)) * 1000;
+  const endMs = startMs + durationMs;
+
+  return state.glucose
+    .map((r) => ({ ts: new Date(`${r.date}T${r.time}:00`).getTime(), value: r.value }))
+    .filter((p) => Number.isFinite(p.ts) && p.ts >= startMs && p.ts <= endMs)
+    .sort((a, b) => a.ts - b.ts)
+    .map((p) => [(p.ts - startMs) / 60000, p.value]);
 }
 
 function chartLabelOpt(show, formatter = undefined) {
@@ -1680,14 +2276,31 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
     }
   );
   const elevation = sliceMetricStream(stream, stream?.altitude, 0, Number.MAX_SAFE_INTEGER, (v) => Number(v));
-  const showHr = !!state.activityLab.visibleSeries.hr;
-  const showPace = !!state.activityLab.visibleSeries.pace && pace.length > 0;
-  const showElevation = !!state.activityLab.visibleSeries.elevation && elevation.length > 0;
 
   if (!time.length) {
+    setGlucoseToggleVisible(false);
     renderActivityLabPlaceholder("lab-hr", "Heart rate, pace, elevation", "No stream data available");
     return;
   }
+
+  const glucosePoints = getGlucosePointsForActivity(focusActivity);
+  const hasGlucose = glucosePoints.length > 0;
+  setGlucoseToggleVisible(hasGlucose);
+
+  const hrState = state.activityLab.visibleSeries.hr || "off";
+  const paceState = state.activityLab.visibleSeries.pace || "off";
+  const elevationState = state.activityLab.visibleSeries.elevation || "off";
+  const glucoseState = hasGlucose ? (state.activityLab.visibleSeries.glucose || "off") : "off";
+
+  const showHr = hrState !== "off";
+  const showPace = paceState !== "off" && pace.length > 0;
+  const showElevation = elevationState !== "off" && elevation.length > 0;
+  const showGlucose = glucoseState !== "off";
+
+  const hrDimmed = hrState === "dimmed";
+  const paceDimmed = paceState === "dimmed";
+  const elevationDimmed = elevationState === "dimmed";
+  const glucoseDimmed = glucoseState === "dimmed";
 
   const model = getSelectedZoneModel();
   const pieces = model ? model.hr_zones.map((upper, i) => {
@@ -1704,16 +2317,142 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
     label: `Z${model.hr_zones.length}`,
   }]) : null;
   const yMin = 80;
-  const paceAxisIndex = showPace ? 1 : -1;
-  const elevationAxisIndex = showPace ? 2 : 1;
   const elevationAxisOffset = showHr ? 42 : 0;
   const elevationAxisBounds = showElevation ? computeElevationAxisBounds(elevation) : {};
-  const useHrZoneColors = !!pieces && showHr && !showPace;
+  const useHrZoneColors = !!pieces && showHr && !hrDimmed && !showPace;
+
+  // Build y-axes and series in tandem so each series' yAxisIndex/visualMap seriesIndex
+  // always matches where it actually landed in the arrays below.
+  const yAxisEntries = [{ type: "value", name: "bpm", min: yMin, show: showHr }];
+  let paceAxisIndex = -1;
+  let elevationAxisIndex = -1;
+  let glucoseAxisIndex = -1;
+
+  if (showPace) {
+    paceAxisIndex = yAxisEntries.length;
+    yAxisEntries.push({
+      type: "value",
+      name: "min/km",
+      position: "right",
+      offset: 0,
+      alignTicks: true,
+      inverse: true,
+      max: 20,
+      axisLabel: { formatter: (v) => formatPaceMinutes(v) },
+    });
+  }
+  if (showElevation) {
+    elevationAxisIndex = yAxisEntries.length;
+    yAxisEntries.push({
+      type: "value",
+      name: "m",
+      position: "left",
+      offset: elevationAxisOffset,
+      ...elevationAxisBounds,
+      axisLabel: { formatter: (v) => Math.round(v) },
+      splitLine: { show: false },
+    });
+  }
+  if (showGlucose) {
+    glucoseAxisIndex = yAxisEntries.length;
+    yAxisEntries.push({
+      type: "value",
+      name: "mg/dL",
+      position: "right",
+      offset: showPace ? 58 : 0,
+      min: GLUCOSE_AXIS_MIN,
+      max: GLUCOSE_AXIS_MAX,
+      axisLabel: { formatter: (v) => Math.round(v) },
+      splitLine: { show: false },
+    });
+  }
+
+  const seriesEntries = [];
+  let hrSeriesIndex = -1;
+  let glucoseSeriesIndex = -1;
+
+  if (showHr) {
+    hrSeriesIndex = seriesEntries.length;
+    seriesEntries.push({
+      type: "line",
+      name: "HR",
+      smooth: true,
+      showSymbol: false,
+      z: 3,
+      lineStyle: {
+        width: 1,
+        ...(hrDimmed ? { color: SERIES_DIMMED_COLOR } : (useHrZoneColors ? {} : { color: "#ef4444" })),
+      },
+      itemStyle: hrDimmed
+        ? { color: SERIES_DIMMED_COLOR }
+        : (useHrZoneColors ? undefined : { color: "#ef4444" }),
+      areaStyle: {
+        opacity: hrDimmed ? 0.06 : 0.16,
+        ...(hrDimmed ? { color: SERIES_DIMMED_COLOR } : {}),
+      },
+      data: hr,
+    });
+  }
+  if (showPace) {
+    seriesEntries.push({
+      type: "line",
+      name: "Pace",
+      yAxisIndex: paceAxisIndex,
+      smooth: true,
+      showSymbol: false,
+      z: 2,
+      lineStyle: { width: 1, ...(paceDimmed ? { color: SERIES_DIMMED_COLOR, opacity: 0.6 } : {}) },
+      data: pace,
+    });
+  }
+  if (showElevation) {
+    seriesEntries.push({
+      type: "line",
+      name: "Elevation",
+      yAxisIndex: elevationAxisIndex,
+      smooth: true,
+      showSymbol: false,
+      z: 0,
+      lineStyle: { width: 0.5, color: "#64748b", opacity: elevationDimmed ? 0.2 : 0.45 },
+      areaStyle: { color: "#64748b", opacity: elevationDimmed ? 0.05 : 0.16 },
+      data: elevation,
+    });
+  }
+  if (showGlucose) {
+    glucoseSeriesIndex = seriesEntries.length;
+    seriesEntries.push({
+      type: "line",
+      name: "Glucose",
+      yAxisIndex: glucoseAxisIndex,
+      smooth: true,
+      showSymbol: false,
+      z: 1,
+      lineStyle: { width: 1.5, ...(glucoseDimmed ? { color: SERIES_DIMMED_COLOR } : {}) },
+      data: glucosePoints,
+    });
+  }
+
+  const visualMapEntries = [];
+  if (useHrZoneColors) {
+    visualMapEntries.push({ show: false, type: "piecewise", dimension: 1, seriesIndex: hrSeriesIndex, pieces });
+  }
+  if (showGlucose && !glucoseDimmed) {
+    visualMapEntries.push({
+      show: false,
+      type: "piecewise",
+      dimension: 1,
+      seriesIndex: glucoseSeriesIndex,
+      pieces: buildGlucoseColorPieces(),
+    });
+  }
+
+  const rightAxisCount = (showPace ? 1 : 0) + (showGlucose ? 1 : 0);
+  const gridRight = rightAxisCount === 0 ? 16 : rightAxisCount === 1 ? 58 : 100;
 
   const hrChart = mkActivityLabChart("lab-hr");
   hrChart.setOption({
     title: {
-      text: "Heart rate, pace, elevation",
+      text: "Heart rate, pace, elevation" + (showGlucose ? ", glucose" : ""),
       subtext: `${focusActivity.date || ""} · ${focusActivity.activity_name || ""} · pace from velocity_smooth`,
       top: 6,
       textStyle: { fontSize: 12 },
@@ -1727,67 +2466,16 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
           if (p.seriesName === "HR") lines.push(`HR ${Math.round(p.value[1])} bpm`);
           else if (p.seriesName === "Pace") lines.push(`Pace ${formatPaceMinutes(p.value[1])} min/km`);
           else if (p.seriesName === "Elevation") lines.push(`Elevation ${Math.round(p.value[1])} m`);
+          else if (p.seriesName === "Glucose") lines.push(`Glucose ${Math.round(p.value[1])} mg/dL`);
         }
         return lines.join(" · ");
       },
     },
-    ...(useHrZoneColors ? { visualMap: { show: false, type: "piecewise", dimension: 1, seriesIndex: 0, pieces } } : {}),
-    grid: { left: showElevation ? 58 : showHr ? 42 : 16, right: showPace ? 58 : 16, top: 52, bottom: 28 },
+    ...(visualMapEntries.length ? { visualMap: visualMapEntries } : {}),
+    grid: { left: showElevation ? 58 : showHr ? 42 : 16, right: gridRight, top: 52, bottom: 28 },
     xAxis: { type: "value", name: "min" },
-    yAxis: [
-      { type: "value", name: "bpm", min: yMin, show: showHr },
-      ...(showPace ? [{
-        type: "value",
-        name: "min/km",
-        alignTicks: true,
-        inverse: true,
-        max: 20,
-        axisLabel: { formatter: (v) => formatPaceMinutes(v) },
-      }] : []),
-      ...(showElevation ? [{
-        type: "value",
-        name: "m",
-        position: "left",
-        offset: elevationAxisOffset,
-        ...elevationAxisBounds,
-        axisLabel: { formatter: (v) => Math.round(v) },
-        splitLine: { show: false },
-      }] : []),
-    ],
-    series: [
-      ...(showHr ? [{
-        type: "line",
-        name: "HR",
-        smooth: true,
-        showSymbol: false,
-        z: 3,
-        lineStyle: { width: 1, ...(useHrZoneColors ? {} : { color: "#ef4444" }) },
-        itemStyle: useHrZoneColors ? undefined : { color: "#ef4444" },
-        areaStyle: { opacity: 0.16 },
-        data: hr,
-      }] : []),
-      ...(showPace ? [{
-        type: "line",
-        name: "Pace",
-        yAxisIndex: paceAxisIndex,
-        smooth: true,
-        showSymbol: false,
-        z: 2,
-        lineStyle: { width: 1 },
-        data: pace,
-      }] : []),
-      ...(showElevation ? [{
-        type: "line",
-        name: "Elevation",
-        yAxisIndex: elevationAxisIndex,
-        smooth: true,
-        showSymbol: false,
-        z: 0,
-        lineStyle: { width: 0.5, color: "#64748b", opacity: 0.45 },
-        areaStyle: { color: "#64748b", opacity: 0.16 },
-        data: elevation,
-      }] : []),
-    ],
+    yAxis: yAxisEntries,
+    series: seriesEntries,
   });
 }
 
@@ -1862,6 +2550,7 @@ async function renderActivityLabScatter(tabActivity) {
 async function renderActivityLabFocus(tabActivity, focusActivity, forceRefresh = false) {
   renderActivityDetail(tabActivity, focusActivity);
   updateActivityLabValueToggleButtons();
+  setGlucoseToggleVisible(false);
   renderActivityLabPlaceholder("lab-hr", "Heart rate + pace stream", "Loading streams…");
   try {
     const settings = getSettings();
@@ -1875,6 +2564,7 @@ async function renderActivityLabFocus(tabActivity, focusActivity, forceRefresh =
     renderActivityLabTimeSeries(stream, focusActivity);
   } catch (err) {
     const detail = String(err?.message || "Unknown stream error");
+    setGlucoseToggleVisible(false);
     renderActivityLabPlaceholder("lab-hr", "Heart rate, pace, elevation", detail);
   }
   try {
@@ -3091,6 +3781,8 @@ function init() {
   const cached = loadIntervalsCache().sort(compareIntervalsChronologically);
   state.intervals = cached;
   state.filtered = [...cached];
+  state.glucose = loadGlucoseCache();
+  applyGlucoseFilters();
   renderActivities();
   renderIntervals();
 
@@ -3257,7 +3949,8 @@ function init() {
     btn.addEventListener("click", () => {
       const key = btn.dataset.activityLabLabel;
       if (!key) return;
-      state.activityLab.visibleSeries[key] = !state.activityLab.visibleSeries[key];
+      const current = state.activityLab.visibleSeries[key] || "off";
+      state.activityLab.visibleSeries[key] = SERIES_TOGGLE_CYCLE[current] || "on";
       const tabActivity = getActiveTabActivity();
       if (!tabActivity) return;
       const focusActivity = state.activityLab.streamActivities.find(
@@ -3300,6 +3993,43 @@ function init() {
     state.intervalsGrouped = !state.intervalsGrouped;
     if (!state.intervalsGrouped) state.collapsedIntervalGroups.clear();
     renderIntervals();
+  });
+
+  document.getElementById("glucose-upload-input").addEventListener("change", handleGlucoseFileUpload);
+  document.getElementById("apply-glucose-filters").addEventListener("click", applyGlucoseFilters);
+  document.getElementById("clear-glucose-filters").addEventListener("click", () => {
+    document.getElementById("glucose-filter-from").value = "";
+    document.getElementById("glucose-filter-to").value = "";
+    applyGlucoseFilters();
+  });
+  document.getElementById("clear-glucose").addEventListener("click", () => {
+    state.glucose = [];
+    clearGlucoseCache();
+    state.openGlucoseTabs = [];
+    state.activeGlucoseTabId = null;
+    renderGlucoseTabBar();
+    document.getElementById("glucose-upload-status").textContent = "";
+    applyGlucoseFilters();
+  });
+  document.getElementById("glucose-prev-page").addEventListener("click", () => {
+    state.glucosePage -= 1;
+    renderGlucoseTable();
+  });
+  document.getElementById("glucose-next-page").addEventListener("click", () => {
+    state.glucosePage += 1;
+    renderGlucoseTable();
+  });
+  document.getElementById("glucose-view-chart").addEventListener("click", openGlucoseTab);
+  document.getElementById("glucose-detail-back").addEventListener("click", () => setScreen("glucose"));
+  document.getElementById("glucose-tab-bar").addEventListener("click", (e) => {
+    const closeBtn = e.target.closest("[data-close-tab]");
+    if (closeBtn) {
+      e.stopPropagation();
+      closeGlucoseTab(closeBtn.dataset.closeTab);
+      return;
+    }
+    const tab = e.target.closest(".activity-tab");
+    if (tab) openGlucoseDetail(tab.dataset.tabId);
   });
 
   document.querySelectorAll("[data-screen-target]").forEach((btn) => {

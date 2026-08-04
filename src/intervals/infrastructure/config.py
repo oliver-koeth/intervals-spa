@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     data_dir: str = "~/.intervals"
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    athlete_id: str | None = None
+    api_key: str | None = None
+    oauth_client_id: str | None = None
+    oauth_client_secret: str | None = None
+
 
 _settings: Settings | None = None
 
