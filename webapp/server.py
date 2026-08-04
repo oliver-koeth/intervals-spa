@@ -221,7 +221,9 @@ def run_activity_search(payload: dict[str, Any]) -> list[dict[str, Any]]:
         raise ValueError("athlete_id, api_key, start_date, and end_date are required")
 
     auth = "Basic " + base64.b64encode(f"API_KEY:{api_key}".encode()).decode("ascii")
-    fields = quote("id,name,start_date_local,type,moving_time,distance")
+    fields = quote(
+        "id,name,start_date_local,type,moving_time,distance,average_heartrate,max_heartrate"
+    )
     activities_url = (
         f"{API_BASE}/athlete/{quote(athlete_id)}/activities"
         f"?oldest={quote(start_date)}&newest={quote(end_date)}&fields={fields}"
@@ -250,6 +252,8 @@ def run_activity_search(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "source": "intervals",
                 "moving_time_s": int(activity.get("moving_time") or 0),
                 "distance_m": float(activity.get("distance") or 0),
+                "avg_hr": activity.get("average_heartrate", 0),
+                "max_hr": activity.get("max_heartrate", 0),
             }
         )
 
