@@ -479,6 +479,11 @@ span.flatpickr-weekday {
 .glucose-upload-label { margin: 0; }
 .glucose-pagination { margin-top: 0.75rem; }
 
+/* ── Similarity (tactical test UI) ───────────────────────────────────────── */
+.similarity-score-cell {
+  font-weight: 700;
+}
+
 /* ── Table ───────────────────────────────────────────────────────────────── */
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
@@ -710,6 +715,29 @@ body:not(.theme-dark) .activity-tab-bar {
   margin-top: 0.2rem;
   color: var(--text-muted);
   font-size: 0.75rem;
+}
+.activity-lab-stream-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+.activity-lab-stream-controls label {
+  font-size: 0.8rem;
+}
+.activity-lab-stream-controls input[type="range"] {
+  width: 100%;
+  accent-color: var(--primary);
+}
+.activity-lab-stream-score {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.36rem;
+  border-radius: 999px;
+  background: rgba(81, 184, 255, 0.18);
+  color: var(--text);
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 .activity-lab-main {
   display: flex;

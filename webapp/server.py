@@ -23,6 +23,19 @@ ROOT_DIR = Path(__file__).resolve().parent
 API_BASE = "https://intervals.icu/api/v1"
 USER_AGENT = "intervals-spa-local-server/0.1"
 
+# Activity summary fields requested from intervals.icu's /activities endpoint.
+# Keep in sync with ACTIVITY_SEARCH_FIELDS in webapp/app.js and with the
+# result dict built in run_activity_search() below.
+ACTIVITY_SEARCH_FIELDS = ",".join(
+    [
+        "id", "name", "start_date_local", "type",
+        "moving_time", "distance", "average_heartrate", "max_heartrate",
+        "total_elevation_gain", "icu_training_load", "icu_intensity",
+        "icu_average_watts", "icu_weighted_avg_watts", "average_speed",
+        "icu_hr_zone_times",
+    ]
+)
+
 
 def _json_response(handler: SimpleHTTPRequestHandler, code: int, payload: dict[str, Any]) -> None:
     raw = json.dumps(payload).encode("utf-8")
@@ -221,9 +234,7 @@ def run_activity_search(payload: dict[str, Any]) -> list[dict[str, Any]]:
         raise ValueError("athlete_id, api_key, start_date, and end_date are required")
 
     auth = "Basic " + base64.b64encode(f"API_KEY:{api_key}".encode()).decode("ascii")
-    fields = quote(
-        "id,name,start_date_local,type,moving_time,distance,average_heartrate,max_heartrate"
-    )
+    fields = quote(ACTIVITY_SEARCH_FIELDS)
     activities_url = (
         f"{API_BASE}/athlete/{quote(athlete_id)}/activities"
         f"?oldest={quote(start_date)}&newest={quote(end_date)}&fields={fields}"
@@ -254,6 +265,23 @@ def run_activity_search(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "distance_m": float(activity.get("distance") or 0),
                 "avg_hr": activity.get("average_heartrate", 0),
                 "max_hr": activity.get("max_heartrate", 0),
+                "elevation_gain_m": float(activity.get("total_elevation_gain") or 0),
+                "training_load": (
+                    float(activity["icu_training_load"])
+                    if activity.get("icu_training_load") is not None
+                    else None
+                ),
+                "intensity": (
+                    float(activity["icu_intensity"])
+                    if activity.get("icu_intensity") is not None
+                    else None
+                ),
+                "avg_watts": float(activity.get("icu_average_watts") or 0),
+                "weighted_watts": float(activity.get("icu_weighted_avg_watts") or 0),
+                "avg_speed_ms": float(activity.get("average_speed") or 0),
+                "hr_zone_times": [
+                    float(v) for v in (activity.get("icu_hr_zone_times") or [])
+                ],
             }
         )
 

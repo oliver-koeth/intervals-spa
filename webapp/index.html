@@ -6,7 +6,7 @@
     <title>Intervals</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/themes/light.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260803-7" />
+    <link rel="stylesheet" href="./styles.css?v=20260804-1" />
     <script src="https://cdn.jsdelivr.net/npm/echarts@6/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/shoelace-autoloader.js"></script>
@@ -17,6 +17,7 @@
       <nav class="nav">
         <button class="nav-btn" data-screen-target="search">Search</button>
         <button class="nav-btn" data-screen-target="activities">Activities</button>
+        <button class="nav-btn" data-screen-target="similarity">Similarity</button>
         <button class="nav-btn" data-screen-target="intervals">Intervals</button>
         <button class="nav-btn" data-screen-target="compare">Compare</button>
         <button class="nav-btn" data-screen-target="glucose">Glucose</button>
@@ -287,9 +288,66 @@
                   <th>Type</th>
                   <th>Activity</th>
                   <th class="right">Time</th>
+                  <th class="right">Distance</th>
+                  <th class="right">Load</th>
                 </tr>
               </thead>
               <tbody id="activities-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Similarity (tactical test UI) ───────────────────────────────── -->
+      <section id="screen-similarity" class="screen shoelace-forms">
+        <div class="card">
+          <h1>Activity Similarity</h1>
+          <p class="muted">
+            Tactical test UI for the activity-similarity search: pick a query activity, a single
+            similarity type, and a minimum match threshold, then see which other activities from your
+            local Activities list qualify. Activity type is always a hard gate (a Run is never "similar"
+            to a VirtualRun). This is a developer tool for validating the scoring approach — not the
+            final UI.
+          </p>
+
+          <div class="filters">
+            <label>Query activity
+              <sl-select id="similarity-query-select">
+                <sl-option value="">Select an activity…</sl-option>
+              </sl-select>
+            </label>
+            <label>Similarity type
+              <sl-select id="similarity-type-select" value="duration">
+                <sl-option value="duration">Duration</sl-option>
+                <sl-option value="intervals">Work intervals</sl-option>
+                <sl-option value="load">Load</sl-option>
+              </sl-select>
+            </label>
+            <label>Min. match: <span id="similarity-min-score-value">40%</span>
+              <input id="similarity-min-score" type="range" min="0" max="100" step="5" value="40" />
+            </label>
+            <div class="form-actions">
+              <button id="similarity-find" class="btn primary" type="button">Find similar</button>
+            </div>
+          </div>
+
+          <p id="similarity-status" class="muted" style="margin-top:.75rem"></p>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Activity</th>
+                  <th class="right">Time</th>
+                  <th class="right">Match</th>
+                  <th>Detail</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="similarity-results-body"></tbody>
             </table>
           </div>
         </div>
@@ -303,9 +361,23 @@
               <h1 style="margin:0">Activity Stream</h1>
               <span id="activity-lab-stream-summary" class="muted"></span>
             </div>
-            <p class="muted" style="margin:.35rem 0 .75rem">
-              Same main type from the past 14 days. The tab activity stays highlighted.
+            <p id="activity-lab-stream-desc" class="muted" style="margin:.35rem 0 .75rem">
+              Ranked by "Duration" similarity to the tab activity. The tab activity stays highlighted.
             </p>
+            <div class="activity-lab-stream-controls">
+              <label>Show
+                <sl-select id="activity-lab-stream-mode" value="duration">
+                  <sl-option value="recent">Recent (same type, 14 days)</sl-option>
+                  <sl-option value="duration">Similar duration</sl-option>
+                  <sl-option value="intervals">Similar work intervals</sl-option>
+                  <sl-option value="load">Similar load</sl-option>
+                </sl-select>
+              </label>
+              <label id="activity-lab-stream-threshold-wrap">
+                Min. match: <span id="activity-lab-stream-threshold-value">80%</span>
+                <input id="activity-lab-stream-threshold" type="range" min="0" max="100" step="5" value="80" />
+              </label>
+            </div>
             <div id="activity-lab-stream-list" class="activity-lab-stream-list"></div>
           </aside>
 
@@ -904,6 +976,6 @@
         <a href="https://github.com/oliver-koeth/intervals-spa" target="_blank" rel="noopener noreferrer">Source</a>
       </div>
     </footer>
-    <script src="./app.js?v=20260803-8"></script>
+    <script src="./app.js?v=20260804-1"></script>
   </body>
 </html>

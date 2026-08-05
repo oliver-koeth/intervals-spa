@@ -9,6 +9,21 @@ const TOOLTIP_CSS = "background:#101820;border:1px solid rgba(148,163,184,0.34);
 const SERIES_TOGGLE_CYCLE = { on: "dimmed", dimmed: "off", off: "on" };
 const SERIES_DIMMED_COLOR = "#94a3b8";
 
+/* Activity-similarity search: exactly one of three independent similarity types is
+   used at a time (never blended) — duration, work-interval shape (avg + variance of
+   work-interval length), and training load. Activity type is a hard gate (a Run is
+   never "similar" to a VirtualRun). */
+const SIMILARITY_TYPES = ["duration", "intervals", "load"];
+const SIMILARITY_TYPE_LABELS = {
+  duration: "Duration",
+  intervals: "Work intervals",
+  load: "Load",
+};
+const SIMILARITY_DEFAULT_TYPE = "duration";
+/* Safety cap on how many candidates get a live work-intervals fetch for the
+   "intervals" similarity type (one API call per not-yet-cached activity). */
+const SIMILARITY_INTERVALS_FETCH_CAP = 150;
+
 /* ─── State ─────────────────────────────────────────────────────────────── */
 const state = {
   activities: [],
@@ -35,11 +50,20 @@ const state = {
   compareSource: [],
   pinnedInterval: null,
   dismissedCallouts: new Set(),
+  similarity: {
+    queryActivityId: null,
+    type: SIMILARITY_DEFAULT_TYPE,
+    minScorePct: 40,
+    results: [],
+  },
   activityLab: {
     requestToken: 0,
     tabActivityId: null,
     focusActivityId: null,
     streamActivities: [],
+    streamScores: {},
+    streamListMode: SIMILARITY_DEFAULT_TYPE,
+    streamMinScorePct: 80,
     workIntervalsByActivity: {},
     workIntervals: [],
     visibleSeries: {
@@ -63,6 +87,19 @@ const INTERVALS_CACHE_KEY   = "intervals_cached_intervals_v1";
 const GLUCOSE_CACHE_KEY     = "intervals_cached_glucose_v1";
 const GLUCOSE_PAGE_SIZE     = 100;
 const HR_STREAM_LS_PREFIX   = "intervals_hr_stream_v5:";   // localStorage key prefix for activity streams
+
+/**
+ * Activity summary fields requested from intervals.icu's /activities endpoint.
+ * Keep in sync with the `fields` query built server-side in webapp/server.py
+ * (run_activity_search) and with mapActivity()'s field mapping below.
+ */
+const ACTIVITY_SEARCH_FIELDS = [
+  "id", "name", "start_date_local", "type",
+  "moving_time", "distance", "average_heartrate", "max_heartrate",
+  "total_elevation_gain", "icu_training_load", "icu_intensity",
+  "icu_average_watts", "icu_weighted_avg_watts", "average_speed",
+  "icu_hr_zone_times",
+].join(",");
 
 /** Persist a stream object to localStorage (silently skips on quota errors). */
 function saveHrStreamToStorage(cacheKey, stream) {
@@ -230,6 +267,253 @@ function activityMainType(type) {
   return t;
 }
 
+/* ─── Activity similarity (fingerprint + score) ─────────────────────────────
+ * Exactly one of three independent similarity types is scored at a time (never
+ * blended): duration, work-interval shape (avg + variance of work-interval
+ * length), and training load. Each uses a ratio-based comparison, naturally in
+ * [0, 1], symmetric, no dataset-wide normalization needed. The exact activity
+ * type is a hard gate (e.g. "Run" and "VirtualRun" are never considered
+ * similar), keeping indoor/outdoor and real/virtual sessions distinct. The
+ * "intervals" type additionally gates on both activities having work-interval
+ * data available (fetched on demand and cached in workIntervalsByActivity).
+ */
+
+/** Ratio similarity for positive quantities: 1 when equal, →0 as they diverge; 1 if both are ~0. */
+function ratioSimilarity(a, b) {
+  const av = Number(a) || 0;
+  const bv = Number(b) || 0;
+  if (av <= 0 && bv <= 0) return 1;
+  if (av <= 0 || bv <= 0) return 0;
+  return Math.min(av, bv) / Math.max(av, bv);
+}
+
+/** Mean + population standard deviation of work-interval durations (seconds). */
+function computeWorkIntervalStats(workIntervals) {
+  const durations = (Array.isArray(workIntervals) ? workIntervals : [])
+    .map((it) => Number(it?.duration || 0))
+    .filter((d) => d > 0);
+  const count = durations.length;
+  if (count === 0) return { count: 0, avgS: 0, stdS: 0 };
+  const avgS = durations.reduce((sum, d) => sum + d, 0) / count;
+  const variance = durations.reduce((sum, d) => sum + (d - avgS) ** 2, 0) / count;
+  return { count, avgS, stdS: Math.sqrt(variance) };
+}
+
+/**
+ * Builds a similarity fingerprint from an internal activity object (as produced by
+ * mapActivity()/run_activity_search) plus that activity's work intervals (only
+ * needed for the "intervals" similarity type — pass [] or omit otherwise).
+ */
+function buildActivityFingerprint(activity, workIntervals = []) {
+  const durationS = Math.max(0, Number(activity?.moving_time_s || 0));
+  const trainingLoadRaw = activity?.training_load;
+  const intensityRaw = activity?.intensity;
+  const hasTrainingLoad = trainingLoadRaw != null;
+  const hasIntensity = intensityRaw != null;
+  const trainingLoad = hasTrainingLoad ? Math.max(0, Number(trainingLoadRaw)) : 0;
+  const intensity = hasIntensity ? Math.max(0, Number(intensityRaw)) : 0;
+  const durationMin = durationS / 60;
+  const loadDensity = hasTrainingLoad && durationMin > 0 ? trainingLoad / durationMin : 0;
+  const workIntervalStats = computeWorkIntervalStats(workIntervals);
+
+  return {
+    activity_id: activity?.activity_id,
+    type: normalizeActivityType(activity?.activity_type),
+    durationS,
+    loadDensity,
+    intensity,
+    hasLoadDensity: hasTrainingLoad && durationMin > 0,
+    hasLoad: hasTrainingLoad || hasIntensity,
+    workIntervalCount: workIntervalStats.count,
+    workIntervalAvgS: workIntervalStats.avgS,
+    workIntervalStdS: workIntervalStats.stdS,
+    hasWorkIntervals: workIntervalStats.count > 0,
+  };
+}
+
+/**
+ * Similarity between two fingerprints for a single similarity `type`. Returns
+ * 0 (gated) when the activity types differ, or when the requested type needs
+ * data that either side lacks (load, work intervals).
+ */
+function similarityScoreForType(fpA, fpB, type) {
+  if (!fpA?.type || !fpB?.type || fpA.type !== fpB.type) {
+    return { score: 0, gated: true };
+  }
+  if (type === "duration") {
+    return { score: ratioSimilarity(fpA.durationS, fpB.durationS), gated: false };
+  }
+  if (type === "load") {
+    if (!fpA.hasLoad || !fpB.hasLoad) return { score: 0, gated: true };
+    const a = fpA.hasLoadDensity ? fpA.loadDensity : fpA.intensity;
+    const b = fpB.hasLoadDensity ? fpB.loadDensity : fpB.intensity;
+    return { score: ratioSimilarity(a, b), gated: false };
+  }
+  if (type === "intervals") {
+    if (!fpA.hasWorkIntervals || !fpB.hasWorkIntervals) return { score: 0, gated: true };
+    const avgSim = ratioSimilarity(fpA.workIntervalAvgS, fpB.workIntervalAvgS);
+    const stdSim = ratioSimilarity(fpA.workIntervalStdS, fpB.workIntervalStdS);
+    return { score: (avgSim * 0.7) + (stdSim * 0.3), gated: false };
+  }
+  return { score: 0, gated: true };
+}
+
+/** Best-effort work intervals lookup that never throws (used by similarity search). */
+async function loadWorkIntervalsSafe(activity) {
+  try {
+    return await loadWorkIntervals(activity);
+  } catch (err) {
+    return [];
+  }
+}
+
+/**
+ * Ranks `candidates` by similarity to `queryActivity` for a single similarity
+ * `type` ("duration" | "intervals" | "load"), excluding the query itself.
+ * For "intervals", work-interval data is fetched (and cached) on demand, one
+ * activity at a time, capped by SIMILARITY_INTERVALS_FETCH_CAP candidates.
+ */
+async function findSimilarActivities(queryActivity, candidates, options = {}) {
+  const type = SIMILARITY_TYPES.includes(options.type) ? options.type : SIMILARITY_DEFAULT_TYPE;
+  const minScore = Number.isFinite(options.minScore) ? options.minScore : 0;
+  const limit = Number.isFinite(options.limit) ? options.limit : 20;
+  const needsIntervals = type === "intervals";
+
+  const queryWorkIntervals = needsIntervals ? await loadWorkIntervalsSafe(queryActivity) : [];
+  const queryFp = buildActivityFingerprint(queryActivity, queryWorkIntervals);
+
+  const sameType = candidates.filter((candidate) => (
+    String(candidate.activity_id) !== String(queryActivity.activity_id)
+    && normalizeActivityType(candidate.activity_type) === queryFp.type
+  ));
+  const pool = needsIntervals ? sameType.slice(0, SIMILARITY_INTERVALS_FETCH_CAP) : sameType;
+
+  const results = [];
+  for (const candidate of pool) {
+    const workIntervals = needsIntervals ? await loadWorkIntervalsSafe(candidate) : [];
+    const candidateFp = buildActivityFingerprint(candidate, workIntervals);
+    const { score, gated } = similarityScoreForType(queryFp, candidateFp, type);
+    if (gated || score < minScore) continue;
+    results.push({
+      activity: candidate,
+      score,
+      detail: {
+        durationS: candidateFp.durationS,
+        loadDensity: candidateFp.loadDensity,
+        hasLoadDensity: candidateFp.hasLoadDensity,
+        intensity: candidateFp.intensity,
+        workIntervalCount: candidateFp.workIntervalCount,
+        workIntervalAvgS: candidateFp.workIntervalAvgS,
+        workIntervalStdS: candidateFp.workIntervalStdS,
+      },
+    });
+  }
+  results.sort((a, b) => b.score - a.score);
+  return results.slice(0, limit);
+}
+
+/* ─── Similarity screen (tactical test UI) ──────────────────────────────── */
+function similarityActivityLabel(activity) {
+  const durationLabel = activity.moving_time_s ? formatDuration(activity.moving_time_s) : "-";
+  const distLabel = activity.distance_m ? formatDistance(activity.distance_m) : "";
+  const namePart = activity.activity_name ? ` · ${activity.activity_name.slice(0, 32)}` : "";
+  return `${activity.date || "-"} · ${activity.activity_type || "-"} · ${durationLabel}`
+    + (distLabel ? ` · ${distLabel}` : "") + namePart;
+}
+
+function renderSimilarityQueryOptions() {
+  const select = document.getElementById("similarity-query-select");
+  if (!select) return;
+  const sorted = [...state.activities].sort(compareActivitiesChronologically).reverse();
+  const previousValue = select.value || state.similarity.queryActivityId || "";
+  const stillExists = sorted.some((a) => String(a.activity_id) === previousValue);
+  const selectedValue = stillExists ? previousValue : "";
+
+  select.innerHTML = '<sl-option value="">Select an activity…</sl-option>';
+  sorted.forEach((activity) => {
+    const opt = document.createElement("sl-option");
+    opt.value = String(activity.activity_id);
+    opt.textContent = similarityActivityLabel(activity);
+    if (opt.value === selectedValue) opt.selected = true;
+    select.appendChild(opt);
+  });
+  state.similarity.queryActivityId = selectedValue;
+}
+
+/** Renders a contextual value for the currently selected similarity `type` (shown in the Detail column). */
+function renderSimilarityDetail(type, detail) {
+  if (!detail) return '<span class="muted">-</span>';
+  if (type === "load") {
+    if (detail.hasLoadDensity) return `${detail.loadDensity.toFixed(2)} load/min`;
+    if (detail.intensity) return `${detail.intensity.toFixed(1)} intensity`;
+    return '<span class="muted">-</span>';
+  }
+  if (type === "intervals") {
+    if (!detail.workIntervalCount) return '<span class="muted">-</span>';
+    return `${detail.workIntervalCount}× · avg ${formatDuration(Math.round(detail.workIntervalAvgS))}`
+      + ` (±${formatDuration(Math.round(detail.workIntervalStdS))})`;
+  }
+  return formatDuration(detail.durationS);
+}
+
+function renderSimilarityResults(queryActivity, type, results) {
+  const body = document.getElementById("similarity-results-body");
+  body.innerHTML = "";
+  results.forEach((entry, index) => {
+    const { activity, score, detail } = entry;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${index + 1}</td>
+      <td>${activity.date || "-"}</td>
+      <td>${activity.activity_type || "-"}</td>
+      <td title="${activity.activity_name || ""}">${(activity.activity_name || "").slice(0, 42)}</td>
+      <td class="right">${formatDuration(activity.moving_time_s)}</td>
+      <td class="right similarity-score-cell">${Math.round(score * 100)}%</td>
+      <td>${renderSimilarityDetail(type, detail)}</td>
+      <td><button type="button" class="btn secondary similarity-open-btn" data-similarity-open-id="${activity.activity_id}">Open</button></td>
+    `;
+    body.appendChild(tr);
+  });
+  const statusEl = document.getElementById("similarity-status");
+  const typeLabel = SIMILARITY_TYPE_LABELS[type] || type;
+  if (results.length === 0) {
+    statusEl.textContent = queryActivity
+      ? `No activities of type "${queryActivity.activity_type}" met the minimum ${typeLabel.toLowerCase()} match against "${similarityActivityLabel(queryActivity)}".`
+      : "";
+  } else {
+    statusEl.textContent = `${results.length} similar activit${results.length === 1 ? "y" : "ies"} `
+      + `(by ${typeLabel.toLowerCase()}) found for "${similarityActivityLabel(queryActivity)}".`;
+  }
+}
+
+async function handleSimilarityFind() {
+  const select = document.getElementById("similarity-query-select");
+  const queryId = select.value;
+  const statusEl = document.getElementById("similarity-status");
+  if (!queryId) {
+    document.getElementById("similarity-results-body").innerHTML = "";
+    statusEl.textContent = "Pick a query activity first.";
+    return;
+  }
+  state.similarity.queryActivityId = queryId;
+  const queryActivity = state.activities.find((a) => String(a.activity_id) === queryId);
+  if (!queryActivity) {
+    statusEl.textContent = "Could not find that activity — it may have been removed from the list.";
+    return;
+  }
+  const type = document.getElementById("similarity-type-select").value || SIMILARITY_DEFAULT_TYPE;
+  state.similarity.type = type;
+  const minScore = (Number(document.getElementById("similarity-min-score").value) || 0) / 100;
+  statusEl.textContent = "Searching…";
+  const results = await findSimilarActivities(queryActivity, state.activities, {
+    type,
+    minScore,
+    limit: 25,
+  });
+  state.similarity.results = results;
+  renderSimilarityResults(queryActivity, type, results);
+}
+
 function addDays(dateIso, days) {
   const d = new Date(`${dateIso}T00:00:00`);
   d.setDate(d.getDate() + days);
@@ -300,6 +584,7 @@ function setScreen(name) {
     btn.classList.toggle("nav-btn-active", btn.dataset.screenTarget === name);
   });
   if (name === "compare") renderCompare();
+  if (name === "similarity") renderSimilarityQueryOptions();
 }
 
 /* ─── Settings ───────────────────────────────────────────────────────────── */
@@ -1723,6 +2008,13 @@ function mapActivity(activity) {
     distance_m: Number(activity.distance || 0),
     avg_hr: Number(activity.average_heartrate || 0),
     max_hr: Number(activity.max_heartrate || 0),
+    elevation_gain_m: Number(activity.total_elevation_gain || 0),
+    training_load: activity.icu_training_load != null ? Number(activity.icu_training_load) : null,
+    intensity: activity.icu_intensity != null ? Number(activity.icu_intensity) : null,
+    avg_watts: Number(activity.icu_average_watts || 0),
+    weighted_watts: Number(activity.icu_weighted_avg_watts || 0),
+    avg_speed_ms: Number(activity.average_speed || 0),
+    hr_zone_times: Array.isArray(activity.icu_hr_zone_times) ? activity.icu_hr_zone_times.map(Number) : [],
   };
 }
 
@@ -1795,9 +2087,7 @@ async function runDirectSearch(params, athleteId, apiKey) {
 async function runDirectActivitySearch(params, athleteId, apiKey) {
   const auth = `Basic ${btoa(`API_KEY:${apiKey}`)}`;
   const hdrs = { Authorization: auth, Accept: "application/json" };
-  const fields = encodeURIComponent(
-    "id,name,start_date_local,type,moving_time,distance,average_heartrate,max_heartrate"
-  );
+  const fields = encodeURIComponent(ACTIVITY_SEARCH_FIELDS);
   const url = `https://intervals.icu/api/v1/athlete/${encodeURIComponent(athleteId)}/activities` +
     `?oldest=${encodeURIComponent(params.startDate)}&newest=${encodeURIComponent(params.endDate)}` +
     `&fields=${fields}`;
@@ -1871,6 +2161,8 @@ function renderActivities() {
       <td>${item.activity_type || ""}</td>
       <td title="${item.activity_name || ""}">${(item.activity_name || "").slice(0, 48)}</td>
       <td class="right">${formatSeconds(item.moving_time_s)}</td>
+      <td class="right">${formatDistance(item.distance_m)}</td>
+      <td class="right">${item.training_load != null ? Math.round(item.training_load) : "-"}</td>
     `;
     tr.addEventListener("click", () => openActivityTab(item));
     body.appendChild(tr);
@@ -1950,6 +2242,8 @@ function renderActivityDetail(tabActivity, focusActivity) {
     { label: "Duration", value: formatDuration(activity.moving_time_s) },
     { label: "Distance", value: formatDistance(activity.distance_m) },
     { label: "Avg Pace", value: formatAvgPace(activity.moving_time_s, activity.distance_m) },
+    { label: "Avg HR", value: activity.avg_hr ? `${Math.round(activity.avg_hr)} bpm` : "-" },
+    { label: "Load", value: activity.training_load != null ? Math.round(activity.training_load) : "-" },
     { label: "Source", value: activity.source || "intervals.icu" },
   ];
   card.innerHTML = `
@@ -1973,10 +2267,18 @@ function renderActivityDetail(tabActivity, focusActivity) {
 function renderActivityLabStreamList() {
   const wrap = document.getElementById("activity-lab-stream-list");
   const summary = document.getElementById("activity-lab-stream-summary");
+  const desc = document.getElementById("activity-lab-stream-desc");
   const tabId = String(state.activityLab.tabActivityId || "");
   const focusId = String(state.activityLab.focusActivityId || "");
+  const mode = state.activityLab.streamListMode || SIMILARITY_DEFAULT_TYPE;
+  const scores = state.activityLab.streamScores || {};
   const items = state.activityLab.streamActivities || [];
   summary.textContent = `${items.length} activities`;
+  if (desc) {
+    desc.textContent = mode === "recent"
+      ? "Same main type from the past 14 days. The tab activity stays highlighted."
+      : `Ranked by "${SIMILARITY_TYPE_LABELS[mode] || mode}" similarity to the tab activity. The tab activity stays highlighted.`;
+  }
   wrap.innerHTML = "";
   items.forEach((activity) => {
     const id = String(activity.activity_id || "");
@@ -1985,10 +2287,12 @@ function renderActivityLabStreamList() {
     if (id === tabId) row.classList.add("is-tab-activity");
     if (id === focusId) row.classList.add("is-focus-activity");
     row.dataset.activityLabSelect = id;
+    const score = scores[id];
+    const scoreBadge = Number.isFinite(score) ? `<span class="activity-lab-stream-score">${Math.round(score * 100)}%</span>` : "";
     row.innerHTML = `
       <div class="activity-lab-stream-main">
         <strong>${activity.date || "-"}</strong>
-        <span>${formatDuration(activity.moving_time_s)}</span>
+        <span>${formatDuration(activity.moving_time_s)}${scoreBadge}</span>
       </div>
       <div class="activity-lab-stream-sub">
         ${(activity.activity_type || "-")} · ${(activity.activity_name || "").slice(0, 44)}
@@ -1997,6 +2301,7 @@ function renderActivityLabStreamList() {
     wrap.appendChild(row);
   });
 }
+
 
 function mkActivityLabChart(name) {
   if (state.activityLabCharts[name]) state.activityLabCharts[name].dispose();
@@ -2134,6 +2439,71 @@ async function loadActivityLabStreamActivities(tabActivity) {
     if (byDate !== 0) return byDate;
     return String(b.activity_id || "").localeCompare(String(a.activity_id || ""));
   });
+}
+
+/** Ranks state.activities by similarity `type` to `tabActivity`, always including the tab activity itself. */
+async function loadActivityLabSimilarActivities(tabActivity, type, minScore) {
+  const results = await findSimilarActivities(tabActivity, state.activities, {
+    type,
+    minScore,
+    limit: 40,
+  });
+  const scores = {};
+  results.forEach((r) => {
+    scores[String(r.activity.activity_id || "")] = r.score;
+  });
+  const byIdentity = new Map();
+  byIdentity.set(activityIdentity(tabActivity), tabActivity);
+  results.forEach((r) => byIdentity.set(activityIdentity(r.activity), r.activity));
+  return { activities: [...byIdentity.values()], scores };
+}
+
+/** Resolves the Activity Stream panel's list according to the current mode (recent, or one of the 3 similarity types). */
+async function loadActivityLabStreamList(tabActivity) {
+  const mode = state.activityLab.streamListMode || SIMILARITY_DEFAULT_TYPE;
+  if (mode === "recent") {
+    const activities = await loadActivityLabStreamActivities(tabActivity);
+    return { activities, scores: {} };
+  }
+  const minScore = (Number(state.activityLab.streamMinScorePct) || 0) / 100;
+  return loadActivityLabSimilarActivities(tabActivity, mode, minScore);
+}
+
+/** Syncs the Activity Stream mode dropdown + threshold slider inputs to state.activityLab. */
+function syncActivityLabStreamControls() {
+  const modeSelect = document.getElementById("activity-lab-stream-mode");
+  const thresholdWrap = document.getElementById("activity-lab-stream-threshold-wrap");
+  const thresholdInput = document.getElementById("activity-lab-stream-threshold");
+  const thresholdValue = document.getElementById("activity-lab-stream-threshold-value");
+  if (!modeSelect) return;
+  const mode = state.activityLab.streamListMode || SIMILARITY_DEFAULT_TYPE;
+  const pct = state.activityLab.streamMinScorePct || 80;
+  modeSelect.value = mode;
+  thresholdWrap.classList.toggle("hidden", mode === "recent");
+  thresholdInput.value = String(pct);
+  thresholdValue.textContent = `${pct}%`;
+}
+
+/** Reloads and re-renders the Activity Stream panel for the current mode, without disturbing the chart unless the focused activity drops out of the new list. */
+async function refreshActivityLabStreamList() {
+  const tabActivity = getActiveTabActivity();
+  if (!tabActivity) return;
+  const token = ++state.activityLab.requestToken;
+  const { activities: streamActivities, scores } = await loadActivityLabStreamList(tabActivity);
+  if (token !== state.activityLab.requestToken) return;
+  state.activityLab.streamActivities = streamActivities;
+  state.activityLab.streamScores = scores;
+  const stillFocused = streamActivities.some(
+    (a) => String(a.activity_id) === String(state.activityLab.focusActivityId)
+  );
+  if (!stillFocused) state.activityLab.focusActivityId = String(tabActivity.activity_id || "");
+  renderActivityLabStreamList();
+  if (!stillFocused) {
+    const focusActivity = streamActivities.find(
+      (a) => String(a.activity_id) === String(state.activityLab.focusActivityId)
+    ) || tabActivity;
+    await renderActivityLabFocus(tabActivity, focusActivity);
+  }
 }
 
 async function loadWorkIntervals(activity) {
@@ -2319,7 +2689,7 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
   const yMin = 80;
   const elevationAxisOffset = showHr ? 42 : 0;
   const elevationAxisBounds = showElevation ? computeElevationAxisBounds(elevation) : {};
-  const useHrZoneColors = !!pieces && showHr && !hrDimmed && !showPace;
+  const useHrZoneColors = !!pieces && showHr && !hrDimmed;
 
   // Build y-axes and series in tandem so each series' yAxisIndex/visualMap seriesIndex
   // always matches where it actually landed in the arrays below.
@@ -2581,10 +2951,16 @@ async function openActivityLab(tabActivity, options = {}) {
   const token = ++state.activityLab.requestToken;
   state.activityLab.tabActivityId = String(tabActivity.activity_id || "");
   state.activityLab.focusActivityId = String(options.focusActivityId || tabActivity.activity_id || "");
+  if (!options.keepStreamMode) {
+    state.activityLab.streamListMode = SIMILARITY_DEFAULT_TYPE;
+    state.activityLab.streamMinScorePct = 80;
+  }
+  syncActivityLabStreamControls();
   setScreen("activity-detail");
-  const streamActivities = await loadActivityLabStreamActivities(tabActivity);
+  const { activities: streamActivities, scores } = await loadActivityLabStreamList(tabActivity);
   if (token !== state.activityLab.requestToken) return;
   state.activityLab.streamActivities = streamActivities;
+  state.activityLab.streamScores = scores;
   if (!streamActivities.some((a) => String(a.activity_id) === String(state.activityLab.focusActivityId))) {
     state.activityLab.focusActivityId = String(tabActivity.activity_id || "");
   }
@@ -3945,6 +4321,20 @@ function init() {
     renderActivityLabFocus(tabActivity, focusActivity, true);
   });
 
+  document.getElementById("activity-lab-stream-mode").addEventListener("sl-change", (e) => {
+    state.activityLab.streamListMode = e.target.value || "recent";
+    syncActivityLabStreamControls();
+    refreshActivityLabStreamList();
+  });
+  document.getElementById("activity-lab-stream-threshold").addEventListener("input", (e) => {
+    const pct = Number(e.target.value) || 0;
+    state.activityLab.streamMinScorePct = pct;
+    document.getElementById("activity-lab-stream-threshold-value").textContent = `${pct}%`;
+  });
+  document.getElementById("activity-lab-stream-threshold").addEventListener("change", () => {
+    refreshActivityLabStreamList();
+  });
+
   document.querySelectorAll(".activity-lab-series-toggle").forEach((btn) => {
     btn.addEventListener("click", () => {
       const key = btn.dataset.activityLabLabel;
@@ -4030,6 +4420,23 @@ function init() {
     }
     const tab = e.target.closest(".activity-tab");
     if (tab) openGlucoseDetail(tab.dataset.tabId);
+  });
+
+  document.getElementById("similarity-min-score").addEventListener("input", (e) => {
+    document.getElementById("similarity-min-score-value").textContent = `${e.target.value}%`;
+  });
+  document.getElementById("similarity-type-select").addEventListener("sl-change", (e) => {
+    state.similarity.type = e.target.value || SIMILARITY_DEFAULT_TYPE;
+  });
+  document.getElementById("similarity-query-select").addEventListener("sl-change", (e) => {
+    state.similarity.queryActivityId = e.target.value;
+  });
+  document.getElementById("similarity-find").addEventListener("click", handleSimilarityFind);
+  document.getElementById("similarity-results-body").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-similarity-open-id]");
+    if (!btn) return;
+    const activity = state.activities.find((a) => String(a.activity_id) === btn.dataset.similarityOpenId);
+    if (activity) openActivityTab(activity);
   });
 
   document.querySelectorAll("[data-screen-target]").forEach((btn) => {
