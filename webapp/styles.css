@@ -291,6 +291,10 @@ a.btn { text-decoration: none; display: inline-block; }
   color: var(--primary-text);
   border-color: transparent;
 }
+#screen-activities .btn.primary {
+  background: var(--activities-accent);
+  color: var(--activities-accent-text);
+}
 #screen-search .btn.search-accent,
 #screen-search .btn.search-accent-secondary,
 #screen-search .btn.secondary {
