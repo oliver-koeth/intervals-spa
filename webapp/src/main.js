@@ -143,24 +143,28 @@ function init() {
   document.getElementById("back-to-list").addEventListener("click", () => setScreen("intervals"));
   document.getElementById("go-compare").addEventListener("click", () => setScreen("compare"));
 
-  // Activity tab bar — delegated click handler
-  document.getElementById("activity-tab-bar").addEventListener("click", (e) => {
-    const closeBtn = e.target.closest("[data-close-tab]");
-    if (closeBtn) {
-      e.stopPropagation();
-      closeActivityTab(closeBtn.dataset.closeTab);
-      return;
-    }
-    const tab = e.target.closest(".activity-tab");
-    if (tab) {
-      const id = tab.dataset.tabId;
-      const entry = state.openActivityTabs.find((t) => t.id === id);
-      if (entry) {
-        state.activeActivityTabId = id;
-        renderActivityTabBar();
-        openActivityLab(entry.activity);
+  // Activity tab sidebars — delegated click handler
+  ["activities-sidebar", "activity-detail-sidebar"].forEach((id) => {
+    const sidebar = document.getElementById(id);
+    if (!sidebar) return;
+    sidebar.addEventListener("click", (e) => {
+      const closeBtn = e.target.closest("[data-close-tab]");
+      if (closeBtn) {
+        e.stopPropagation();
+        closeActivityTab(closeBtn.dataset.closeTab);
+        return;
       }
-    }
+      const item = e.target.closest(".activities-sidebar-item");
+      if (item) {
+        const id = item.dataset.tabId;
+        const entry = state.openActivityTabs.find((t) => t.id === id);
+        if (entry) {
+          state.activeActivityTabId = id;
+          updateActivitiesSidebars();
+          openActivityLab(entry.activity);
+        }
+      }
+    });
   });
 
   document.getElementById("activity-lab-stream-list").addEventListener("click", (e) => {

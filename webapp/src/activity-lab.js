@@ -22,25 +22,6 @@ function formatAvgPace(movingTimeS, distanceM) {
   return `${formatPaceMinutes(minPerKm)} /km`;
 }
 
-function renderActivityTabBar() {
-  const bar = document.getElementById("activity-tab-bar");
-  bar.innerHTML = "";
-  if (state.openActivityTabs.length === 0) {
-    bar.classList.add("hidden");
-    return;
-  }
-  bar.classList.remove("hidden");
-  state.openActivityTabs.forEach(({ id, activity }) => {
-    const tab = document.createElement("button");
-    tab.className = "activity-tab" + (id === state.activeActivityTabId ? " active" : "");
-    tab.dataset.tabId = id;
-    const label = activity.date || id;
-    tab.innerHTML = `<span class="activity-tab-label">${label}</span>`
-      + `<span class="activity-tab-close" data-close-tab="${id}" title="Close">×</span>`;
-    bar.appendChild(tab);
-  });
-}
-
 function getActivityIndexLabel(index) {
   if (index < 9) return String(index + 1);
   return String.fromCharCode(65 + (index - 9));
@@ -51,28 +32,29 @@ function renderActivitiesSidebar(hostId) {
   if (!list) return;
   list.innerHTML = "";
   const activeId = state.activeActivityTabId;
-  state.activities.forEach((activity, index) => {
-    const id = String(activity.activity_id || activity.date || `activity-${index}`);
+  const collapsed = document.querySelector("#sidebar.collapsed") != null;
+  state.openActivityTabs.forEach(({ id, activity }, index) => {
     const btn = document.createElement("button");
     btn.className = "btn activities-sidebar-item" + (id === activeId ? " active" : "");
     btn.type = "button";
-    btn.dataset.activityId = id;
+    btn.dataset.tabId = id;
+    const label = activity.date || id;
     btn.title = activity.activity_name ? `${activity.date} — ${activity.activity_name}` : activity.date;
-    const collapsed = document.querySelector("#sidebar.collapsed") != null;
-    btn.textContent = collapsed ? getActivityIndexLabel(index) : (activity.date || id);
-    btn.addEventListener("click", () => openActivityTab(activity));
+    btn.innerHTML = `<span class="activities-sidebar-label">${collapsed ? getActivityIndexLabel(index) : label}</span>`
+      + `<span class="activities-sidebar-close" data-close-tab="${id}" title="Close">×</span>`;
     list.appendChild(btn);
   });
 }
 
 function updateActivitiesSidebars() {
+  const hasTabs = state.openActivityTabs.length > 0;
   const onActivities = state.screen === "activities";
   const onDetail = state.screen === "activity-detail";
   const activitiesSidebar = document.getElementById("activities-sidebar");
   const detailSidebar = document.getElementById("activity-detail-sidebar");
-  if (activitiesSidebar) activitiesSidebar.classList.toggle("hidden", !onActivities);
+  if (activitiesSidebar) activitiesSidebar.classList.toggle("hidden", !(onActivities && hasTabs));
   if (detailSidebar) detailSidebar.classList.toggle("hidden", !onDetail);
-  if (onActivities) renderActivitiesSidebar("activities-sidebar-list");
+  if (onActivities || onDetail) renderActivitiesSidebar("activities-sidebar-list");
   if (onDetail) renderActivitiesSidebar("activity-detail-sidebar-list");
 }
 
@@ -830,7 +812,6 @@ function openActivityTab(activity) {
     existing.activity = activity;
   }
   state.activeActivityTabId = id;
-  renderActivityTabBar();
   updateActivitiesSidebars();
   openActivityLab(activity);
 }
@@ -844,15 +825,15 @@ function closeActivityTab(id) {
     if (state.openActivityTabs.length > 0) {
       const next = state.openActivityTabs[Math.max(0, idx - 1)];
       state.activeActivityTabId = next.id;
-      renderActivityTabBar();
+      updateActivitiesSidebars();
       openActivityLab(next.activity);
     } else {
       state.activeActivityTabId = null;
-      renderActivityTabBar();
+      updateActivitiesSidebars();
       setScreen("activities");
     }
   } else {
-    renderActivityTabBar();
+    updateActivitiesSidebars();
   }
 }
 
