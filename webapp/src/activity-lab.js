@@ -142,11 +142,15 @@ function mkActivityLabChart(name) {
 function updateActivityLabValueToggleButtons() {
   document.querySelectorAll(".activity-lab-series-toggle").forEach((btn) => {
     const key = btn.dataset.activityLabLabel;
-    const seriesState = state.activityLab.visibleSeries[key] || "off";
+    const seriesState = key === "elevation" ? "dimmed" : (state.activityLab.visibleSeries[key] || "on");
     btn.classList.toggle("is-active", seriesState === "on");
     btn.classList.toggle("is-dimmed", seriesState === "dimmed");
+    btn.classList.toggle("is-fixed", key === "elevation");
     btn.setAttribute("aria-pressed", seriesState === "on" ? "true" : seriesState === "dimmed" ? "mixed" : "false");
-    btn.title = `${key}: ${seriesState} (click to cycle on → dimmed → off)`;
+    btn.setAttribute("aria-disabled", key === "elevation" ? "true" : "false");
+    btn.title = key === "elevation"
+      ? "Elevation is always shown in grey"
+      : `${key}: ${seriesState === "on" ? "colour" : "grey"} (click to toggle)`;
   });
 }
 
@@ -484,13 +488,15 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
   const hasGlucose = glucosePoints.length > 0;
   setGlucoseToggleVisible(hasGlucose);
 
-  const hrState = state.activityLab.visibleSeries.hr || "off";
-  const paceState = state.activityLab.visibleSeries.pace || "off";
-  const elevationState = state.activityLab.visibleSeries.elevation || "off";
-  const glucoseState = hasGlucose ? (state.activityLab.visibleSeries.glucose || "off") : "off";
+  const hrState = state.activityLab.visibleSeries.hr === "dimmed" ? "dimmed" : "on";
+  const paceState = state.activityLab.visibleSeries.pace === "dimmed" ? "dimmed" : "on";
+  const elevationState = "dimmed";
+  const glucoseState = hasGlucose
+    ? (state.activityLab.visibleSeries.glucose === "dimmed" ? "dimmed" : "on")
+    : "off";
 
-  const showHr = hrState !== "off";
-  const showPace = paceState !== "off" && pace.length > 0;
+  const showHr = hr.length > 0;
+  const showPace = pace.length > 0;
   const showElevation = elevationState !== "off" && elevation.length > 0;
   const showGlucose = glucoseState !== "off";
 
@@ -516,7 +522,10 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
   const yMin = 80;
   const elevationAxisOffset = showHr ? 42 : 0;
   const elevationAxisBounds = showElevation ? computeElevationAxisBounds(elevation) : {};
-  const useHrZoneColors = !!pieces && showHr && !hrDimmed;
+  const useHrZoneColors = !!pieces && showHr && !hrDimmed
+    && (!showPace || paceDimmed)
+    && (!showElevation || elevationDimmed)
+    && (!showGlucose || glucoseDimmed);
 
   // Build y-axes and series in tandem so each series' yAxisIndex/visualMap seriesIndex
   // always matches where it actually landed in the arrays below.
@@ -578,14 +587,14 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
       z: 3,
       lineStyle: {
         width: 1,
-        ...(hrDimmed ? { color: SERIES_DIMMED_COLOR } : (useHrZoneColors ? {} : { color: "#ef4444" })),
+        ...(hrDimmed ? { color: SERIES_DIMMED_COLOR } : (useHrZoneColors ? {} : { color: SERIES_COLORS.hr })),
       },
       itemStyle: hrDimmed
         ? { color: SERIES_DIMMED_COLOR }
-        : (useHrZoneColors ? undefined : { color: "#ef4444" }),
+        : (useHrZoneColors ? undefined : { color: SERIES_COLORS.hr }),
       areaStyle: {
         opacity: hrDimmed ? 0.06 : 0.16,
-        ...(hrDimmed ? { color: SERIES_DIMMED_COLOR } : {}),
+        ...(hrDimmed ? { color: SERIES_DIMMED_COLOR } : (useHrZoneColors ? {} : { color: SERIES_COLORS.hr })),
       },
       data: hr,
     });
@@ -598,7 +607,7 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
       smooth: true,
       showSymbol: false,
       z: 2,
-      lineStyle: { width: 1, ...(paceDimmed ? { color: SERIES_DIMMED_COLOR, opacity: 0.6 } : {}) },
+      lineStyle: { width: 1, color: paceDimmed ? SERIES_DIMMED_COLOR : SERIES_COLORS.pace, opacity: paceDimmed ? 0.6 : 1 },
       data: pace,
     });
   }
@@ -610,8 +619,8 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
       smooth: true,
       showSymbol: false,
       z: 0,
-      lineStyle: { width: 0.5, color: "#64748b", opacity: elevationDimmed ? 0.2 : 0.45 },
-      areaStyle: { color: "#64748b", opacity: elevationDimmed ? 0.05 : 0.16 },
+      lineStyle: { width: 0.5, color: SERIES_COLORS.elevation, opacity: 0.28 },
+      areaStyle: { color: SERIES_COLORS.elevation, opacity: 0.07 },
       data: elevation,
     });
   }
@@ -624,7 +633,7 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
       smooth: true,
       showSymbol: false,
       z: 1,
-      lineStyle: { width: 1.5, ...(glucoseDimmed ? { color: SERIES_DIMMED_COLOR } : {}) },
+      lineStyle: { width: 1.5, color: glucoseDimmed ? SERIES_DIMMED_COLOR : SERIES_COLORS.glucose },
       data: glucosePoints,
     });
   }
@@ -991,4 +1000,3 @@ function renderGroupedIntervals(body) {
     }
   });
 }
-

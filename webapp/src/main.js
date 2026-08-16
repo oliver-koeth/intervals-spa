@@ -209,6 +209,7 @@ function init() {
     btn.addEventListener("click", () => {
       const key = btn.dataset.activityLabLabel;
       if (!key) return;
+      if (key === "elevation") return;
       const current = state.activityLab.visibleSeries[key] || "off";
       state.activityLab.visibleSeries[key] = SERIES_TOGGLE_CYCLE[current] || "on";
       const tabActivity = getActiveTabActivity();

@@ -1185,17 +1185,32 @@ body:not(.theme-dark) .activity-lab-stream-item.is-focus-activity {
   font-size: 0.76rem;
   border-radius: 999px;
 }
-.activity-lab-series-toggle.is-active {
+#screen-activity-detail .activity-lab-series-toggle.is-active {
   color: var(--text);
-  border-color: rgba(84, 224, 161, 0.48);
-  background: rgba(84, 224, 161, 0.13);
-  box-shadow: inset 0 0 0 1px rgba(84, 224, 161, 0.10);
 }
-.activity-lab-series-toggle.is-dimmed {
+#screen-activity-detail .activity-lab-series-toggle[data-activity-lab-label="hr"].is-active {
+  border-color: rgba(239, 68, 68, 0.58);
+  background: rgba(239, 68, 68, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.12);
+}
+#screen-activity-detail .activity-lab-series-toggle[data-activity-lab-label="pace"].is-active {
+  border-color: rgba(81, 184, 255, 0.58);
+  background: rgba(81, 184, 255, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(81, 184, 255, 0.12);
+}
+#screen-activity-detail .activity-lab-series-toggle[data-activity-lab-label="glucose"].is-active {
+  border-color: rgba(84, 224, 161, 0.58);
+  background: rgba(84, 224, 161, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(84, 224, 161, 0.12);
+}
+#screen-activity-detail .activity-lab-series-toggle.is-dimmed {
   color: var(--text-muted);
   border-color: rgba(148, 163, 184, 0.5);
   background: rgba(148, 163, 184, 0.14);
   box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.12);
+}
+#screen-activity-detail .activity-lab-series-toggle.is-fixed {
+  cursor: default;
 }
 .activity-lab-work-list {
   display: block;
