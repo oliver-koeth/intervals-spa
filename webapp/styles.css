@@ -18,6 +18,8 @@
   --search-accent-text: #ffffff;
   --activities-accent: #d97706;    /* warm orange for light mode */
   --activities-accent-text: #ffffff;
+  --intervals-accent: #dc2626;     /* red for light mode */
+  --intervals-accent-text: #ffffff;
   --panel-shadow: 0 12px 34px rgba(15, 23, 42, 0.10);
   --panel-inset: inset 0 1px 0 rgba(255, 255, 255, 0.68);
 }
@@ -38,6 +40,8 @@ body.theme-dark {
   --search-accent-text: #081418;
   --activities-accent: #fb923c;  /* warm orange for dark mode */
   --activities-accent-text: #1a0f05;
+  --intervals-accent: #f87171;   /* soft red for dark mode */
+  --intervals-accent-text: #1b0b0b;
   --panel-shadow: 0 16px 46px rgba(0, 0, 0, 0.30);
   --panel-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
@@ -160,6 +164,16 @@ body:not(.theme-dark) .sidebar-nav .nav-btn[data-screen-target="activities"].nav
   background: rgba(217, 119, 6, 0.10);
   box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.32);
 }
+.sidebar-nav .nav-btn[data-screen-target="intervals"].nav-btn-active {
+  color: var(--intervals-accent);
+  background: rgba(248, 113, 113, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.35);
+}
+body:not(.theme-dark) .sidebar-nav .nav-btn[data-screen-target="intervals"].nav-btn-active {
+  color: var(--intervals-accent);
+  background: rgba(220, 38, 38, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.32);
+}
 .sidebar-nav .nav-btn sl-icon { font-size: 1.15rem; }
 .sidebar.collapsed .sidebar-nav .nav-btn {
   grid-template-columns: 1fr;
@@ -262,6 +276,10 @@ h1 {
 #screen-activities h2 {
   color: var(--activities-accent);
   margin: 0 0 0.25rem;
+}
+#screen-intervals h1,
+#screen-intervals h2 {
+  color: var(--intervals-accent);
 }
 h2 {
   color: var(--text);
@@ -444,6 +462,11 @@ a.btn { text-decoration: none; display: inline-block; }
   background: var(--activities-accent);
   color: var(--activities-accent-text);
 }
+#screen-intervals .btn.primary {
+  background: var(--intervals-accent);
+  color: var(--intervals-accent-text);
+  border-color: transparent;
+}
 #screen-search .btn.search-accent,
 #screen-search .btn.search-accent-secondary,
 #screen-search .btn.secondary {
@@ -502,6 +525,37 @@ body:not(.theme-dark) #screen-activities .btn.secondary {
 body:not(.theme-dark) #screen-activities .btn.secondary:hover {
   background: rgba(217, 119, 6, 0.14);
   border-color: rgba(217, 119, 6, 0.50);
+}
+#screen-intervals .btn.secondary {
+  background: rgba(248, 113, 113, 0.10);
+  color: var(--intervals-accent);
+  border-color: rgba(248, 113, 113, 0.40);
+}
+#screen-intervals .btn.secondary:hover {
+  background: rgba(248, 113, 113, 0.16);
+  border-color: rgba(248, 113, 113, 0.55);
+  color: var(--intervals-accent);
+}
+#screen-intervals .btn.secondary.is-active {
+  color: var(--intervals-accent);
+  background: rgba(248, 113, 113, 0.18);
+  border-color: rgba(248, 113, 113, 0.62);
+  box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.12);
+}
+body:not(.theme-dark) #screen-intervals .btn.secondary {
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--intervals-accent);
+  border-color: rgba(220, 38, 38, 0.32);
+}
+body:not(.theme-dark) #screen-intervals .btn.secondary:hover {
+  background: rgba(220, 38, 38, 0.14);
+  border-color: rgba(220, 38, 38, 0.50);
+}
+body:not(.theme-dark) #screen-intervals .btn.secondary.is-active {
+  color: var(--intervals-accent);
+  background: rgba(220, 38, 38, 0.14);
+  border-color: rgba(220, 38, 38, 0.58);
+  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.10);
 }
 .btn.secondary { background: rgba(148, 163, 184, 0.06); color: var(--text-muted); }
 .btn.secondary:hover { border-color: var(--border-strong); color: var(--text); background: rgba(148, 163, 184, 0.12); }
