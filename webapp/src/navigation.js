@@ -50,6 +50,7 @@ function setScreen(name) {
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.classList.toggle("nav-btn-active", btn.dataset.screenTarget === name);
   });
+  document.body.classList.toggle("activities-layout", name === "activities" || name === "activity-detail");
   if (typeof updateActivitiesSidebars === "function") updateActivitiesSidebars();
   if (name === "compare") renderCompare();
   if (name === "similarity") renderSimilarityQueryOptions();

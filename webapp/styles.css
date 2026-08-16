@@ -220,14 +220,23 @@ body:not(.theme-dark) .topbar {
 #screen-activity-detail.screen.active {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 0.6rem;
+  gap: 1rem;
   align-items: start;
   padding-left: 0;
 }
 #screen-activities.screen.active > .activities-sidebar,
 #screen-activity-detail.screen.active > .activities-sidebar {
-  margin-top: 1.45rem;
-  margin-left: 1rem;
+  margin-left: 0.5rem;
+}
+body.activities-layout .container {
+  max-width: none;
+  width: 100%;
+  padding-left: 0;
+}
+#screen-activities.screen.active > .activities-main,
+#screen-activity-detail.screen.active > .activities-main {
+  min-width: 0;
+  width: 100%;
 }
 
 /* ── Card ────────────────────────────────────────────────────────────────── */
