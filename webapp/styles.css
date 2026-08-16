@@ -220,14 +220,14 @@ body:not(.theme-dark) .topbar {
 #screen-activity-detail.screen.active {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 1rem;
+  gap: 0.6rem;
   align-items: start;
   padding-left: 0;
 }
 #screen-activities.screen.active > .activities-sidebar,
 #screen-activity-detail.screen.active > .activities-sidebar {
   margin-top: 1.45rem;
-  margin-left: 1.85rem;
+  margin-left: 1rem;
 }
 
 /* ── Card ────────────────────────────────────────────────────────────────── */
