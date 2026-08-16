@@ -26,6 +26,7 @@ function init() {
 
   loadSettingsToForm();
   updateSettingsCallouts();
+  updateDeveloperModeVisibility(getSettings().developerMode);
   handleStravaOAuthCallback();
   initManualGallery();
   initSearchDatePickers();
@@ -93,6 +94,8 @@ function init() {
   });
   document.getElementById("settings-form").addEventListener("submit", saveSettings);
   document.getElementById("settings-save-mode").addEventListener("click", saveApiMode);
+  const saveDevModeBtn = document.getElementById("settings-save-developer-mode");
+  if (saveDevModeBtn) saveDevModeBtn.addEventListener("click", saveApiMode);
   document.getElementById("settings-save-strava").addEventListener("click", saveStravaSettings);
   document.getElementById("settings-strava-connect").addEventListener("click", startStravaOAuth);
   document.getElementById("settings-reset").addEventListener("click", clearSettings);
