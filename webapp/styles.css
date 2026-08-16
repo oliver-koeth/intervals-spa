@@ -179,7 +179,7 @@ body:not(.theme-dark) .topbar {
   white-space: nowrap;
 }
 .brand::after {
-  content: "nextgen endurance analysis";
+  content: "trail data hub";
   margin-left: 0.7rem;
   color: var(--text-muted);
   font-size: 0.88rem;
