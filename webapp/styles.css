@@ -219,6 +219,9 @@ body:not(.theme-dark) .topbar {
 #screen-activities.screen.active,
 #screen-activity-detail.screen.active {
   display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  align-items: start;
 }
 
 /* ── Card ────────────────────────────────────────────────────────────────── */
@@ -275,17 +278,6 @@ h2 {
 }
 
 /* ── Activities secondary sidebar ─────────────────────────────────────────── */
-#screen-activities,
-#screen-activity-detail {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 1rem;
-  align-items: start;
-}
-#screen-activities.hidden,
-#screen-activity-detail.hidden {
-  display: none;
-}
 .activities-sidebar {
   display: flex;
   flex-direction: column;
