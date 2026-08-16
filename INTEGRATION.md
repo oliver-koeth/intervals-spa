@@ -731,51 +731,28 @@ retrieve `timezone` first, then format dates accordingly.
 
 ---
 
-## 11. Integration Checklist for intervals-spa
+## 11. How intervals-spa Actually Integrates
 
-This checklist guides the implementation of the intervals.icu integration inside this project.
+`intervals-spa` has no backend — the browser calls intervals.icu directly. The relevant code
+lives entirely under `webapp/src/`:
 
-### Infrastructure
-
-- [ ] Add `INTERVALS_API_KEY` (and/or `INTERVALS_CLIENT_ID` / `INTERVALS_CLIENT_SECRET`) to `src/intervals/infrastructure/config.py` settings.
-- [ ] Create `src/intervals/infrastructure/intervals_client.py`:
-  - Async `httpx.AsyncClient` with Basic auth for API key mode.
-  - Bearer token injection for OAuth mode.
-  - `User-Agent` header set to `intervals-spa/<version>`.
-  - `Retry-After` handling on 429.
-  - Exponential backoff on 5xx.
-- [ ] Add `intervals_athlete_id` to athlete settings (default `"0"` for self-access).
-
-### Domain
-
-- [ ] Define `IntervalsActivity`, `IntervalsEvent`, `IntervalsWellness` value objects in `src/intervals/domain/` (distinct from the internal `Workout` entity).
-- [ ] Map `intervals.icu` zone model (Z1–Z5 via sport settings) to the internal `IntensityZone` enum.
-
-### Application
-
-- [ ] `IntervalsActivityService.fetch_activities(oldest, newest)` → list of `IntervalsActivity`.
-- [ ] `IntervalsEventService.fetch_events(oldest, newest)` → list of `IntervalsEvent`.
-- [ ] `IntervalsWellnessService.fetch_wellness(oldest, newest)` → list of `IntervalsWellness`.
-- [ ] `IntervalsSyncService.sync_athlete()` → bootstrap athlete ID and sport settings.
-
-### API Routes
-
-- [ ] `GET /api/v1/intervals/activities` — proxies intervals.icu activities into the SPA.
-- [ ] `GET /api/v1/intervals/events` — proxies calendar events.
-- [ ] `GET /api/v1/intervals/wellness` — proxies wellness data.
-- [ ] `GET /api/v1/intervals/athlete` — returns cached intervals.icu athlete profile.
-
-### Frontend
-
-- [ ] Add `src/api/intervalsClient.ts` typed wrappers for the proxy routes above.
-- [ ] Add `IntervalsActivitiesPage` showing imported activities.
-- [ ] Render zone distribution using `icu_zone_times` and the semantic zone colors from `docs/STYLEGUIDE.md`.
+- `webapp/src/settings.js` — Settings screen where the user enters their athlete ID and API
+  key; persisted to `localStorage` (never sent anywhere except intervals.icu itself).
+- `webapp/src/api-client.js` — direct-mode (`runDirectSearch`, `runDirectActivitySearch`) and
+  local-proxy-mode (`runProxySearch`, `runProxyActivitySearch`) request/response mapping.
+- `webapp/src/hr-stream-compare.js` — stream fetches (HR/pace/etc.) with in-memory + localStorage
+  caching (`fetchHrStream` and friends).
+- `webapp/server.py` — **local development only**: serves static files and, in proxy mode,
+  forwards `/api/search` requests server-side to sidestep CORS on `localhost`. Not used in the
+  GitHub Pages deployment, where the browser always calls intervals.icu directly (API mode
+  "Direct" or "Auto" resolving to direct off-localhost).
 
 ### Security
 
-- [ ] Store `INTERVALS_API_KEY` in server-side environment variable only — never expose in frontend bundle.
-- [ ] For OAuth: store access tokens in server-side session storage, not browser `localStorage`.
-- [ ] Rotate API keys immediately if compromised via `/settings` → Developer Settings → Regenerate.
+- The intervals.icu API key lives in the browser's `localStorage` only, entered by the user in
+  Settings. This project has no server, so there is no server-side secret to protect.
+- If a key is compromised, the user rotates it themselves via intervals.icu
+  `/settings` → Developer Settings → Regenerate, then re-enters it in this app's Settings screen.
 
 ---
 

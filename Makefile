@@ -1,45 +1,16 @@
-UV     ?= .venv/bin/uv
-PNPM   ?= cd frontend && pnpm
+.PHONY: quality lint dev clean
 
-.PHONY: quality lint typecheck test \
-        fe-lint fe-typecheck fe-test \
-        build dev clean
+# ── Full quality gate ───────────────────────────────────────────────────────
+quality: lint
 
-# ── Full quality gate ──────────────────────────────────────────────────────────
-quality: lint typecheck test fe-lint fe-typecheck fe-test
-
-# ── Backend ───────────────────────────────────────────────────────────────────
+# ── Static JS syntax check ─────────────────────────────────────────────────
 lint:
-	$(UV) run ruff check .
+	@for f in webapp/src/*.js; do node --check "$$f" || exit 1; done
 
-typecheck:
-	$(UV) run mypy --strict src
+# ── Local development server (static files + optional API proxy) ──────────
+dev:
+	./webapp/dev.sh 8080
 
-test:
-	$(UV) run pytest
-
-# ── Frontend ──────────────────────────────────────────────────────────────────
-fe-lint:
-	$(PNPM) run lint
-
-fe-typecheck:
-	$(PNPM) run typecheck
-
-fe-test:
-	$(PNPM) run test run
-
-# ── Build ─────────────────────────────────────────────────────────────────────
-build:
-	$(UV) build
-	$(PNPM) run build
-
-# ── Development servers (run separately in two terminals) ─────────────────────
-dev-backend:
-	$(UV) run uvicorn intervals.api.main:app --reload
-
-dev-frontend:
-	$(PNPM) run dev
-
-# ── Housekeeping ──────────────────────────────────────────────────────────────
+# ── Housekeeping ─────────────────────────────────────────────────────────────
 clean:
-	rm -rf dist/ frontend/dist/ .venv/
+	rm -rf webapp/__pycache__

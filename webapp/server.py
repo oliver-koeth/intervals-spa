@@ -24,7 +24,7 @@ API_BASE = "https://intervals.icu/api/v1"
 USER_AGENT = "intervals-spa-local-server/0.1"
 
 # Activity summary fields requested from intervals.icu's /activities endpoint.
-# Keep in sync with ACTIVITY_SEARCH_FIELDS in webapp/app.js and with the
+# Keep in sync with ACTIVITY_SEARCH_FIELDS in webapp/src/state.js and with the
 # result dict built in run_activity_search() below.
 ACTIVITY_SEARCH_FIELDS = ",".join(
     [

@@ -1,106 +1,72 @@
 # intervals-spa
 
-A single-page application (SPA) for managing and visualising training intervals,
-backed by a Python REST API.
+A browser-only dashboard for reviewing training activities, intervals, and glucose data from
+[intervals.icu](https://intervals.icu) (and optionally [Strava](https://www.strava.com)).
+
+There is **no backend**. The app is a static site: it talks to intervals.icu/Strava directly
+from the browser using your own API key / OAuth token, and stores settings and cached data in
+your browser's `localStorage`. It is deployed as-is to GitHub Pages.
 
 ## Directory Layout
 
-The project is organised into two top-level workspaces that share clear
-dependency boundaries:
-
 ```
 intervals-spa/
-  src/intervals/        Python backend package (FastAPI)
-    api/                HTTP route handlers and request/response wiring
-    application/        Use-case orchestration and boundary contracts
-    domain/             Pure business rules and domain entities
-    infrastructure/     Persistence, config loading, and external I/O
-    shared/             Cross-cutting utilities and error contracts
-  frontend/             React + TypeScript SPA (Vite)
-    src/
-      api/              Typed API client (fetch wrappers)
-      components/       Reusable UI components
-      hooks/            Custom React hooks
-      pages/            Route-level page components
-      types/            Shared TypeScript types
-  tests/
-    unit/               Fast isolated backend unit tests
-    integration/        Backend integration tests
-    e2e/                End-to-end browser tests
-  docs/                 Architecture, requirements, model, and style docs
-  scripts/              Developer tooling and agentic workflow helpers
+  webapp/               The entire application (deployed to GitHub Pages)
+    index.html            Markup + <script> tags loading webapp/src/* in order
+    styles.css            All styling (light/dark theme)
+    server.py             Local-dev-only static server + optional API proxy (not deployed)
+    src/                   Application code, split by feature — see docs/ARCHITECTURE.md
+    datenschutz.html, impressum.html, license.html   Legal pages
+  tools/                 Standalone CLI scripts for the intervals.icu API
+  docs/                  Architecture and intervals.icu API integration reference
 ```
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full breakdown of `webapp/src/`.
 
 ## Developer Setup
 
-### Backend
+1. No install/build step is required — `webapp/` is plain HTML/CSS/JS.
+2. Start the local dev server (serves static files, optionally proxies API calls to avoid CORS
+   on `localhost`):
+   ```bash
+   ./webapp/run.sh 8080
+   ```
+   or with auto-restart on file changes:
+   ```bash
+   ./webapp/dev.sh 8080
+   ```
+3. Open `http://localhost:8080`.
+4. In the **Settings** screen, enter your intervals.icu athlete ID and API key (see
+   [`INTEGRATION.md`](INTEGRATION.md)), and optionally connect Strava.
 
-1. Install Python 3.11+ and [`uv`](https://docs.astral.sh/uv/).
-2. Create and sync the environment:
-   ```bash
-   uv sync --dev
-   ```
-3. Start the development server:
-   ```bash
-   uv run uvicorn intervals.api.main:app --reload
-   ```
-4. Health check:
-   ```bash
-   curl http://localhost:8000/api/v1/health
-   ```
-
-### Frontend
-
-1. Install [Node.js](https://nodejs.org/) 20+ and [pnpm](https://pnpm.io/) (on macOS: `brew install pnpm`).
-2. Install dependencies:
-   ```bash
-   cd frontend && pnpm install
-   ```
-3. Start the development server (proxies `/api` to `localhost:8000`):
-   ```bash
-   pnpm dev
-   ```
-4. Open `http://localhost:5173` in your browser.
-5. Charts are rendered with [Apache ECharts](https://echarts.apache.org/).
+Charts are rendered with [Apache ECharts](https://echarts.apache.org/); UI controls use
+[Shoelace](https://shoelace.style/).
 
 ## Quality Checks
 
-Run all local quality gates (backend + frontend):
 ```bash
 make quality
 ```
 
-Run gates individually when needed:
-```bash
-# Backend
-uv run ruff check .
-uv run mypy --strict src
-uv run pytest
-
-# Frontend
-cd frontend && pnpm lint
-cd frontend && pnpm typecheck
-cd frontend && pnpm test
-```
+This syntax-checks every file in `webapp/src/`. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for
+more.
 
 ## Deployment
 
-See [`INSTALL.md`](INSTALL.md) for Linux VPS and systemd service setup.
+Every push to `master` deploys `webapp/` as-is to GitHub Pages via
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml) — no build step. See
+[`AGENTS.md`](AGENTS.md) for the branching convention used when developing new features.
+
+## Data & Privacy
+
+All settings, API keys, and cached search/glucose data live in your browser's `localStorage`
+only. Nothing is sent to or stored on any server operated by this project. See
+`webapp/datenschutz.html` (Datenschutz/privacy) and `webapp/impressum.html`.
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for contributor workflow and
-architecture-boundary expectations.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-## API Reference
+## intervals.icu API Reference
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET`  | `/api/v1/health` | Health check |
-| `GET`  | `/api/v1/intervals` | List intervals |
-| `POST` | `/api/v1/intervals` | Create interval |
-| `GET`  | `/api/v1/intervals/{id}` | Get interval by ID |
-| `PUT`  | `/api/v1/intervals/{id}` | Update interval |
-| `DELETE` | `/api/v1/intervals/{id}` | Delete interval |
-| `GET`  | `/api/v1/workouts` | List workouts |
-| `POST` | `/api/v1/workouts` | Create workout |
+See [`INTEGRATION.md`](INTEGRATION.md) for authentication, rate limits, and endpoint reference.

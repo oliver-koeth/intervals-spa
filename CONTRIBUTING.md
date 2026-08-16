@@ -2,100 +2,64 @@
 
 ## Local Setup
 
-### Backend
+No install or build step is required — `webapp/` is plain HTML/CSS/JS, loaded directly by the
+browser.
 
-1. Install Python `3.11+`.
-2. Install `uv`.
-3. Sync dependencies (including dev tools):
+1. Install Python `3.8+` (only used to run the local dev server).
+2. Start the dev server:
    ```bash
-   uv sync --dev
+   ./webapp/run.sh 8080
    ```
-4. Verify the API starts:
+   or, with auto-restart on file changes:
    ```bash
-   uv run uvicorn intervals.api.main:app --reload
+   ./webapp/dev.sh 8080
    ```
-
-### Frontend
-
-1. Install Node.js `20+` and `pnpm`.
-2. Install dependencies:
-   ```bash
-   cd frontend && pnpm install
-   ```
-3. Verify the dev server starts:
-   ```bash
-   pnpm dev
-   ```
+3. Open `http://localhost:8080` and configure your intervals.icu credentials in **Settings**.
 
 ## Pre-Commit Quality Commands
 
-Run these before opening a pull request:
-
-### Backend
-1. `uv run ruff check .`
-2. `uv run mypy --strict src`
-3. `uv run pytest`
-
-### Frontend
-1. `cd frontend && pnpm lint`
-2. `cd frontend && pnpm typecheck`
-3. `cd frontend && pnpm test`
-
-### All gates at once
 ```bash
 make quality
 ```
 
+This runs `node --check` over every file in `webapp/src/` to catch syntax errors. There is
+currently no linter/formatter or automated test suite for the webapp JS — see
+`docs/ARCHITECTURE.md` §8 for planned follow-ups (ESLint config, Playwright tests).
+
 ## Architecture Boundary Expectations
 
-### Backend
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full breakdown. In short:
 
-Keep imports and responsibilities aligned with the backend architecture:
-
-- `src/intervals/api`: HTTP route handlers, request validation, error mapping only.
-- `src/intervals/application`: use-case orchestration and boundary request/response contracts.
-- `src/intervals/domain`: pure business rules and domain entities only.
-- `src/intervals/infrastructure`: I/O, persistence, config loading, and external integrations.
-- `src/intervals/shared`: cross-cutting concerns shared by multiple layers.
-
-Import direction must remain inward:
-
-- `api` can import `application` and `shared`.
-- `application` can import `domain` and `shared`.
-- `domain` must not import `api`, `application`, or `infrastructure`.
-
-### Frontend
-
-Keep responsibilities aligned with the frontend architecture:
-
-- `pages/`: route-level page components; orchestrate data fetching and render layouts.
-- `components/`: reusable, stateless (or lightly stateful) UI components.
-- `hooks/`: custom React hooks that encapsulate side-effects and state logic.
-- `api/`: typed fetch wrappers for all backend API endpoints.
-- `types/`: TypeScript type definitions shared across the frontend.
-
-Dependency direction: `pages -> components`, `pages/components -> hooks -> api/types`.
+- Everything lives under `webapp/`; there is no backend and no build step in production.
+- `webapp/src/*.js` are loaded as classic (non-module) `<script>` tags, in the exact order
+  listed in `index.html`. They share one global scope by design.
+  - `state.js` must load first (defines the shared `state` object and constants).
+  - `main.js` must load last (calls `init()`, which wires up all DOM event listeners).
+  - Keep new files grouped by feature (see the existing files for the pattern) and add their
+    `<script>` tag to `index.html` in a position consistent with what they depend on.
+- `webapp/server.py` is local-development tooling only (static file serving + optional API
+  proxy to dodge CORS on `localhost`). Never add production-only logic there — it is not part
+  of the GitHub Pages deployment.
+- All persistent app data (settings, API keys, cached activities/intervals/glucose readings)
+  must go through `localStorage` — never introduce a server-side store.
 
 ## Commit Message Convention
 
-Use the [Conventional Commits](https://www.conventionalcommits.org/) format:
+Follow the existing history: short, descriptive, imperative-mood summaries (no strict
+Conventional Commits prefix required), e.g.:
 
-```
-<type>(<scope>): <short description>
+- `Add activity similarity UI`
+- `Fix mobile tap selection in compare charts`
+- `Add filters to activities page`
 
-[optional body]
-```
+## Branching
 
-Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`.
-
-Examples:
-- `feat(api): add POST /intervals endpoint`
-- `fix(domain): reject negative duration_seconds`
-- `docs(arch): update sequence diagram for Phase 4`
+Per [`AGENTS.md`](AGENTS.md): when starting a new feature while on `master`, create a feature
+branch first, and keep it off GitHub Pages (i.e. don't merge to `master`) until the feature is
+ready — `pages.yml` deploys on every push to `master`.
 
 ## Pull Request Checklist
 
 - [ ] `make quality` passes locally
-- [ ] New code has tests
-- [ ] Architecture boundaries are preserved
-- [ ] Docs updated if API contracts or behavior changed
+- [ ] Manually verified the affected screen(s) in the browser (no automated UI tests yet)
+- [ ] `docs/ARCHITECTURE.md` updated if the file layout or external API usage changed

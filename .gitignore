@@ -1,23 +1,3 @@
-# Python
-.venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.mypy_cache/
-.pytest_cache/
-.ruff_cache/
-dist/
-build/
-*.egg-info/
-.eggs/
-
-# Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
-frontend/*.tsbuildinfo
-
 # Environment
 .env
 .env.local
@@ -33,9 +13,10 @@ Thumbs.db
 *.swp
 *.swo
 
+# Local dev server
+webapp/__pycache__/
+
 # Data / state
-scripts/ralph/.last-branch
-scripts/ralph/.codex-last-message*.txt
 data/
 
 # Tool output artefacts
