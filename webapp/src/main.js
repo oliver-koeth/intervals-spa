@@ -248,8 +248,12 @@ function init() {
 
   const advancedToggle = document.getElementById("activities-advanced-toggle");
   const advancedFilters = document.getElementById("activities-advanced-filters");
+  const timeFilters = document.getElementById("activities-time-filters");
+  const distanceFilters = document.getElementById("activities-distance-filters");
   advancedToggle.addEventListener("click", () => {
     const expanded = advancedFilters.classList.toggle("hidden");
+    timeFilters.classList.toggle("hidden", expanded);
+    distanceFilters.classList.toggle("hidden", expanded);
     advancedToggle.setAttribute("aria-expanded", String(!expanded));
     advancedToggle.textContent = expanded ? "+" : "−";
   });

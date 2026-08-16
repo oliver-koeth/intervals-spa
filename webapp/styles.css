@@ -265,6 +265,10 @@ h2 {
 .filters-row {
   grid-template-columns: repeat(3, minmax(170px, 1fr)) auto;
 }
+#activities-time-filters,
+#activities-distance-filters {
+  grid-template-columns: repeat(2, minmax(170px, 1fr));
+}
 .activities-advanced-toggle {
   align-self: flex-end;
   height: 2.05rem;
