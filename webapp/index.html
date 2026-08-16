@@ -289,10 +289,19 @@
                 </div>
               </div>
     
-              <div class="filters">
+              <div class="filters filters-row">
                 <label>Label
                   <sl-input id="activities-filter-label" placeholder="e.g. Long run"></sl-input>
                 </label>
+                <label>Date from
+                  <input id="activities-filter-date-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                </label>
+                <label>Date to
+                  <input id="activities-filter-date-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                </label>
+                <button id="activities-advanced-toggle" class="btn secondary activities-advanced-toggle" type="button" aria-expanded="false">+</button>
+              </div>
+              <div id="activities-advanced-filters" class="filters filters-row advanced-filters hidden">
                 <label>Source
                   <sl-select id="activities-filter-source" value="">
                     <sl-option value="">All sources</sl-option>
@@ -307,16 +316,22 @@
                     <sl-option value="Ride">Ride</sl-option>
                   </sl-select>
                 </label>
-                <label>Date from
-                  <input id="activities-filter-date-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                <label>Time from
+                  <input id="activities-filter-time-from" class="search-date-input" type="text" placeholder="HH:MM:SS" />
                 </label>
-                <label>Date to
-                  <input id="activities-filter-date-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                <label>Time to
+                  <input id="activities-filter-time-to" class="search-date-input" type="text" placeholder="HH:MM:SS" />
                 </label>
-                <div class="form-actions">
-                  <button id="apply-activities-filters" class="btn primary" type="button">Apply</button>
-                  <button id="clear-activities-filters" class="btn secondary" type="button">Clear</button>
-                </div>
+                <label>Distance from
+                  <sl-input id="activities-filter-distance-from" type="number" min="0" step="0.1" placeholder="km"></sl-input>
+                </label>
+                <label>Distance to
+                  <sl-input id="activities-filter-distance-to" type="number" min="0" step="0.1" placeholder="km"></sl-input>
+                </label>
+              </div>
+              <div class="form-actions filters-actions">
+                <button id="apply-activities-filters" class="btn primary" type="button">Apply</button>
+                <button id="clear-activities-filters" class="btn secondary" type="button">Clear</button>
               </div>
     
               <div class="table-wrap">

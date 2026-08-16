@@ -233,6 +233,10 @@ function init() {
       "activities-filter-label",
       "activities-filter-date-from",
       "activities-filter-date-to",
+      "activities-filter-time-from",
+      "activities-filter-time-to",
+      "activities-filter-distance-from",
+      "activities-filter-distance-to",
     ].forEach((id) => {
       document.getElementById(id).value = "";
     });
@@ -240,6 +244,14 @@ function init() {
     document.getElementById("activities-filter-type").value = "";
     state.activitiesFiltered = [...state.activities];
     renderActivities();
+  });
+
+  const advancedToggle = document.getElementById("activities-advanced-toggle");
+  const advancedFilters = document.getElementById("activities-advanced-filters");
+  advancedToggle.addEventListener("click", () => {
+    const expanded = advancedFilters.classList.toggle("hidden");
+    advancedToggle.setAttribute("aria-expanded", String(!expanded));
+    advancedToggle.textContent = expanded ? "+" : "−";
   });
   document.getElementById("select-none").addEventListener("click", () => {
     state.selected.clear();

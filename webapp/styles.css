@@ -262,6 +262,20 @@ h2 {
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   margin-top: 0.75rem;
 }
+.filters-row {
+  grid-template-columns: repeat(3, minmax(170px, 1fr)) auto;
+}
+.activities-advanced-toggle {
+  align-self: flex-end;
+  height: 2.05rem;
+  width: 2.05rem;
+  min-width: 2.05rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 1.1rem;
+}
 label {
   display: flex;
   flex-direction: column;
@@ -367,6 +381,11 @@ body:not(.theme-dark) #screen-activities .btn.secondary:hover {
   gap: 0.5rem;
   align-items: flex-end;
   padding-bottom: 2px;
+}
+.filters-actions {
+  justify-content: flex-start;
+  margin-top: 0.75rem;
+  padding-bottom: 0;
 }
 .search-actions {
   grid-column: 1 / -1;
