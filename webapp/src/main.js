@@ -141,7 +141,7 @@ function init() {
     topbarMenuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
   });
   document.getElementById("back-to-list").addEventListener("click", () => setScreen("intervals"));
-  document.getElementById("go-compare").addEventListener("click", () => setScreen("compare"));
+  document.getElementById("go-compare").addEventListener("click", openCompareTab);
 
   // Activity tab sidebars — delegated click handler
   ["activities-sidebar", "activity-detail-sidebar"].forEach((id) => {
@@ -164,6 +164,26 @@ function init() {
           openActivityLab(entry.activity);
         }
       }
+    });
+  });
+
+  ["intervals-compare-sidebar", "compare-sidebar"].forEach((id) => {
+    const sidebar = document.getElementById(id);
+    if (!sidebar) return;
+    sidebar.addEventListener("click", (e) => {
+      const closeBtn = e.target.closest("[data-close-compare-tab]");
+      if (closeBtn) {
+        e.stopPropagation();
+        closeCompareTab(closeBtn.dataset.closeCompareTab);
+        return;
+      }
+      const item = e.target.closest(".activities-sidebar-item");
+      if (!item) return;
+      const tab = state.openCompareTabs.find((t) => t.id === item.dataset.compareTabId);
+      if (!tab) return;
+      state.activeCompareTabId = tab.id;
+      updateCompareSidebars();
+      setScreen("compare");
     });
   });
 

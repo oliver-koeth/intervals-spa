@@ -54,6 +54,9 @@ const state = {
   charts: {},
   activityLabCharts: {},
   compareSource: [],
+  openCompareTabs: [],     // [{id, intervals}]
+  activeCompareTabId: null,
+  compareTabCounter: 0,
   pinnedInterval: null,
   dismissedCallouts: new Set(),
   similarity: {

@@ -231,7 +231,9 @@ body:not(.theme-dark) .topbar {
 .screen { display: none; }
 .screen.active { display: block; }
 #screen-activities.screen.active,
-#screen-activity-detail.screen.active {
+#screen-activity-detail.screen.active,
+#screen-intervals.screen.active,
+#screen-compare.screen.active {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 1rem;
@@ -239,7 +241,9 @@ body:not(.theme-dark) .topbar {
   padding-left: 0;
 }
 #screen-activities.screen.active > .activities-sidebar,
-#screen-activity-detail.screen.active > .activities-sidebar {
+#screen-activity-detail.screen.active > .activities-sidebar,
+#screen-intervals.screen.active > .compare-sidebar,
+#screen-compare.screen.active > .compare-sidebar {
   margin-left: 0.25rem;
 }
 body.activities-layout .container {
@@ -248,7 +252,9 @@ body.activities-layout .container {
   padding-left: 0;
 }
 #screen-activities.screen.active > .activities-main,
-#screen-activity-detail.screen.active > .activities-main {
+#screen-activity-detail.screen.active > .activities-main,
+#screen-intervals.screen.active > .card,
+#screen-compare.screen.active > .compare-main {
   min-width: 0;
   width: 100%;
 }
@@ -409,6 +415,35 @@ body:not(.theme-dark) .activities-sidebar-item.active {
   background: var(--activities-accent);
   color: var(--activities-accent-text);
   border: 1px solid var(--activities-accent);
+}
+.compare-sidebar .activities-sidebar-item:not(.active) {
+  background: rgba(248, 113, 113, 0.10);
+  color: var(--intervals-accent);
+  border-color: rgba(248, 113, 113, 0.40);
+}
+.compare-sidebar .activities-sidebar-item:not(.active):hover {
+  background: rgba(248, 113, 113, 0.16);
+  border-color: rgba(248, 113, 113, 0.55);
+  color: var(--intervals-accent);
+}
+.compare-sidebar .activities-sidebar-item.active {
+  background: var(--intervals-accent);
+  color: var(--intervals-accent-text);
+  border-color: var(--intervals-accent);
+}
+body:not(.theme-dark) .compare-sidebar .activities-sidebar-item:not(.active) {
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--intervals-accent);
+  border-color: rgba(220, 38, 38, 0.32);
+}
+body:not(.theme-dark) .compare-sidebar .activities-sidebar-item:not(.active):hover {
+  background: rgba(220, 38, 38, 0.14);
+  border-color: rgba(220, 38, 38, 0.50);
+}
+body:not(.theme-dark) .compare-sidebar .activities-sidebar-item.active {
+  background: var(--intervals-accent);
+  color: var(--intervals-accent-text);
+  border-color: var(--intervals-accent);
 }
 .activities-sidebar.collapsed .activities-sidebar-item {
   width: 1.75rem;

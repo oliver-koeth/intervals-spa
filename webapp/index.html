@@ -41,10 +41,6 @@
             <sl-icon name="stopwatch" aria-hidden="true"></sl-icon>
             <span class="nav-label">Intervals</span>
           </button>
-          <button class="nav-btn" data-screen-target="compare" aria-label="Compare">
-            <sl-icon name="arrow-left-right" aria-hidden="true"></sl-icon>
-            <span class="nav-label">Compare</span>
-          </button>
           <button class="nav-btn" data-screen-target="glucose" aria-label="Glucose">
             <sl-icon name="droplet" aria-hidden="true"></sl-icon>
             <span class="nav-label">Glucose</span>
@@ -580,6 +576,9 @@
     
           <!-- ── Intervals ─────────────────────────────────────────────────────── -->
           <section id="screen-intervals" class="screen shoelace-forms">
+            <aside id="intervals-compare-sidebar" class="activities-sidebar compare-sidebar hidden" aria-label="Open comparisons">
+              <div class="activities-sidebar-scroll" id="intervals-compare-sidebar-list"></div>
+            </aside>
             <div class="card">
               <div class="row space-between">
                 <h1>Intervals</h1>
@@ -660,7 +659,10 @@
     
           <!-- ── Compare ───────────────────────────────────────────────────────── -->
           <section id="screen-compare" class="screen">
-            <div class="card">
+            <aside id="compare-sidebar" class="activities-sidebar compare-sidebar hidden" aria-label="Open comparisons">
+              <div class="activities-sidebar-scroll" id="compare-sidebar-list"></div>
+            </aside>
+            <div class="card compare-main">
               <div class="row space-between">
                 <h1>Comparison Dashboard</h1>
                 <button id="back-to-list" class="btn secondary" type="button">Back to intervals</button>

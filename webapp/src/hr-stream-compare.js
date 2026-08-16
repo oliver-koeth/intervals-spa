@@ -659,13 +659,81 @@ function attachRow1Click(chartName, indexFn) {
   });
 }
 
+function getCompareIndexLabel(index) {
+  if (index < 9) return String(index + 1);
+  return String.fromCharCode(65 + (index - 9));
+}
+
+function compareTabLabel(index, intervals) {
+  return `${getCompareIndexLabel(index)} - ${intervals.length} Intervals`;
+}
+
+function renderCompareSidebar(hostId) {
+  const list = document.getElementById(hostId);
+  if (!list) return;
+  list.innerHTML = "";
+  const collapsed = document.querySelector("#sidebar.collapsed") != null;
+  state.openCompareTabs.forEach(({ id, intervals }, index) => {
+    const btn = document.createElement("button");
+    btn.className = "btn activities-sidebar-item" + (id === state.activeCompareTabId ? " active" : "");
+    btn.type = "button";
+    btn.dataset.compareTabId = id;
+    btn.title = compareTabLabel(index, intervals);
+    btn.innerHTML = `<span class="activities-sidebar-label">${collapsed ? getCompareIndexLabel(index) : compareTabLabel(index, intervals)}</span>`
+      + `<span class="activities-sidebar-close" data-close-compare-tab="${id}" title="Close">×</span>`;
+    list.appendChild(btn);
+  });
+}
+
+function updateCompareSidebars() {
+  const hasTabs = state.openCompareTabs.length > 0;
+  const onIntervals = state.screen === "intervals";
+  const onCompare = state.screen === "compare";
+  const intervalsSidebar = document.getElementById("intervals-compare-sidebar");
+  const compareSidebar = document.getElementById("compare-sidebar");
+  if (intervalsSidebar) intervalsSidebar.classList.toggle("hidden", !(onIntervals && hasTabs));
+  if (compareSidebar) compareSidebar.classList.toggle("hidden", !(onCompare && hasTabs));
+  if (onIntervals) renderCompareSidebar("intervals-compare-sidebar-list");
+  if (onCompare) renderCompareSidebar("compare-sidebar-list");
+}
+
+function openCompareTab() {
+  const selected = state.filtered.filter((x) => state.selected.has(String(x.interval_id)));
+  const intervals = [...(selected.length ? selected : state.filtered)].sort(compareIntervalsChronologically);
+  const id = `compare-${++state.compareTabCounter}`;
+  state.openCompareTabs.push({ id, intervals });
+  state.activeCompareTabId = id;
+  updateCompareSidebars();
+  setScreen("compare");
+}
+
+function closeCompareTab(id) {
+  const idx = state.openCompareTabs.findIndex((t) => t.id === id);
+  if (idx === -1) return;
+  state.openCompareTabs.splice(idx, 1);
+  if (state.activeCompareTabId === id) {
+    const next = state.openCompareTabs[Math.max(0, idx - 1)];
+    state.activeCompareTabId = next ? next.id : null;
+    if (next && state.screen === "compare") {
+      updateCompareSidebars();
+      renderCompare();
+    } else {
+      updateCompareSidebars();
+      if (state.screen === "compare") setScreen("intervals");
+    }
+  } else {
+    updateCompareSidebars();
+  }
+}
+
 function renderCompare() {
+  const activeTab = state.openCompareTabs.find((t) => t.id === state.activeCompareTabId);
   const sel = state.filtered.filter((x) => state.selected.has(String(x.interval_id)));
-  const src = sel.length ? sel : state.filtered;
+  const src = activeTab?.intervals || (sel.length ? sel : state.filtered);
   state.compareSource = [...src].sort(compareIntervalsChronologically);
   state.pinnedInterval = null;
   document.getElementById("compare-summary").textContent =
-    `${state.compareSource.length} interval(s) shown${sel.length ? " (selected)" : " (all filtered)"}`;
+    `${state.compareSource.length} interval(s) shown${activeTab ? "" : sel.length ? " (selected)" : " (all filtered)"}`;
 
   const sorted = state.compareSource;
   const dates  = sorted.map((x) => x.date);
@@ -752,4 +820,3 @@ function renderCompare() {
 
   renderRow2Empty();
 }
-

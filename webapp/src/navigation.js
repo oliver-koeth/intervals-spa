@@ -23,6 +23,7 @@ function initSidebar() {
       as.classList.toggle("collapsed", collapsed);
     });
     if (typeof updateActivitiesSidebars === "function") updateActivitiesSidebars();
+    if (typeof updateCompareSidebars === "function") updateCompareSidebars();
   };
 
   const stored = localStorage.getItem("sidebar-collapsed");
@@ -44,15 +45,23 @@ function initSidebar() {
 
 function setScreen(name) {
   state.screen = name;
-  const primaryNavTarget = name === "activity-detail" ? "activities" : name;
+  const primaryNavTarget = name === "activity-detail"
+    ? "activities"
+    : name === "compare"
+      ? "intervals"
+      : name;
   document.querySelectorAll(".screen").forEach((el) => {
     el.classList.toggle("active", el.id === `screen-${name}`);
   });
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.classList.toggle("nav-btn-active", btn.dataset.screenTarget === primaryNavTarget);
   });
-  document.body.classList.toggle("activities-layout", name === "activities" || name === "activity-detail");
+  document.body.classList.toggle(
+    "activities-layout",
+    name === "activities" || name === "activity-detail" || name === "intervals" || name === "compare"
+  );
   if (typeof updateActivitiesSidebars === "function") updateActivitiesSidebars();
+  if (typeof updateCompareSidebars === "function") updateCompareSidebars();
   if (name === "compare") renderCompare();
   if (name === "similarity") renderSimilarityQueryOptions();
 }
