@@ -309,6 +309,9 @@ h2 {
 #activities-distance-filters {
   grid-template-columns: repeat(2, minmax(170px, 1fr));
 }
+.intervals-advanced-filters {
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+}
 
 /* ── Activities secondary sidebar ─────────────────────────────────────────── */
 .activities-sidebar {
@@ -418,7 +421,8 @@ body:not(.theme-dark) .activities-sidebar-item.active {
 .activities-sidebar.collapsed .activities-sidebar-close {
   display: none;
 }
-.activities-advanced-toggle {
+.activities-advanced-toggle,
+.advanced-toggle {
   align-self: flex-end;
   height: 2.05rem;
   width: 2.05rem;

@@ -586,10 +586,19 @@
                 <div id="result-summary" class="muted"></div>
               </div>
     
-              <div class="filters">
+              <div class="filters filters-row">
                 <label>Label
                   <sl-input id="filter-label" placeholder="e.g. fahrtkopf"></sl-input>
                 </label>
+                <label>Date from
+                  <input id="filter-date-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                </label>
+                <label>Date to
+                  <input id="filter-date-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                </label>
+                <button id="intervals-advanced-toggle" class="btn secondary advanced-toggle" type="button" aria-expanded="false">+</button>
+              </div>
+              <div id="intervals-advanced-filters" class="filters intervals-advanced-filters advanced-filters hidden">
                 <label>Source
                   <sl-select id="filter-source" value="">
                     <sl-option value="">All sources</sl-option>
@@ -610,16 +619,10 @@
                 <label>Time to (mm:ss)
                   <sl-input id="filter-time-to" placeholder="27:00"></sl-input>
                 </label>
-                <label>Date from
-                  <input id="filter-date-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
-                </label>
-                <label>Date to
-                  <input id="filter-date-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
-                </label>
-                <div class="form-actions">
-                  <button id="apply-filters" class="btn primary" type="button">Apply</button>
-                  <button id="clear-filters" class="btn secondary" type="button">Clear</button>
-                </div>
+              </div>
+              <div class="form-actions filters-actions">
+                <button id="apply-filters" class="btn primary" type="button">Apply</button>
+                <button id="clear-filters" class="btn secondary" type="button">Clear</button>
               </div>
     
               <div class="selection-bar">

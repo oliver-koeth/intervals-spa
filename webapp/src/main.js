@@ -262,6 +262,15 @@ function init() {
     advancedToggle.setAttribute("aria-expanded", String(!expanded));
     advancedToggle.textContent = expanded ? "+" : "−";
   });
+
+  const intervalsAdvancedToggle = document.getElementById("intervals-advanced-toggle");
+  const intervalsAdvancedFilters = document.getElementById("intervals-advanced-filters");
+  intervalsAdvancedToggle.addEventListener("click", () => {
+    const expanded = intervalsAdvancedFilters.classList.toggle("hidden");
+    intervalsAdvancedToggle.setAttribute("aria-expanded", String(!expanded));
+    intervalsAdvancedToggle.textContent = expanded ? "+" : "−";
+  });
+
   document.getElementById("select-none").addEventListener("click", () => {
     state.selected.clear();
     renderIntervals();
