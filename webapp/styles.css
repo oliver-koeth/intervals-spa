@@ -226,7 +226,7 @@ body:not(.theme-dark) .topbar {
 }
 #screen-activities.screen.active > .activities-sidebar,
 #screen-activity-detail.screen.active > .activities-sidebar {
-  margin-left: 0.5rem;
+  margin-left: 0.25rem;
 }
 body.activities-layout .container {
   max-width: none;
@@ -1065,8 +1065,7 @@ body:not(.theme-dark) #screen-activity-detail .btn.secondary:hover {
   align-items: start;
 }
 .activity-lab-stream-card {
-  position: sticky;
-  top: 132px;
+  align-self: start;
   min-height: calc(100vh - 168px);
 }
 .activity-lab-stream-list {
