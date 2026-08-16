@@ -7,6 +7,36 @@ function closeTopbarMenu() {
   toggle.setAttribute("aria-expanded", "false");
 }
 
+function initSidebar() {
+  const sidebar = document.getElementById("sidebar");
+  const toggle = document.getElementById("sidebar-toggle");
+  if (!sidebar || !toggle) return;
+
+  const applyCollapsed = (collapsed) => {
+    sidebar.classList.toggle("collapsed", collapsed);
+    toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    toggle.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
+    const icon = toggle.querySelector("sl-icon");
+    if (icon) icon.name = collapsed ? "chevron-right" : "chevron-left";
+  };
+
+  const stored = localStorage.getItem("sidebar-collapsed");
+  if (stored === "true") {
+    applyCollapsed(true);
+  } else if (stored === "false") {
+    applyCollapsed(false);
+  } else if (window.innerWidth <= 900) {
+    // Start collapsed on narrow viewports so the content area stays usable.
+    applyCollapsed(true);
+  }
+
+  toggle.addEventListener("click", () => {
+    const collapsed = sidebar.classList.toggle("collapsed");
+    applyCollapsed(collapsed);
+    localStorage.setItem("sidebar-collapsed", collapsed ? "true" : "false");
+  });
+}
+
 function setScreen(name) {
   state.screen = name;
   document.querySelectorAll(".screen").forEach((el) => {

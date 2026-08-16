@@ -30,6 +30,7 @@ function init() {
   initManualGallery();
   initSearchDatePickers();
   setScreen("search");
+  initSidebar();
 
   document.getElementById("activity-search-form").addEventListener("submit", handleActivitySearchSubmit);
   document.getElementById("activity-search-form").addEventListener("reset", () => {
