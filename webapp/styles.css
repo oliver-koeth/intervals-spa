@@ -14,6 +14,8 @@
   --accent-green: #54e0a1;
   --accent-amber: #ffb85c;
   --accent-rose: #ff647c;
+  --search-accent: #1a9c5e;      /* green for light mode */
+  --search-accent-text: #ffffff;
   --panel-shadow: 0 12px 34px rgba(15, 23, 42, 0.10);
   --panel-inset: inset 0 1px 0 rgba(255, 255, 255, 0.68);
 }
@@ -30,6 +32,8 @@ body.theme-dark {
   --text-subtle: #748391;
   --primary: #dbe7ef;
   --primary-text: #101820;
+  --search-accent: #54e0a1;      /* brighter mint-green for dark mode */
+  --search-accent-text: #081418;
   --panel-shadow: 0 16px 46px rgba(0, 0, 0, 0.30);
   --panel-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
@@ -132,6 +136,16 @@ body:not(.theme-dark) .sidebar {
   background: var(--surface-soft);
   box-shadow: var(--panel-inset);
 }
+.sidebar-nav .nav-btn[data-screen-target="search"].nav-btn-active {
+  color: var(--search-accent);
+  background: rgba(84, 224, 161, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(84, 224, 161, 0.35);
+}
+body:not(.theme-dark) .sidebar-nav .nav-btn[data-screen-target="search"].nav-btn-active {
+  color: var(--search-accent);
+  background: rgba(26, 156, 94, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(26, 156, 94, 0.32);
+}
 .sidebar-nav .nav-btn sl-icon { font-size: 1.15rem; }
 .sidebar.collapsed .sidebar-nav .nav-btn {
   grid-template-columns: 1fr;
@@ -203,6 +217,10 @@ h1 {
   font-size: 1rem;
   font-weight: 650;
   letter-spacing: -0.018em;
+}
+#screen-search h1,
+#screen-search h2 {
+  color: var(--search-accent);
   margin: 0 0 0.25rem;
 }
 h2 {
@@ -254,6 +272,42 @@ a.btn { text-decoration: none; display: inline-block; }
   background: var(--primary);
   color: var(--primary-text);
   border-color: transparent;
+}
+#screen-search .btn.search-accent,
+#screen-search .btn.search-accent-secondary,
+#screen-search .btn.secondary {
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease, filter 0.15s ease;
+}
+.btn.search-accent {
+  background: var(--search-accent);
+  color: var(--search-accent-text);
+  border-color: transparent;
+}
+.btn.search-accent:hover {
+  filter: brightness(1.08);
+}
+#screen-search .btn.secondary {
+  background: rgba(84, 224, 161, 0.10);
+  color: var(--search-accent);
+  border-color: rgba(84, 224, 161, 0.40);
+}
+#screen-search .btn.secondary:hover {
+  background: rgba(84, 224, 161, 0.16);
+  border-color: rgba(84, 224, 161, 0.55);
+}
+#screen-search .btn.secondary.is-active {
+  color: var(--search-accent-text);
+  background: var(--search-accent);
+  border-color: transparent;
+}
+body:not(.theme-dark) #screen-search .btn.secondary {
+  background: rgba(26, 156, 94, 0.08);
+  color: var(--search-accent);
+  border-color: rgba(26, 156, 94, 0.32);
+}
+body:not(.theme-dark) #screen-search .btn.secondary:hover {
+  background: rgba(26, 156, 94, 0.14);
+  border-color: rgba(26, 156, 94, 0.50);
 }
 .btn.secondary { background: rgba(148, 163, 184, 0.06); color: var(--text-muted); }
 .btn.secondary:hover { border-color: var(--border-strong); color: var(--text); background: rgba(148, 163, 184, 0.12); }
@@ -373,6 +427,32 @@ a.btn { text-decoration: none; display: inline-block; }
   background: transparent;
   border-color: var(--border);
   color: var(--text);
+}
+#screen-search .shoelace-forms sl-button[variant="primary"]::part(base) {
+  background: var(--search-accent);
+  border-color: transparent;
+  color: var(--search-accent-text);
+}
+#screen-search .shoelace-forms sl-button[variant="primary"]::part(base):hover {
+  filter: brightness(1.08);
+}
+#screen-search .shoelace-forms sl-button[variant="default"]::part(base) {
+  background: rgba(84, 224, 161, 0.10);
+  border-color: rgba(84, 224, 161, 0.40);
+  color: var(--search-accent);
+}
+#screen-search .shoelace-forms sl-button[variant="default"]::part(base):hover {
+  background: rgba(84, 224, 161, 0.16);
+  border-color: rgba(84, 224, 161, 0.55);
+}
+body:not(.theme-dark) #screen-search .shoelace-forms sl-button[variant="default"]::part(base) {
+  background: rgba(26, 156, 94, 0.08);
+  border-color: rgba(26, 156, 94, 0.32);
+  color: var(--search-accent);
+}
+body:not(.theme-dark) #screen-search .shoelace-forms sl-button[variant="default"]::part(base):hover {
+  background: rgba(26, 156, 94, 0.14);
+  border-color: rgba(26, 156, 94, 0.50);
 }
 .shoelace-forms sl-button[variant="primary"]::part(base) {
   background: var(--primary);
