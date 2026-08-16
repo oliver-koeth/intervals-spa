@@ -193,7 +193,7 @@ body:not(.theme-dark) .topbar {
   white-space: nowrap;
 }
 .brand::after {
-  content: "trail data hub";
+  content: "Explore, Compare & Tune Your Training & Racing";
   margin-left: 0.7rem;
   color: var(--text-muted);
   font-size: 0.88rem;
