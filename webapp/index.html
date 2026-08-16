@@ -851,12 +851,16 @@
     
               <hr class="settings-divider" />
     
-              <!-- ── Reset ── -->
-              <div class="settings-reset-row">
-                <button type="button" id="settings-reset" class="btn secondary">Reset all settings</button>
-                <button type="button" id="settings-clear-interval-cache" class="btn secondary">Delete intervals cache</button>
-                <button type="button" id="settings-clear-hr-cache" class="btn secondary">Delete HR stream cache</button>
-                <span class="muted" style="font-size:.8rem">Removes all data from local storage and reloads the form.</span>
+              <!-- ── Group 7: Danger Zone ── -->
+              <div class="settings-group settings-danger-zone">
+                <h2>Danger Zone</h2>
+                <p class="muted" style="margin:0 0 .75rem">These actions remove browser-local data and cannot be undone.</p>
+                <div class="settings-reset-row">
+                  <button type="button" id="settings-reset" class="btn secondary">Reset all settings</button>
+                  <button type="button" id="settings-clear-interval-cache" class="btn secondary">Delete intervals cache</button>
+                  <button type="button" id="settings-clear-hr-cache" class="btn secondary">Delete HR stream cache</button>
+                  <span class="muted" style="font-size:.8rem">Removes all data from local storage and reloads the form.</span>
+                </div>
               </div>
     
             </div>

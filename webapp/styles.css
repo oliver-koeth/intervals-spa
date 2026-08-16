@@ -22,6 +22,8 @@
   --intervals-accent-text: #ffffff;
   --glucose-accent: #ca8a04;       /* yellow for light mode */
   --glucose-accent-text: #ffffff;
+  --settings-accent: #64748b;      /* grey for light mode */
+  --settings-accent-text: #ffffff;
   --panel-shadow: 0 12px 34px rgba(15, 23, 42, 0.10);
   --panel-inset: inset 0 1px 0 rgba(255, 255, 255, 0.68);
 }
@@ -46,6 +48,8 @@ body.theme-dark {
   --intervals-accent-text: #1b0b0b;
   --glucose-accent: #facc15;     /* yellow for dark mode */
   --glucose-accent-text: #1a1300;
+  --settings-accent: #cbd5e1;     /* brighter grey for dark mode */
+  --settings-accent-text: #101820;
   --panel-shadow: 0 16px 46px rgba(0, 0, 0, 0.30);
   --panel-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
@@ -188,6 +192,16 @@ body:not(.theme-dark) .sidebar-nav .nav-btn[data-screen-target="glucose"].nav-bt
   background: rgba(202, 138, 4, 0.10);
   box-shadow: inset 0 0 0 1px rgba(202, 138, 4, 0.32);
 }
+.sidebar-nav .nav-btn[data-screen-target="settings"].nav-btn-active {
+  color: var(--settings-accent);
+  background: rgba(203, 213, 225, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(203, 213, 225, 0.35);
+}
+body:not(.theme-dark) .sidebar-nav .nav-btn[data-screen-target="settings"].nav-btn-active {
+  color: var(--settings-accent);
+  background: rgba(100, 116, 139, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.32);
+}
 .sidebar-nav .nav-btn sl-icon { font-size: 1.15rem; }
 .sidebar.collapsed .sidebar-nav .nav-btn {
   grid-template-columns: 1fr;
@@ -306,6 +320,10 @@ h1 {
 #screen-glucose-detail h1,
 #screen-glucose-detail h2 {
   color: var(--glucose-accent);
+}
+#screen-settings h1,
+#screen-settings h2 {
+  color: var(--settings-accent);
 }
 h2 {
   color: var(--text);
@@ -534,6 +552,30 @@ a.btn { text-decoration: none; display: inline-block; }
   background: var(--glucose-accent);
   color: var(--glucose-accent-text);
   border-color: transparent;
+}
+#screen-settings .btn.primary {
+  background: var(--settings-accent);
+  color: var(--settings-accent-text);
+  border-color: transparent;
+}
+#screen-settings .btn.secondary {
+  background: rgba(203, 213, 225, 0.10);
+  color: var(--settings-accent);
+  border-color: rgba(203, 213, 225, 0.40);
+}
+#screen-settings .btn.secondary:hover {
+  background: rgba(203, 213, 225, 0.16);
+  border-color: rgba(203, 213, 225, 0.55);
+  color: var(--settings-accent);
+}
+body:not(.theme-dark) #screen-settings .btn.secondary {
+  background: rgba(100, 116, 139, 0.08);
+  color: var(--settings-accent);
+  border-color: rgba(100, 116, 139, 0.32);
+}
+body:not(.theme-dark) #screen-settings .btn.secondary:hover {
+  background: rgba(100, 116, 139, 0.14);
+  border-color: rgba(100, 116, 139, 0.50);
 }
 #screen-search .btn.search-accent,
 #screen-search .btn.search-accent-secondary,
@@ -1678,9 +1720,34 @@ body.theme-dark .callout.callout-warn {
 }
 .callout-dismiss:hover { color: var(--text); }
 .callout[hidden], .callout.hidden { display: none !important; }
+#screen-settings .callout,
+#screen-settings .callout.callout-warn {
+  background: rgba(203, 213, 225, 0.12);
+  border-left-color: var(--settings-accent);
+  color: var(--text);
+}
+body:not(.theme-dark) #screen-settings .callout,
+body:not(.theme-dark) #screen-settings .callout.callout-warn {
+  background: rgba(100, 116, 139, 0.10);
+}
+#screen-settings .callout-body a {
+  color: var(--settings-accent);
+  font-weight: 600;
+}
 .settings-reset-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: .75rem;
   padding-top: .25rem;
+}
+.settings-danger-zone {
+  border: 1px solid rgba(203, 213, 225, 0.32);
+  border-radius: .75rem;
+  padding: .85rem;
+  background: rgba(203, 213, 225, 0.08);
+}
+body:not(.theme-dark) .settings-danger-zone {
+  border-color: rgba(100, 116, 139, 0.24);
+  background: rgba(100, 116, 139, 0.06);
 }
