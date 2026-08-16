@@ -428,29 +428,29 @@ body:not(.theme-dark) #screen-search .btn.secondary:hover {
   border-color: var(--border);
   color: var(--text);
 }
-#screen-search .shoelace-forms sl-button[variant="primary"]::part(base) {
+#screen-search.shoelace-forms sl-button[variant="primary"]::part(base) {
   background: var(--search-accent);
   border-color: transparent;
   color: var(--search-accent-text);
 }
-#screen-search .shoelace-forms sl-button[variant="primary"]::part(base):hover {
+#screen-search.shoelace-forms sl-button[variant="primary"]::part(base):hover {
   filter: brightness(1.08);
 }
-#screen-search .shoelace-forms sl-button[variant="default"]::part(base) {
+#screen-search.shoelace-forms sl-button[variant="default"]::part(base) {
   background: rgba(84, 224, 161, 0.10);
   border-color: rgba(84, 224, 161, 0.40);
   color: var(--search-accent);
 }
-#screen-search .shoelace-forms sl-button[variant="default"]::part(base):hover {
+#screen-search.shoelace-forms sl-button[variant="default"]::part(base):hover {
   background: rgba(84, 224, 161, 0.16);
   border-color: rgba(84, 224, 161, 0.55);
 }
-body:not(.theme-dark) #screen-search .shoelace-forms sl-button[variant="default"]::part(base) {
+body:not(.theme-dark) #screen-search.shoelace-forms sl-button[variant="default"]::part(base) {
   background: rgba(26, 156, 94, 0.08);
   border-color: rgba(26, 156, 94, 0.32);
   color: var(--search-accent);
 }
-body:not(.theme-dark) #screen-search .shoelace-forms sl-button[variant="default"]::part(base):hover {
+body:not(.theme-dark) #screen-search.shoelace-forms sl-button[variant="default"]::part(base):hover {
   background: rgba(26, 156, 94, 0.14);
   border-color: rgba(26, 156, 94, 0.50);
 }
