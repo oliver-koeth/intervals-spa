@@ -171,6 +171,7 @@ function renderActivities() {
     body.appendChild(tr);
   });
   document.getElementById("activities-summary").textContent = `${state.activitiesFiltered.length} activities`;
+  if (typeof updateActivitiesSidebars === "function") updateActivitiesSidebars();
 }
 
 function applyActivitiesFilters() {

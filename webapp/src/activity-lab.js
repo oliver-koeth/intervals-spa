@@ -41,6 +41,41 @@ function renderActivityTabBar() {
   });
 }
 
+function getActivityIndexLabel(index) {
+  if (index < 9) return String(index + 1);
+  return String.fromCharCode(65 + (index - 9));
+}
+
+function renderActivitiesSidebar(hostId) {
+  const list = document.getElementById(hostId);
+  if (!list) return;
+  list.innerHTML = "";
+  const activeId = state.activeActivityTabId;
+  state.activities.forEach((activity, index) => {
+    const id = String(activity.activity_id || activity.date || `activity-${index}`);
+    const btn = document.createElement("button");
+    btn.className = "btn activities-sidebar-item" + (id === activeId ? " active" : "");
+    btn.type = "button";
+    btn.dataset.activityId = id;
+    btn.title = activity.activity_name ? `${activity.date} — ${activity.activity_name}` : activity.date;
+    const collapsed = document.querySelector("#sidebar.collapsed") != null;
+    btn.textContent = collapsed ? getActivityIndexLabel(index) : (activity.date || id);
+    btn.addEventListener("click", () => openActivityTab(activity));
+    list.appendChild(btn);
+  });
+}
+
+function updateActivitiesSidebars() {
+  const onActivities = state.screen === "activities";
+  const onDetail = state.screen === "activity-detail";
+  const activitiesSidebar = document.getElementById("activities-sidebar");
+  const detailSidebar = document.getElementById("activity-detail-sidebar");
+  if (activitiesSidebar) activitiesSidebar.classList.toggle("hidden", !onActivities);
+  if (detailSidebar) detailSidebar.classList.toggle("hidden", !onDetail);
+  if (onActivities) renderActivitiesSidebar("activities-sidebar-list");
+  if (onDetail) renderActivitiesSidebar("activity-detail-sidebar-list");
+}
+
 function renderActivityDetail(tabActivity, focusActivity) {
   const card = document.getElementById("activity-detail-card");
   const activity = focusActivity || tabActivity;
@@ -796,6 +831,7 @@ function openActivityTab(activity) {
   }
   state.activeActivityTabId = id;
   renderActivityTabBar();
+  updateActivitiesSidebars();
   openActivityLab(activity);
 }
 

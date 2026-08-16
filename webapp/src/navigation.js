@@ -14,10 +14,15 @@ function initSidebar() {
 
   const applyCollapsed = (collapsed) => {
     sidebar.classList.toggle("collapsed", collapsed);
+    document.body.classList.toggle("sidebar-collapsed", collapsed);
     toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
     toggle.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
     const icon = toggle.querySelector("sl-icon");
     if (icon) icon.name = collapsed ? "chevron-right" : "chevron-left";
+    document.querySelectorAll(".activities-sidebar").forEach((as) => {
+      as.classList.toggle("collapsed", collapsed);
+    });
+    if (typeof updateActivitiesSidebars === "function") updateActivitiesSidebars();
   };
 
   const stored = localStorage.getItem("sidebar-collapsed");
@@ -45,6 +50,7 @@ function setScreen(name) {
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.classList.toggle("nav-btn-active", btn.dataset.screenTarget === name);
   });
+  if (typeof updateActivitiesSidebars === "function") updateActivitiesSidebars();
   if (name === "compare") renderCompare();
   if (name === "similarity") renderSimilarityQueryOptions();
 }

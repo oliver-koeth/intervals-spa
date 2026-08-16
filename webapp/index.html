@@ -280,7 +280,10 @@
     
           <!-- ── Activities ────────────────────────────────────────────────────── -->
           <section id="screen-activities" class="screen shoelace-forms">
-            <div class="card">
+            <aside id="activities-sidebar" class="activities-sidebar hidden">
+              <div class="activities-sidebar-scroll" id="activities-sidebar-list"></div>
+            </aside>
+            <div class="card activities-main">
               <div class="row space-between">
                 <h1>Activities</h1>
                 <div class="selection-bar" style="margin:0">
@@ -288,7 +291,7 @@
                   <button id="clear-activities" class="btn secondary" type="button">Clear list</button>
                 </div>
               </div>
-    
+
               <div class="filters filters-row">
                 <label>Label
                   <sl-input id="activities-filter-label" placeholder="e.g. Long run"></sl-input>
@@ -413,7 +416,10 @@
     
           <!-- ── Activity detail ───────────────────────────────────────────────── -->
           <section id="screen-activity-detail" class="screen">
-            <div class="activity-lab-layout">
+            <aside id="activity-detail-sidebar" class="activities-sidebar hidden" aria-label="Activity list">
+              <div class="activities-sidebar-scroll" id="activity-detail-sidebar-list"></div>
+            </aside>
+            <div class="activity-lab-layout activities-main">
               <aside class="card activity-lab-stream-card">
                 <div class="row space-between">
                   <h1 style="margin:0">Activity Stream</h1>
