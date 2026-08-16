@@ -44,15 +44,15 @@ function initSidebar() {
 
 function setScreen(name) {
   state.screen = name;
+  const primaryNavTarget = name === "activity-detail" ? "activities" : name;
   document.querySelectorAll(".screen").forEach((el) => {
     el.classList.toggle("active", el.id === `screen-${name}`);
   });
   document.querySelectorAll(".nav-btn").forEach((btn) => {
-    btn.classList.toggle("nav-btn-active", btn.dataset.screenTarget === name);
+    btn.classList.toggle("nav-btn-active", btn.dataset.screenTarget === primaryNavTarget);
   });
   document.body.classList.toggle("activities-layout", name === "activities" || name === "activity-detail");
   if (typeof updateActivitiesSidebars === "function") updateActivitiesSidebars();
   if (name === "compare") renderCompare();
   if (name === "similarity") renderSimilarityQueryOptions();
 }
-
