@@ -238,9 +238,10 @@ body:not(.theme-dark) .topbar {
 
 /* ── Layout ──────────────────────────────────────────────────────────────── */
 .container {
-  max-width: 1380px;
-  margin: 0 auto;
-  padding: 1.45rem 1.85rem 2.25rem;
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 1.45rem 1.85rem 2.25rem 0.5rem;
 }
 .screen { display: none; }
 .screen.active { display: block; }
@@ -258,12 +259,11 @@ body:not(.theme-dark) .topbar {
 #screen-activity-detail.screen.active > .activities-sidebar,
 #screen-intervals.screen.active > .compare-sidebar,
 #screen-compare.screen.active > .compare-sidebar {
-  margin-left: 0.25rem;
+  margin-left: 0;
 }
 body.activities-layout .container {
   max-width: none;
   width: 100%;
-  padding-left: 0;
 }
 #screen-activities.screen.active > .activities-main,
 #screen-activity-detail.screen.active > .activities-main,
