@@ -49,7 +49,9 @@ function setScreen(name) {
     ? "activities"
     : name === "compare"
       ? "intervals"
-      : name;
+      : name === "glucose-detail"
+        ? "glucose"
+        : name;
   document.querySelectorAll(".screen").forEach((el) => {
     el.classList.toggle("active", el.id === `screen-${name}`);
   });

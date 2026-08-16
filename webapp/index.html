@@ -497,7 +497,7 @@
               </p>
     
               <div class="glucose-upload-row">
-                <label class="btn secondary glucose-upload-label" for="glucose-upload-input">
+                <label class="btn primary glucose-upload-label" for="glucose-upload-input">
                   Upload CSV/TXT file
                 </label>
                 <input
@@ -509,18 +509,18 @@
                 <span id="glucose-upload-status" class="muted"></span>
               </div>
     
-              <div class="filters">
+              <div class="filters glucose-filter-row">
                 <label>From
                   <input id="glucose-filter-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
                 </label>
                 <label>To
                   <input id="glucose-filter-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
                 </label>
-                <div class="form-actions">
-                  <button id="apply-glucose-filters" class="btn secondary" type="button">Apply</button>
-                  <button id="clear-glucose-filters" class="btn secondary" type="button">Clear</button>
-                  <button id="glucose-view-chart" class="btn primary" type="button">View chart</button>
-                </div>
+              </div>
+              <div class="form-actions filters-actions">
+                <button id="apply-glucose-filters" class="btn primary" type="button">Apply</button>
+                <button id="clear-glucose-filters" class="btn secondary" type="button">Clear</button>
+                <button id="glucose-view-chart" class="btn primary" type="button">View chart</button>
               </div>
     
               <div class="table-wrap">

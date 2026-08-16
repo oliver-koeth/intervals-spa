@@ -20,6 +20,8 @@
   --activities-accent-text: #ffffff;
   --intervals-accent: #dc2626;     /* red for light mode */
   --intervals-accent-text: #ffffff;
+  --glucose-accent: #ca8a04;       /* yellow for light mode */
+  --glucose-accent-text: #ffffff;
   --panel-shadow: 0 12px 34px rgba(15, 23, 42, 0.10);
   --panel-inset: inset 0 1px 0 rgba(255, 255, 255, 0.68);
 }
@@ -42,6 +44,8 @@ body.theme-dark {
   --activities-accent-text: #1a0f05;
   --intervals-accent: #f87171;   /* soft red for dark mode */
   --intervals-accent-text: #1b0b0b;
+  --glucose-accent: #facc15;     /* yellow for dark mode */
+  --glucose-accent-text: #1a1300;
   --panel-shadow: 0 16px 46px rgba(0, 0, 0, 0.30);
   --panel-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
@@ -174,6 +178,16 @@ body:not(.theme-dark) .sidebar-nav .nav-btn[data-screen-target="intervals"].nav-
   background: rgba(220, 38, 38, 0.10);
   box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.32);
 }
+.sidebar-nav .nav-btn[data-screen-target="glucose"].nav-btn-active {
+  color: var(--glucose-accent);
+  background: rgba(250, 204, 21, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.35);
+}
+body:not(.theme-dark) .sidebar-nav .nav-btn[data-screen-target="glucose"].nav-btn-active {
+  color: var(--glucose-accent);
+  background: rgba(202, 138, 4, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(202, 138, 4, 0.32);
+}
 .sidebar-nav .nav-btn sl-icon { font-size: 1.15rem; }
 .sidebar.collapsed .sidebar-nav .nav-btn {
   grid-template-columns: 1fr;
@@ -287,6 +301,12 @@ h1 {
 #screen-intervals h2 {
   color: var(--intervals-accent);
 }
+#screen-glucose h1,
+#screen-glucose h2,
+#screen-glucose-detail h1,
+#screen-glucose-detail h2 {
+  color: var(--glucose-accent);
+}
 h2 {
   color: var(--text);
   font-size: 0.96rem;
@@ -313,6 +333,9 @@ h2 {
 }
 #activities-time-filters,
 #activities-distance-filters {
+  grid-template-columns: repeat(2, minmax(170px, 1fr));
+}
+.glucose-filter-row {
   grid-template-columns: repeat(2, minmax(170px, 1fr));
 }
 .intervals-advanced-filters {
@@ -506,6 +529,12 @@ a.btn { text-decoration: none; display: inline-block; }
   color: var(--intervals-accent-text);
   border-color: transparent;
 }
+#screen-glucose .btn.primary,
+#screen-glucose-detail .btn.primary {
+  background: var(--glucose-accent);
+  color: var(--glucose-accent-text);
+  border-color: transparent;
+}
 #screen-search .btn.search-accent,
 #screen-search .btn.search-accent-secondary,
 #screen-search .btn.secondary {
@@ -595,6 +624,29 @@ body:not(.theme-dark) #screen-intervals .btn.secondary.is-active {
   background: rgba(220, 38, 38, 0.14);
   border-color: rgba(220, 38, 38, 0.58);
   box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.10);
+}
+#screen-glucose .btn.secondary,
+#screen-glucose-detail .btn.secondary {
+  background: rgba(250, 204, 21, 0.10);
+  color: var(--glucose-accent);
+  border-color: rgba(250, 204, 21, 0.40);
+}
+#screen-glucose .btn.secondary:hover,
+#screen-glucose-detail .btn.secondary:hover {
+  background: rgba(250, 204, 21, 0.16);
+  border-color: rgba(250, 204, 21, 0.55);
+  color: var(--glucose-accent);
+}
+body:not(.theme-dark) #screen-glucose .btn.secondary,
+body:not(.theme-dark) #screen-glucose-detail .btn.secondary {
+  background: rgba(202, 138, 4, 0.08);
+  color: var(--glucose-accent);
+  border-color: rgba(202, 138, 4, 0.32);
+}
+body:not(.theme-dark) #screen-glucose .btn.secondary:hover,
+body:not(.theme-dark) #screen-glucose-detail .btn.secondary:hover {
+  background: rgba(202, 138, 4, 0.14);
+  border-color: rgba(202, 138, 4, 0.50);
 }
 .btn.secondary { background: rgba(148, 163, 184, 0.06); color: var(--text-muted); }
 .btn.secondary:hover { border-color: var(--border-strong); color: var(--text); background: rgba(148, 163, 184, 0.12); }
