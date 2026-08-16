@@ -899,7 +899,6 @@ function renderIntervalRow(item, groupKey = "") {
     <td class="center" title="${sourceLabel}">${sourceIcon}</td>
     <td>${item.date || ""}</td>
     <td>${item.activity_type || ""}</td>
-    <td title="${item.activity_name || ""}">${(item.activity_name || "").slice(0, 34)}</td>
     <td>${item.label || ""}</td>
     <td class="right">${formatSeconds(item.moving_time_s)}</td>
     <td class="right">${Math.round(item.avg_watts || 0)}</td>
@@ -983,7 +982,6 @@ function renderGroupedIntervals(body) {
       <td class="center interval-group-muted">-</td>
       <td>${groupDateRange(items)}</td>
       <td>${uniqueDisplayValue(items, "activity_type")}</td>
-      <td class="interval-group-muted">Average</td>
       <td class="interval-group-name">${group.name} (${items.length})</td>
       <td class="right">${avgTime === null ? "-" : formatSeconds(avgTime)}</td>
       <td class="right">${avgWatts === null ? "-" : Math.round(avgWatts)}</td>
