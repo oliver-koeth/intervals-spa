@@ -5,6 +5,12 @@ function parseMmSs(input) {
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 }
 
+function parseHhMmSs(input) {
+  if (!input || !String(input).trim()) return null;
+  const m = String(input).trim().match(/^(\d+):([0-5]\d):([0-5]\d)$/);
+  return m ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) : null;
+}
+
 function formatSeconds(value) {
   const total = Math.max(0, Math.round(Number(value) || 0));
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;

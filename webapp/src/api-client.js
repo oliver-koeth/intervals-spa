@@ -171,6 +171,7 @@ function renderActivities() {
     body.appendChild(tr);
   });
   document.getElementById("activities-summary").textContent = `${state.activitiesFiltered.length} activities`;
+  if (typeof updateActivitiesSidebars === "function") updateActivitiesSidebars();
 }
 
 function applyActivitiesFilters() {
@@ -179,6 +180,10 @@ function applyActivitiesFilters() {
   const typeNeedle = normalizeActivityType(document.getElementById("activities-filter-type").value);
   const dFrom = document.getElementById("activities-filter-date-from").value;
   const dTo = document.getElementById("activities-filter-date-to").value;
+  const tFrom = parseHhMmSs(document.getElementById("activities-filter-time-from").value);
+  const tTo = parseHhMmSs(document.getElementById("activities-filter-time-to").value);
+  const distFromKm = Number(document.getElementById("activities-filter-distance-from").value) || 0;
+  const distToKm = Number(document.getElementById("activities-filter-distance-to").value) || 0;
 
   state.activitiesFiltered = state.activities.filter((item) => {
     if (labelNeedle && !String(item.activity_name || "").toLowerCase().includes(labelNeedle)) return false;
@@ -186,6 +191,10 @@ function applyActivitiesFilters() {
     if (typeNeedle && normalizeActivityType(item.activity_type) !== typeNeedle) return false;
     if (dFrom && item.date < dFrom) return false;
     if (dTo && item.date > dTo) return false;
+    if (tFrom != null && (item.moving_time_s == null || item.moving_time_s < tFrom)) return false;
+    if (tTo != null && (item.moving_time_s == null || item.moving_time_s > tTo)) return false;
+    if (distFromKm && (item.distance_m == null || item.distance_m < distFromKm * 1000)) return false;
+    if (distToKm && (item.distance_m == null || item.distance_m > distToKm * 1000)) return false;
     return true;
   });
   renderActivities();

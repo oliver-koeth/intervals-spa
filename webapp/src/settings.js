@@ -6,6 +6,7 @@ function getSettings() {
     apiMode:      localStorage.getItem("intervals_api_mode") || "auto",
     zoneModelId:  localStorage.getItem("intervals_zone_model_id") || "",
     zoneModels:   JSON.parse(localStorage.getItem("intervals_zone_models") || "[]"),
+    developerMode: localStorage.getItem("intervals_developer_mode") === "true",
     strava: {
       clientId: localStorage.getItem("intervals_strava_client_id") || "",
       clientSecret: localStorage.getItem("intervals_strava_client_secret") || "",
@@ -43,6 +44,8 @@ function loadSettingsToForm() {
   document.getElementById("settings-athlete-id").value = s.athleteId;
   document.getElementById("settings-api-key").value = s.apiKey;
   document.getElementById("settings-api-mode").value = s.apiMode;
+  const devCheckbox = document.getElementById("settings-developer-mode");
+  if (devCheckbox) devCheckbox.checked = s.developerMode;
   document.getElementById("settings-strava-client-id").value = s.strava.clientId;
   document.getElementById("settings-strava-client-secret").value = s.strava.clientSecret;
   document.getElementById("settings-strava-access-token").value = s.strava.accessToken;
@@ -66,6 +69,11 @@ function saveSettings(e) {
 
 function saveApiMode() {
   localStorage.setItem("intervals_api_mode", document.getElementById("settings-api-mode").value);
+  const devCheckbox = document.getElementById("settings-developer-mode");
+  if (devCheckbox) {
+    localStorage.setItem("intervals_developer_mode", devCheckbox.checked ? "true" : "false");
+    updateDeveloperModeVisibility(devCheckbox.checked);
+  }
   updateSettingsCallouts();
 }
 
@@ -93,7 +101,7 @@ function saveStravaSettings() {
 
 function clearSettings() {
   [
-    "intervals_athlete_id", "intervals_api_key", "intervals_api_mode",
+    "intervals_athlete_id", "intervals_api_key", "intervals_api_mode", "intervals_developer_mode",
     "intervals_zone_model_id", "intervals_zone_models", ACTIVITIES_CACHE_KEY, INTERVALS_CACHE_KEY,
     GLUCOSE_CACHE_KEY,
     "intervals_strava_client_id", "intervals_strava_client_secret",
@@ -134,6 +142,16 @@ function clearSettings() {
   // Reset any per-session dismiss flags
   state.dismissedCallouts.clear();
   updateSettingsCallouts();
+}
+
+/* ─── Developer mode visibility ─────────────────────────────────────────── */
+function updateDeveloperModeVisibility(enabled) {
+  const nav = document.querySelector('.sidebar-nav [data-screen-target="similarity"]');
+  if (nav) nav.classList.toggle("hidden", !enabled);
+  const screen = document.getElementById("screen-similarity");
+  if (screen && !enabled && screen.classList.contains("active")) {
+    setScreen("search");
+  }
 }
 
 /* ─── Settings callouts ─────────────────────────────────────────────────── */

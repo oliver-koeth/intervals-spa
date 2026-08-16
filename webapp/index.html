@@ -12,970 +12,1055 @@
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/shoelace-autoloader.js"></script>
   </head>
   <body class="theme-dark">
-    <header class="topbar">
-      <div class="brand">Intervals</div>
-      <nav class="nav">
-        <button class="nav-btn" data-screen-target="search">Search</button>
-        <button class="nav-btn" data-screen-target="activities">Activities</button>
-        <button class="nav-btn" data-screen-target="similarity">Similarity</button>
-        <button class="nav-btn" data-screen-target="intervals">Intervals</button>
-        <button class="nav-btn" data-screen-target="compare">Compare</button>
-        <button class="nav-btn" data-screen-target="glucose">Glucose</button>
-        <button class="nav-btn" data-screen-target="settings">Settings</button>
-        <button class="nav-btn" data-screen-target="manual">Manual</button>
-      </nav>
-      <button
-        id="topbar-menu-toggle"
-        class="btn secondary topbar-menu-toggle"
-        type="button"
-        aria-label="Toggle menu"
-        aria-expanded="false"
-        aria-controls="topbar-menu"
-      >☰</button>
-      <div id="topbar-menu" class="row topbar-menu">
-        <a
-          href="https://github.com/oliver-koeth/intervals-spa/issues"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="btn secondary"
-        >Open issue</a>
-        <button id="theme-toggle" class="btn secondary">Light mode</button>
-      </div>
-    </header>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+        <button
+          id="sidebar-toggle"
+          class="sidebar-toggle"
+          type="button"
+          aria-label="Collapse sidebar"
+          aria-expanded="true"
+          aria-controls="sidebar"
+        >
+          <sl-icon name="chevron-left" aria-hidden="true"></sl-icon>
+        </button>
+        <nav class="sidebar-nav">
+          <button class="nav-btn" data-screen-target="search" aria-label="Search">
+            <sl-icon name="search" aria-hidden="true"></sl-icon>
+            <span class="nav-label">Search</span>
+          </button>
+          <button class="nav-btn" data-screen-target="activities" aria-label="Activities">
+            <sl-icon name="activity" aria-hidden="true"></sl-icon>
+            <span class="nav-label">Activities</span>
+          </button>
+          <button class="nav-btn" data-screen-target="similarity" aria-label="Similarity">
+            <sl-icon name="intersect" aria-hidden="true"></sl-icon>
+            <span class="nav-label">Similarity</span>
+          </button>
+          <button class="nav-btn" data-screen-target="intervals" aria-label="Intervals">
+            <sl-icon name="stopwatch" aria-hidden="true"></sl-icon>
+            <span class="nav-label">Intervals</span>
+          </button>
+          <button class="nav-btn" data-screen-target="glucose" aria-label="Glucose">
+            <sl-icon name="droplet" aria-hidden="true"></sl-icon>
+            <span class="nav-label">Glucose</span>
+          </button>
+          <button class="nav-btn" data-screen-target="settings" aria-label="Settings">
+            <sl-icon name="gear" aria-hidden="true"></sl-icon>
+            <span class="nav-label">Settings</span>
+          </button>
+          <button class="nav-btn" data-screen-target="manual" aria-label="Manual">
+            <sl-icon name="book" aria-hidden="true"></sl-icon>
+            <span class="nav-label">Manual</span>
+          </button>
+        </nav>
+      </aside>
 
-    <!-- ── Level-2 tab bars (shown when at least one tab is open) ──────────── -->
-    <div id="tab-bar-stack" class="tab-bar-stack">
-      <div id="activity-tab-bar" class="activity-tab-bar hidden"></div>
-      <div id="glucose-tab-bar" class="activity-tab-bar hidden"></div>
-    </div>
-
-    <main class="container">
-
-      <!-- ── Search ───────────────────────────────────────────────────────── -->
-      <section id="screen-search" class="screen active shoelace-forms">
-        <div class="card" style="margin-bottom:.75rem">
-          <h1>Search Activities</h1>
-          <p class="muted">Searches intervals.icu activities and lets you add matches to your local activities list.</p>
-
-          <form id="activity-search-form" class="form-grid">
-            <label>Name / label
-              <sl-input id="activity-search-label" placeholder="e.g. Long run"></sl-input>
-            </label>
-            <label>Activity type
-              <sl-select id="activity-search-type" value="">
-                <sl-option value="">All types</sl-option>
-                <sl-option value="Run">Run</sl-option>
-                <sl-option value="VirtualRun">VirtualRun</sl-option>
-                <sl-option value="Ride">Ride</sl-option>
-              </sl-select>
-            </label>
-            <label>Date from
-              <input id="activity-search-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
-            </label>
-            <label>Date to
-              <input id="activity-search-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
-            </label>
-            <div class="form-actions search-actions">
-              <sl-button type="submit" id="activity-search-submit" variant="primary">Search</sl-button>
-              <sl-button type="reset" variant="default">Reset</sl-button>
-            </div>
-          </form>
-          <p id="activity-search-status" class="muted" style="margin-top:.75rem"></p>
-
-          <div id="activity-search-preview" class="search-preview hidden">
-            <div class="row space-between">
-              <h2 style="margin:.25rem 0">Activity result preview</h2>
-              <div id="activity-search-preview-summary" class="muted"></div>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Type</th>
-                    <th>Activity</th>
-                    <th class="right">Time</th>
-                  </tr>
-                </thead>
-                <tbody id="activity-search-preview-body"></tbody>
-              </table>
-            </div>
-            <div class="search-preview-actions">
-              <sl-button id="activity-search-preview-cancel" type="button" variant="default">Cancel</sl-button>
-              <sl-button id="activity-search-preview-add" type="button" variant="primary">Add all to activities</sl-button>
-            </div>
+      <div class="app-content">
+        <header class="topbar">
+          <div class="brand">Trail Data Hub</div>
+          <button
+            id="topbar-menu-toggle"
+            class="btn secondary topbar-menu-toggle"
+            type="button"
+            aria-label="Toggle menu"
+            aria-expanded="false"
+            aria-controls="topbar-menu"
+          >☰</button>
+          <div id="topbar-menu" class="row topbar-menu">
+            <a
+              href="https://github.com/oliver-koeth/intervals-spa/issues"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn secondary"
+            >Open issue</a>
+            <button id="theme-toggle" class="btn secondary">Light mode</button>
           </div>
+        </header>
+
+        <!-- ── Level-2 tab bars (shown when at least one tab is open) ──────────── -->
+        <div id="tab-bar-stack" class="tab-bar-stack">
+          <div id="glucose-tab-bar" class="activity-tab-bar hidden"></div>
         </div>
+    
+        <main class="container">
+    
+          <!-- ── Search ───────────────────────────────────────────────────────── -->
+          <section id="screen-search" class="screen active shoelace-forms">
+            <div class="card" style="margin-bottom:.75rem">
+              <h1>Search Activities</h1>
+              <p class="muted">Searches intervals.icu activities and lets you add matches to your local activities list.</p>
+    
+              <form id="activity-search-form" class="form-grid">
+                <label>Name / label
+                  <sl-input id="activity-search-label" placeholder="e.g. Long run"></sl-input>
+                </label>
+                <label>Activity type
+                  <sl-select id="activity-search-type" value="">
+                    <sl-option value="">All types</sl-option>
+                    <sl-option value="Run">Run</sl-option>
+                    <sl-option value="VirtualRun">VirtualRun</sl-option>
+                    <sl-option value="Ride">Ride</sl-option>
+                  </sl-select>
+                </label>
+                <label>Date from
+                  <input id="activity-search-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                </label>
+                <label>Date to
+                  <input id="activity-search-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                </label>
+                <div class="form-actions search-actions">
+                  <sl-button type="submit" id="activity-search-submit" variant="primary">Search</sl-button>
+                  <sl-button type="reset" variant="default">Reset</sl-button>
+                </div>
+              </form>
+              <p id="activity-search-status" class="muted" style="margin-top:.75rem"></p>
+    
+              <div id="activity-search-preview" class="search-preview hidden">
+                <div class="row space-between">
+                  <h2 style="margin:.25rem 0">Activity result preview</h2>
+                  <div id="activity-search-preview-summary" class="muted"></div>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Activity</th>
+                        <th class="right">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody id="activity-search-preview-body"></tbody>
+                  </table>
+                </div>
+                <div class="search-preview-actions">
+                  <sl-button id="activity-search-preview-cancel" type="button" variant="default">Cancel</sl-button>
+                  <sl-button id="activity-search-preview-add" type="button" variant="primary">Add all to activities</sl-button>
+                </div>
+              </div>
+            </div>
+    
+            <div class="card">
+              <h1>Search Intervals</h1>
+              <p class="muted">Searches intervals.icu and returns matching intervals.</p>
+    
+              <form id="search-form" class="form-grid">
+                <label>Label
+                  <sl-input id="search-label" placeholder="e.g. fahrtkopf"></sl-input>
+                </label>
+                <label>Activity type
+                  <sl-select id="search-type" value="">
+                    <sl-option value="">All types</sl-option>
+                    <sl-option value="Run">Run</sl-option>
+                    <sl-option value="VirtualRun">VirtualRun</sl-option>
+                  </sl-select>
+                </label>
+                <label>Time target (mm:ss)
+                  <sl-input id="search-time" placeholder="e.g. 03:00"></sl-input>
+                </label>
+                <label>Margin (mm:ss)
+                  <sl-input id="search-margin" placeholder="e.g. 00:10"></sl-input>
+                </label>
+                <label>Date from
+                  <input id="search-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                </label>
+                <label>Date to
+                  <input id="search-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                </label>
+                <div class="checkbox-label">
+                  <span>&nbsp;</span>
+                  <sl-checkbox id="search-exclude-recovery" checked>Exclude recovery intervals</sl-checkbox>
+                </div>
+                <div class="form-actions search-actions">
+                  <sl-button type="submit" id="search-submit" variant="primary">Search</sl-button>
+                  <sl-button type="reset" variant="default">Reset</sl-button>
+                </div>
+              </form>
+              <p id="search-status" class="muted" style="margin-top:.75rem"></p>
+    
+              <div id="search-preview" class="search-preview hidden">
+                <div class="row space-between">
+                  <h2 style="margin:.25rem 0">Search result preview</h2>
+                  <div id="search-preview-summary" class="muted"></div>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Activity</th>
+                        <th>Label</th>
+                        <th class="right">Start</th>
+                        <th class="right">Time</th>
+                        <th class="right">Zone</th>
+                      </tr>
+                    </thead>
+                    <tbody id="search-preview-body"></tbody>
+                  </table>
+                </div>
+                <div class="search-preview-actions">
+                  <sl-button id="search-preview-cancel" type="button" variant="default">Cancel</sl-button>
+                  <sl-button id="search-preview-add" type="button" variant="primary">Add all to intervals</sl-button>
+                </div>
+              </div>
+            </div>
+    
+            <div class="card" style="margin-top:.75rem">
+              <h1>Search Strava Segments</h1>
+              <p class="muted">Searches your Strava segment efforts and maps results to interval rows.</p>
+              <form id="strava-search-form" class="form-grid">
+                <label>Label
+                  <sl-input id="strava-search-label" placeholder="e.g. hill, segment name"></sl-input>
+                </label>
+                <label>Activity type
+                  <sl-select id="strava-search-type" value="">
+                    <sl-option value="">All types</sl-option>
+                    <sl-option value="Run">Run</sl-option>
+                    <sl-option value="Ride">Ride</sl-option>
+                  </sl-select>
+                </label>
+                <label>Date from
+                  <input id="strava-search-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                </label>
+                <label>Date to
+                  <input id="strava-search-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                </label>
+                <div class="checkbox-label">
+                  <span>&nbsp;</span>
+                  <sl-checkbox id="strava-search-starred" checked>Starred segment only</sl-checkbox>
+                </div>
+                <div class="checkbox-label" id="strava-nonstarred-warn-wrap" style="display:none">
+                  <span>&nbsp;</span>
+                  <span class="callout callout-warn" style="margin:0;font-size:.8rem;padding:.4rem .6rem">
+                    ⚠ Without "Starred segment only" results may be incomplete — Strava limits activity scanning to the last 30 activities.
+                  </span>
+                </div>
+                <div class="form-actions search-actions">
+                  <sl-button type="submit" id="strava-search-submit" variant="primary">Search</sl-button>
+                  <sl-button type="reset" variant="default">Reset</sl-button>
+                </div>
+              </form>
+              <p id="strava-search-status" class="muted" style="margin-top:.75rem"></p>
+    
+              <div id="strava-search-preview" class="search-preview hidden">
+                <div class="row space-between">
+                  <h2 style="margin:.25rem 0">Strava result preview</h2>
+                  <div id="strava-search-preview-summary" class="muted"></div>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Activity</th>
+                        <th>Label</th>
+                        <th class="right">Start</th>
+                        <th class="right">Time</th>
+                        <th class="right">Zone</th>
+                      </tr>
+                    </thead>
+                    <tbody id="strava-search-preview-body"></tbody>
+                  </table>
+                </div>
+                <div class="search-preview-actions">
+                  <sl-button id="strava-search-preview-cancel" type="button" variant="default">Cancel</sl-button>
+                  <sl-button id="strava-search-preview-add" type="button" variant="primary">Add all to intervals</sl-button>
+                </div>
+              </div>
+            </div>
+          </section>
+    
+          <!-- ── Activities ────────────────────────────────────────────────────── -->
+          <section id="screen-activities" class="screen shoelace-forms">
+            <aside id="activities-sidebar" class="activities-sidebar hidden">
+              <div class="activities-sidebar-scroll" id="activities-sidebar-list"></div>
+            </aside>
+            <div class="card activities-main">
+              <div class="row space-between">
+                <h1>Activities</h1>
+                <div class="selection-bar" style="margin:0">
+                  <div id="activities-summary" class="muted"></div>
+                  <button id="clear-activities" class="btn secondary" type="button">Clear list</button>
+                </div>
+              </div>
 
-        <div class="card">
-          <h1>Search Intervals</h1>
-          <p class="muted">Searches intervals.icu and returns matching intervals.</p>
-
-          <form id="search-form" class="form-grid">
-            <label>Label
-              <sl-input id="search-label" placeholder="e.g. fahrtkopf"></sl-input>
-            </label>
-            <label>Activity type
-              <sl-select id="search-type" value="">
-                <sl-option value="">All types</sl-option>
-                <sl-option value="Run">Run</sl-option>
-                <sl-option value="VirtualRun">VirtualRun</sl-option>
-              </sl-select>
-            </label>
-            <label>Time target (mm:ss)
-              <sl-input id="search-time" placeholder="e.g. 03:00"></sl-input>
-            </label>
-            <label>Margin (mm:ss)
-              <sl-input id="search-margin" placeholder="e.g. 00:10"></sl-input>
-            </label>
-            <label>Date from
-              <input id="search-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
-            </label>
-            <label>Date to
-              <input id="search-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
-            </label>
-            <div class="checkbox-label">
-              <span>&nbsp;</span>
-              <sl-checkbox id="search-exclude-recovery" checked>Exclude recovery intervals</sl-checkbox>
+              <div class="filters filters-row">
+                <label>Label
+                  <sl-input id="activities-filter-label" placeholder="e.g. Long run"></sl-input>
+                </label>
+                <label>Date from
+                  <input id="activities-filter-date-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                </label>
+                <label>Date to
+                  <input id="activities-filter-date-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                </label>
+                <button id="activities-advanced-toggle" class="btn secondary activities-advanced-toggle" type="button" aria-expanded="false">+</button>
+              </div>
+              <div id="activities-advanced-filters" class="filters filters-row advanced-filters hidden">
+                <label>Source
+                  <sl-select id="activities-filter-source" value="">
+                    <sl-option value="">All sources</sl-option>
+                    <sl-option value="intervals">Intervals.icu</sl-option>
+                  </sl-select>
+                </label>
+                <label>Activity type
+                  <sl-select id="activities-filter-type" value="">
+                    <sl-option value="">All types</sl-option>
+                    <sl-option value="Run">Run</sl-option>
+                    <sl-option value="VirtualRun">VirtualRun</sl-option>
+                    <sl-option value="Ride">Ride</sl-option>
+                  </sl-select>
+                </label>
+              </div>
+              <div id="activities-time-filters" class="filters filters-row advanced-filters hidden">
+                <label>Time from
+                  <input id="activities-filter-time-from" class="search-date-input" type="text" placeholder="HH:MM:SS" />
+                </label>
+                <label>Time to
+                  <input id="activities-filter-time-to" class="search-date-input" type="text" placeholder="HH:MM:SS" />
+                </label>
+              </div>
+              <div id="activities-distance-filters" class="filters filters-row advanced-filters hidden">
+                <label>Distance from
+                  <input id="activities-filter-distance-from" class="search-date-input" type="number" min="0" step="0.1" placeholder="km" />
+                </label>
+                <label>Distance to
+                  <input id="activities-filter-distance-to" class="search-date-input" type="number" min="0" step="0.1" placeholder="km" />
+                </label>
+              </div>
+              <div class="form-actions filters-actions">
+                <button id="apply-activities-filters" class="btn primary" type="button">Apply</button>
+                <button id="clear-activities-filters" class="btn secondary" type="button">Clear</button>
+              </div>
+    
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>Activity</th>
+                      <th class="right">Time</th>
+                      <th class="right">Distance</th>
+                      <th class="right">Load</th>
+                    </tr>
+                  </thead>
+                  <tbody id="activities-body"></tbody>
+                </table>
+              </div>
             </div>
-            <div class="form-actions search-actions">
-              <sl-button type="submit" id="search-submit" variant="primary">Search</sl-button>
-              <sl-button type="reset" variant="default">Reset</sl-button>
+          </section>
+    
+          <!-- ── Similarity (tactical test UI) ───────────────────────────────── -->
+          <section id="screen-similarity" class="screen shoelace-forms">
+            <div class="card">
+              <h1>Activity Similarity</h1>
+              <p class="muted">
+                Tactical test UI for the activity-similarity search: pick a query activity, a single
+                similarity type, and a minimum match threshold, then see which other activities from your
+                local Activities list qualify. Activity type is always a hard gate (a Run is never "similar"
+                to a VirtualRun). This is a developer tool for validating the scoring approach — not the
+                final UI.
+              </p>
+    
+              <div class="filters">
+                <label>Query activity
+                  <sl-select id="similarity-query-select">
+                    <sl-option value="">Select an activity…</sl-option>
+                  </sl-select>
+                </label>
+                <label>Similarity type
+                  <sl-select id="similarity-type-select" value="duration">
+                    <sl-option value="duration">Duration</sl-option>
+                    <sl-option value="intervals">Work intervals</sl-option>
+                    <sl-option value="load">Load</sl-option>
+                  </sl-select>
+                </label>
+                <label><span>Accuracy: <span id="similarity-min-score-value">40%</span></span>
+                  <input id="similarity-min-score" type="range" min="0" max="100" step="5" value="40" />
+                </label>
+                <div class="form-actions">
+                  <button id="similarity-find" class="btn primary" type="button">Find similar</button>
+                </div>
+              </div>
+    
+              <p id="similarity-status" class="muted" style="margin-top:.75rem"></p>
+    
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>Activity</th>
+                      <th class="right">Time</th>
+                      <th class="right">Match</th>
+                      <th>Detail</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="similarity-results-body"></tbody>
+                </table>
+              </div>
             </div>
-          </form>
-          <p id="search-status" class="muted" style="margin-top:.75rem"></p>
-
-          <div id="search-preview" class="search-preview hidden">
-            <div class="row space-between">
-              <h2 style="margin:.25rem 0">Search result preview</h2>
-              <div id="search-preview-summary" class="muted"></div>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Type</th>
-                    <th>Activity</th>
-                    <th>Label</th>
-                    <th class="right">Start</th>
-                    <th class="right">Time</th>
-                    <th class="right">Zone</th>
-                  </tr>
-                </thead>
-                <tbody id="search-preview-body"></tbody>
-              </table>
-            </div>
-            <div class="search-preview-actions">
-              <sl-button id="search-preview-cancel" type="button" variant="default">Cancel</sl-button>
-              <sl-button id="search-preview-add" type="button" variant="primary">Add all to intervals</sl-button>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" style="margin-top:.75rem">
-          <h1>Search Strava Segments</h1>
-          <p class="muted">Searches your Strava segment efforts and maps results to interval rows.</p>
-          <form id="strava-search-form" class="form-grid">
-            <label>Label
-              <sl-input id="strava-search-label" placeholder="e.g. hill, segment name"></sl-input>
-            </label>
-            <label>Activity type
-              <sl-select id="strava-search-type" value="">
-                <sl-option value="">All types</sl-option>
-                <sl-option value="Run">Run</sl-option>
-                <sl-option value="Ride">Ride</sl-option>
-              </sl-select>
-            </label>
-            <label>Date from
-              <input id="strava-search-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
-            </label>
-            <label>Date to
-              <input id="strava-search-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
-            </label>
-            <div class="checkbox-label">
-              <span>&nbsp;</span>
-              <sl-checkbox id="strava-search-starred" checked>Starred segment only</sl-checkbox>
-            </div>
-            <div class="checkbox-label" id="strava-nonstarred-warn-wrap" style="display:none">
-              <span>&nbsp;</span>
-              <span class="callout callout-warn" style="margin:0;font-size:.8rem;padding:.4rem .6rem">
-                ⚠ Without "Starred segment only" results may be incomplete — Strava limits activity scanning to the last 30 activities.
-              </span>
-            </div>
-            <div class="form-actions search-actions">
-              <sl-button type="submit" id="strava-search-submit" variant="primary">Search</sl-button>
-              <sl-button type="reset" variant="default">Reset</sl-button>
-            </div>
-          </form>
-          <p id="strava-search-status" class="muted" style="margin-top:.75rem"></p>
-
-          <div id="strava-search-preview" class="search-preview hidden">
-            <div class="row space-between">
-              <h2 style="margin:.25rem 0">Strava result preview</h2>
-              <div id="strava-search-preview-summary" class="muted"></div>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Type</th>
-                    <th>Activity</th>
-                    <th>Label</th>
-                    <th class="right">Start</th>
-                    <th class="right">Time</th>
-                    <th class="right">Zone</th>
-                  </tr>
-                </thead>
-                <tbody id="strava-search-preview-body"></tbody>
-              </table>
-            </div>
-            <div class="search-preview-actions">
-              <sl-button id="strava-search-preview-cancel" type="button" variant="default">Cancel</sl-button>
-              <sl-button id="strava-search-preview-add" type="button" variant="primary">Add all to intervals</sl-button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── Activities ────────────────────────────────────────────────────── -->
-      <section id="screen-activities" class="screen shoelace-forms">
-        <div class="card">
-          <div class="row space-between">
-            <h1>Activities</h1>
-            <div class="selection-bar" style="margin:0">
-              <div id="activities-summary" class="muted"></div>
-              <button id="clear-activities" class="btn secondary" type="button">Clear list</button>
-            </div>
-          </div>
-
-          <div class="filters">
-            <label>Label
-              <sl-input id="activities-filter-label" placeholder="e.g. Long run"></sl-input>
-            </label>
-            <label>Source
-              <sl-select id="activities-filter-source" value="">
-                <sl-option value="">All sources</sl-option>
-                <sl-option value="intervals">Intervals.icu</sl-option>
-              </sl-select>
-            </label>
-            <label>Activity type
-              <sl-select id="activities-filter-type" value="">
-                <sl-option value="">All types</sl-option>
-                <sl-option value="Run">Run</sl-option>
-                <sl-option value="VirtualRun">VirtualRun</sl-option>
-                <sl-option value="Ride">Ride</sl-option>
-              </sl-select>
-            </label>
-            <label>Date from
-              <input id="activities-filter-date-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
-            </label>
-            <label>Date to
-              <input id="activities-filter-date-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
-            </label>
-            <div class="form-actions">
-              <button id="apply-activities-filters" class="btn secondary" type="button">Apply</button>
-              <button id="clear-activities-filters" class="btn secondary" type="button">Clear</button>
-            </div>
-          </div>
-
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Type</th>
-                  <th>Activity</th>
-                  <th class="right">Time</th>
-                  <th class="right">Distance</th>
-                  <th class="right">Load</th>
-                </tr>
-              </thead>
-              <tbody id="activities-body"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── Similarity (tactical test UI) ───────────────────────────────── -->
-      <section id="screen-similarity" class="screen shoelace-forms">
-        <div class="card">
-          <h1>Activity Similarity</h1>
-          <p class="muted">
-            Tactical test UI for the activity-similarity search: pick a query activity, a single
-            similarity type, and a minimum match threshold, then see which other activities from your
-            local Activities list qualify. Activity type is always a hard gate (a Run is never "similar"
-            to a VirtualRun). This is a developer tool for validating the scoring approach — not the
-            final UI.
-          </p>
-
-          <div class="filters">
-            <label>Query activity
-              <sl-select id="similarity-query-select">
-                <sl-option value="">Select an activity…</sl-option>
-              </sl-select>
-            </label>
-            <label>Similarity type
-              <sl-select id="similarity-type-select" value="duration">
-                <sl-option value="duration">Duration</sl-option>
-                <sl-option value="intervals">Work intervals</sl-option>
-                <sl-option value="load">Load</sl-option>
-              </sl-select>
-            </label>
-            <label>Min. match: <span id="similarity-min-score-value">40%</span>
-              <input id="similarity-min-score" type="range" min="0" max="100" step="5" value="40" />
-            </label>
-            <div class="form-actions">
-              <button id="similarity-find" class="btn primary" type="button">Find similar</button>
-            </div>
-          </div>
-
-          <p id="similarity-status" class="muted" style="margin-top:.75rem"></p>
-
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Date</th>
-                  <th>Type</th>
-                  <th>Activity</th>
-                  <th class="right">Time</th>
-                  <th class="right">Match</th>
-                  <th>Detail</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="similarity-results-body"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── Activity detail ───────────────────────────────────────────────── -->
-      <section id="screen-activity-detail" class="screen">
-        <div class="activity-lab-layout">
-          <aside class="card activity-lab-stream-card">
-            <div class="row space-between">
-              <h1 style="margin:0">Activity Stream</h1>
-              <span id="activity-lab-stream-summary" class="muted"></span>
-            </div>
-            <p id="activity-lab-stream-desc" class="muted" style="margin:.35rem 0 .75rem">
-              Ranked by "Duration" similarity to the tab activity. The tab activity stays highlighted.
-            </p>
-            <div class="activity-lab-stream-controls">
-              <label>Show
-                <sl-select id="activity-lab-stream-mode" value="duration">
-                  <sl-option value="recent">Recent (same type, 14 days)</sl-option>
-                  <sl-option value="duration">Similar duration</sl-option>
-                  <sl-option value="intervals">Similar work intervals</sl-option>
-                  <sl-option value="load">Similar load</sl-option>
-                </sl-select>
-              </label>
-              <label id="activity-lab-stream-threshold-wrap">
-                Min. match: <span id="activity-lab-stream-threshold-value">80%</span>
-                <input id="activity-lab-stream-threshold" type="range" min="0" max="100" step="5" value="80" />
-              </label>
-            </div>
-            <div id="activity-lab-stream-list" class="activity-lab-stream-list"></div>
-          </aside>
-
-          <div class="activity-lab-main">
-            <div class="card" id="activity-detail-card">
-              <p class="muted">No activity selected.</p>
-            </div>
-
-            <div class="chart-grid activity-lab-chart-grid">
-              <div class="card activity-lab-chart-card">
-                <div class="activity-lab-chart-head">
-                  <h2 style="margin:0">Heart rate, pace, elevation</h2>
-                  <div class="activity-lab-series-toggles" aria-label="Chart series visibility">
-                    <button type="button" class="btn secondary activity-lab-series-toggle" data-activity-lab-label="hr">hr</button>
-                    <button type="button" class="btn secondary activity-lab-series-toggle" data-activity-lab-label="pace">pace</button>
-                    <button type="button" class="btn secondary activity-lab-series-toggle" data-activity-lab-label="elevation">elevation</button>
-                    <button type="button" class="btn secondary activity-lab-series-toggle hidden" data-activity-lab-label="glucose">glucose</button>
+          </section>
+    
+          <!-- ── Activity detail ───────────────────────────────────────────────── -->
+          <section id="screen-activity-detail" class="screen shoelace-forms">
+            <aside id="activity-detail-sidebar" class="activities-sidebar hidden" aria-label="Activity list">
+              <div class="activities-sidebar-scroll" id="activity-detail-sidebar-list"></div>
+            </aside>
+            <div class="activity-lab-layout activities-main">
+              <aside class="card activity-lab-stream-card">
+                <div class="row space-between">
+                  <h1 style="margin:0">Activity Stream</h1>
+                  <span id="activity-lab-stream-summary" class="muted"></span>
+                </div>
+                <p id="activity-lab-stream-desc" class="muted" style="margin:.35rem 0 .75rem">
+                  Ranked by "Duration" similarity to the tab activity. The tab activity stays highlighted.
+                </p>
+                <div class="activity-lab-stream-controls">
+                  <label>Show
+                    <sl-select id="activity-lab-stream-mode" value="duration">
+                      <sl-option value="recent">Recent (same type, 14 days)</sl-option>
+                      <sl-option value="duration">Similar duration</sl-option>
+                      <sl-option value="intervals">Similar work intervals</sl-option>
+                      <sl-option value="load">Similar load</sl-option>
+                    </sl-select>
+                  </label>
+                  <label id="activity-lab-stream-threshold-wrap">
+                    <span>Accuracy: <span id="activity-lab-stream-threshold-value">80%</span></span>
+                    <input id="activity-lab-stream-threshold" type="range" min="0" max="100" step="5" value="80" />
+                  </label>
+                </div>
+                <div id="activity-lab-stream-list" class="activity-lab-stream-list"></div>
+              </aside>
+    
+              <div class="activity-lab-main">
+                <div class="card" id="activity-detail-card">
+                  <p class="muted">No activity selected.</p>
+                </div>
+    
+                <div class="chart-grid activity-lab-chart-grid">
+                  <div class="card activity-lab-chart-card">
+                    <div class="activity-lab-chart-head">
+                      <h2 style="margin:0">Heart rate, pace, elevation</h2>
+                      <div class="activity-lab-series-toggles" aria-label="Chart series visibility">
+                        <button type="button" class="btn secondary activity-lab-series-toggle" data-activity-lab-label="hr">hr</button>
+                        <button type="button" class="btn secondary activity-lab-series-toggle" data-activity-lab-label="pace">pace</button>
+                        <button type="button" class="btn secondary activity-lab-series-toggle" data-activity-lab-label="elevation">elevation</button>
+                        <button type="button" class="btn secondary activity-lab-series-toggle hidden" data-activity-lab-label="glucose">glucose</button>
+                      </div>
+                    </div>
+                    <div id="chart-lab-hr" class="chart"></div>
                   </div>
                 </div>
-                <div id="chart-lab-hr" class="chart"></div>
+    
+                <div class="card">
+                  <div class="row space-between" style="margin-bottom:.5rem">
+                    <h2 style="margin:0">Work Intervals</h2>
+                    <button id="activity-lab-refresh" class="btn secondary" type="button">
+                      Refresh stream data
+                    </button>
+                  </div>
+                  <div id="activity-lab-work-intervals" class="activity-lab-work-list muted">
+                    No work intervals loaded.
+                  </div>
+                </div>
               </div>
             </div>
-
+          </section>
+    
+          <!-- ── Glucose ───────────────────────────────────────────────────────── -->
+          <section id="screen-glucose" class="screen shoelace-forms">
             <div class="card">
-              <div class="row space-between" style="margin-bottom:.5rem">
-                <h2 style="margin:0">Work Intervals</h2>
-                <button id="activity-lab-refresh" class="btn secondary" type="button">
-                  Refresh stream data
-                </button>
+              <div class="row space-between">
+                <h1>Glucose</h1>
+                <div class="selection-bar" style="margin:0">
+                  <div id="glucose-summary" class="muted"></div>
+                  <button id="clear-glucose" class="btn secondary" type="button">Clear list</button>
+                </div>
               </div>
-              <div id="activity-lab-work-intervals" class="activity-lab-work-list muted">
-                No work intervals loaded.
+              <p class="muted">
+                Upload a FreeStyle LibreView (or compatible) glucose export CSV/TXT file. Readings are merged into
+                your local browser storage — records with a matching device timestamp are overwritten, everything
+                else is added.
+              </p>
+              <p class="muted">
+                Pick a From/To range below, then click <strong>View chart</strong> to open it in its own tab
+                (multiple ranges can stay open at once). Inside that chart, clicking a point drills into a
+                second chart showing the full 00:00–23:59 view of that day.
+              </p>
+    
+              <div class="glucose-upload-row">
+                <label class="btn primary glucose-upload-label" for="glucose-upload-input">
+                  Upload CSV/TXT file
+                </label>
+                <input
+                  id="glucose-upload-input"
+                  type="file"
+                  accept=".csv,.txt,text/csv,text/plain"
+                  class="hidden"
+                />
+                <span id="glucose-upload-status" class="muted"></span>
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── Glucose ───────────────────────────────────────────────────────── -->
-      <section id="screen-glucose" class="screen shoelace-forms">
-        <div class="card">
-          <div class="row space-between">
-            <h1>Glucose</h1>
-            <div class="selection-bar" style="margin:0">
-              <div id="glucose-summary" class="muted"></div>
-              <button id="clear-glucose" class="btn secondary" type="button">Clear list</button>
-            </div>
-          </div>
-          <p class="muted">
-            Upload a FreeStyle LibreView (or compatible) glucose export CSV/TXT file. Readings are merged into
-            your local browser storage — records with a matching device timestamp are overwritten, everything
-            else is added.
-          </p>
-          <p class="muted">
-            Pick a From/To range below, then click <strong>View chart</strong> to open it in its own tab
-            (multiple ranges can stay open at once). Inside that chart, clicking a point drills into a
-            second chart showing the full 00:00–23:59 view of that day.
-          </p>
-
-          <div class="glucose-upload-row">
-            <label class="btn secondary glucose-upload-label" for="glucose-upload-input">
-              Upload CSV/TXT file
-            </label>
-            <input
-              id="glucose-upload-input"
-              type="file"
-              accept=".csv,.txt,text/csv,text/plain"
-              class="hidden"
-            />
-            <span id="glucose-upload-status" class="muted"></span>
-          </div>
-
-          <div class="filters">
-            <label>From
-              <input id="glucose-filter-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
-            </label>
-            <label>To
-              <input id="glucose-filter-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
-            </label>
-            <div class="form-actions">
-              <button id="apply-glucose-filters" class="btn secondary" type="button">Apply</button>
-              <button id="clear-glucose-filters" class="btn secondary" type="button">Clear</button>
-              <button id="glucose-view-chart" class="btn primary" type="button">View chart</button>
-            </div>
-          </div>
-
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Time</th>
-                  <th class="right">Glucose (mg/dL)</th>
-                  <th>Type</th>
-                </tr>
-              </thead>
-              <tbody id="glucose-body"></tbody>
-            </table>
-          </div>
-
-          <div class="row space-between glucose-pagination">
-            <span id="glucose-page-info" class="muted"></span>
-            <div class="row" style="gap:.4rem">
-              <button id="glucose-prev-page" class="btn secondary" type="button">‹ Prev</button>
-              <button id="glucose-next-page" class="btn secondary" type="button">Next ›</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── Glucose chart (level-2 tab) ──────────────────────────────────── -->
-      <section id="screen-glucose-detail" class="screen">
-        <div class="card activity-lab-chart-card">
-          <div class="row space-between" style="margin-bottom:.35rem">
-            <span id="glucose-detail-summary" class="muted"></span>
-            <button id="glucose-detail-back" class="btn secondary" type="button">← Back to ranges</button>
-          </div>
-          <p class="muted" style="margin:.15rem 0 .6rem">
-            Click any point on the chart below to open a detailed view of that single day
-            (00:00–23:59) in the chart underneath. Clicking a different day updates it.
-          </p>
-          <div id="chart-glucose-detail" class="chart"></div>
-        </div>
-
-        <div class="card activity-lab-chart-card" style="margin-top:.75rem">
-          <div class="row space-between" style="margin-bottom:.35rem">
-            <span id="glucose-day-summary" class="muted"></span>
-          </div>
-          <p class="muted" style="margin:.15rem 0 .6rem">
-            Shaded bands mark activities from your Activities list that happened that day —
-            color reflects the average heart-rate zone (green = easiest zone, progressing through
-            orange/red/purple for harder zones), and the label shows the activity type.
-          </p>
-          <div id="chart-glucose-day" class="chart"></div>
-        </div>
-      </section>
-
-      <!-- ── Intervals ─────────────────────────────────────────────────────── -->
-      <section id="screen-intervals" class="screen shoelace-forms">
-        <div class="card">
-          <div class="row space-between">
-            <h1>Intervals</h1>
-            <div id="result-summary" class="muted"></div>
-          </div>
-
-          <div class="filters">
-            <label>Label
-              <sl-input id="filter-label" placeholder="e.g. fahrtkopf"></sl-input>
-            </label>
-            <label>Source
-              <sl-select id="filter-source" value="">
-                <sl-option value="">All sources</sl-option>
-                <sl-option value="intervals">Intervals.icu</sl-option>
-                <sl-option value="strava">Strava</sl-option>
-              </sl-select>
-            </label>
-            <label>Activity type
-              <sl-select id="filter-type" value="">
-                <sl-option value="">All types</sl-option>
-                <sl-option value="Run">Run</sl-option>
-                <sl-option value="VirtualRun">VirtualRun</sl-option>
-              </sl-select>
-            </label>
-            <label>Time from (mm:ss)
-              <sl-input id="filter-time-from" placeholder="22:00"></sl-input>
-            </label>
-            <label>Time to (mm:ss)
-              <sl-input id="filter-time-to" placeholder="27:00"></sl-input>
-            </label>
-            <label>Date from
-              <input id="filter-date-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
-            </label>
-            <label>Date to
-              <input id="filter-date-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
-            </label>
-            <div class="form-actions">
-              <button id="apply-filters" class="btn secondary" type="button">Apply</button>
-              <button id="clear-filters" class="btn secondary" type="button">Clear</button>
-            </div>
-          </div>
-
-          <div class="selection-bar">
-            <button id="select-all" class="btn secondary" type="button">Select all</button>
-            <button id="select-none" class="btn secondary" type="button">Select none</button>
-            <button id="group-intervals" class="btn secondary" type="button" aria-pressed="false">Group</button>
-            <span id="selected-count" class="muted">0 selected</span>
-            <button id="go-compare" class="btn primary" type="button">Compare selected</button>
-          </div>
-
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th class="center">Sel</th>
-                  <th class="center">Src</th>
-                  <th>Date</th>
-                  <th>Type</th>
-                  <th>Activity</th>
-                  <th>Label</th>
-                  <th class="right">Time</th>
-                  <th class="right">Avg W</th>
-                  <th class="right">W/kg</th>
-                  <th class="right">Avg HR</th>
-                  <th class="right">Max HR</th>
-                  <th class="right">Load</th>
-                  <th class="right">Zone</th>
-                  <th class="right">Dec%</th>
-                </tr>
-              </thead>
-              <tbody id="intervals-body"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── Compare ───────────────────────────────────────────────────────── -->
-      <section id="screen-compare" class="screen">
-        <div class="card">
-          <div class="row space-between">
-            <h1>Comparison Dashboard</h1>
-            <button id="back-to-list" class="btn secondary" type="button">Back to intervals</button>
-          </div>
-          <p id="compare-summary" class="muted"></p>
-          <p class="hint muted">Click any point in the top row to pin zone distribution and HR stream to that interval.</p>
-
-          <div class="chart-grid chart-grid-3">
-            <div id="chart-progression" class="chart"></div>
-            <div id="chart-hr" class="chart"></div>
-            <div id="chart-scatter" class="chart"></div>
-          </div>
-          <div class="chart-grid chart-grid-3" style="margin-top:.75rem">
-            <div id="chart-zones" class="chart"></div>
-            <div id="chart-hr-stream" class="chart chart-span2"></div>
-          </div>
-          <details id="hr-diagnostics-wrap" class="hr-diagnostics">
-            <summary>HR diagnostics (copy/paste)</summary>
-            <pre id="hr-diagnostics">No interval selected yet.</pre>
-          </details>
-        </div>
-      </section>
-
-      <!-- ── Settings ──────────────────────────────────────────────────────── -->
-      <section id="screen-settings" class="screen shoelace-forms">
-        <div class="card">
-          <h1>Settings</h1>
-          <div class="settings-group">
-            <h2>Data privacy</h2>
-            <div class="callout">
-              <span class="callout-icon">ℹ</span>
-              <span class="callout-body">
-                This app stores settings and optional intervals cache in your browser <strong>Local Storage</strong>.
-                This implementation has no built-in analytics, tracking pixels, or telemetry.
-                Data is sent only when you trigger API actions, and only to
-                <a href="https://intervals.icu/" target="_blank" rel="noopener">intervals.icu</a>,
-                <a href="https://www.strava.com/" target="_blank" rel="noopener">Strava</a>,
-                and optionally your own local proxy endpoint (<code>/api/*</code>) when using Proxy mode.
-                On page load, the chart library is also fetched from
-                <a href="https://www.jsdelivr.com/" target="_blank" rel="noopener">jsDelivr CDN</a>.
-                Use <strong>Reset all settings</strong> to remove stored values from this browser.
-              </span>
-            </div>
-            <p class="muted" style="margin:0">
-              Note: this is a technical transparency summary, not a complete GDPR privacy notice.
-            </p>
-          </div>
-
-          <hr class="settings-divider" />
-
-          <!-- ── Group 1: Account ── -->
-          <div class="settings-group">
-            <h2>Intervals.icu Connection</h2>
-            <div id="callout-account" class="callout callout-warn">
-              <span class="callout-icon">⚠</span>
-              <span class="callout-body">
-                Enter your <strong>Athlete ID</strong> and <strong>API key</strong> to enable search.
-                Find your athlete ID at the bottom of
-                <a href="https://intervals.icu/settings" target="_blank" rel="noopener">intervals.icu/settings</a>
-                and generate an API key under <em>Account → API access</em>.
-              </span>
-              <button class="callout-dismiss" data-dismiss="callout-account" title="Dismiss">✕</button>
-            </div>
-            <form id="settings-form" class="form-grid">
-              <label>Athlete ID
-                <sl-input id="settings-athlete-id" placeholder="e.g. i75074"></sl-input>
-              </label>
-              <label>API Key
-                <sl-input id="settings-api-key" type="password" placeholder="intervals.icu API key"></sl-input>
-              </label>
-              <div class="form-actions save-actions">
-                <button type="submit" class="btn primary">Save</button>
+    
+              <div class="filters glucose-filter-row">
+                <label>From
+                  <input id="glucose-filter-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                </label>
+                <label>To
+                  <input id="glucose-filter-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                </label>
               </div>
-            </form>
-            <p id="settings-status" class="muted" style="margin-top:.5rem"></p>
-          </div>
-
-          <hr class="settings-divider" />
-
-          <!-- ── Group 3: Strava Connection ── -->
-          <div class="settings-group">
-            <h2>Strava Connection</h2>
-            <p class="muted" style="margin:0 0 .5rem">Stored locally in this browser only.</p>
-            <div id="callout-strava" class="callout callout-warn hidden">
-              <span class="callout-icon">⚠</span>
-              <span class="callout-body">
-                Enter your Strava <strong>Client ID</strong> and <strong>Client Secret</strong>, then connect OAuth to
-                retrieve an access token with <em>read + activity:read_all</em> scope for segment search and HR streams.
-                If Strava shows <em>redirect_uri invalid</em>, set <strong>OAuth Redirect URI</strong> to exactly the
-                callback URL configured in your Strava app.
-              </span>
-              <button class="callout-dismiss" data-dismiss="callout-strava" title="Dismiss">✕</button>
-            </div>
-            <div class="row" style="margin-bottom:.5rem; flex-wrap:wrap">
-              <button type="button" id="settings-strava-connect" class="btn secondary">Connect Strava (OAuth read + activity:read_all)</button>
-              <span id="settings-strava-oauth-status" class="muted"></span>
-            </div>
-            <div class="form-grid">
-              <label>Client ID
-                <sl-input id="settings-strava-client-id" placeholder="e.g. 29670"></sl-input>
-              </label>
-              <label>Client Secret
-                <sl-input id="settings-strava-client-secret" type="password" placeholder="Strava client secret"></sl-input>
-              </label>
-              <label>Access Token
-                <sl-input id="settings-strava-access-token" type="password" placeholder="Strava access token"></sl-input>
-              </label>
-              <label>OAuth Redirect URI (optional)
-                <sl-input id="settings-strava-redirect-uri" placeholder="e.g. https://oliver-koeth.github.io/intervals-spa"></sl-input>
-              </label>
-              <div class="form-actions save-actions">
-                <button type="button" id="settings-save-strava" class="btn primary">Save</button>
+              <div class="form-actions filters-actions">
+                <button id="apply-glucose-filters" class="btn primary" type="button">Apply</button>
+                <button id="clear-glucose-filters" class="btn secondary" type="button">Clear</button>
+                <button id="glucose-view-chart" class="btn primary" type="button">View chart</button>
+              </div>
+    
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Time</th>
+                      <th class="right">Glucose (mg/dL)</th>
+                      <th>Type</th>
+                    </tr>
+                  </thead>
+                  <tbody id="glucose-body"></tbody>
+                </table>
+              </div>
+    
+              <div class="row space-between glucose-pagination">
+                <span id="glucose-page-info" class="muted"></span>
+                <div class="row" style="gap:.4rem">
+                  <button id="glucose-prev-page" class="btn secondary" type="button">‹ Prev</button>
+                  <button id="glucose-next-page" class="btn secondary" type="button">Next ›</button>
+                </div>
               </div>
             </div>
-            <p id="settings-strava-status" class="muted" style="margin:.5rem 0 0"></p>
-          </div>
-
-          <hr class="settings-divider" />
-
-          <!-- ── Group 4: API Mode ── -->
-          <div class="settings-group">
-            <h2>API Mode</h2>
-            <div id="callout-api-mode" class="callout hidden">
-              <span class="callout-icon">ℹ</span>
-              <span class="callout-body">
-                <strong>Auto</strong> is recommended — it uses the local Python proxy when running on
-                localhost and direct API access on GitHub Pages. Set to <em>Proxy</em> only if you are
-                running <code>server.py</code> locally and want to force it. Set to <em>Direct</em>
-                only for debugging.
-              </span>
-              <button class="callout-dismiss" data-dismiss="callout-api-mode" title="Dismiss">✕</button>
+          </section>
+    
+          <!-- ── Glucose chart (level-2 tab) ──────────────────────────────────── -->
+          <section id="screen-glucose-detail" class="screen">
+            <div class="card activity-lab-chart-card">
+              <div class="row space-between" style="margin-bottom:.35rem">
+                <span id="glucose-detail-summary" class="muted"></span>
+                <button id="glucose-detail-back" class="btn secondary" type="button">← Back to ranges</button>
+              </div>
+              <p class="muted" style="margin:.15rem 0 .6rem">
+                Click any point on the chart below to open a detailed view of that single day
+                (00:00–23:59) in the chart underneath. Clicking a different day updates it.
+              </p>
+              <div id="chart-glucose-detail" class="chart"></div>
             </div>
-            <div class="form-grid">
-              <label>API mode
-                <sl-select id="settings-api-mode" value="auto">
-                  <sl-option value="auto">Auto (recommended)</sl-option>
-                  <sl-option value="proxy">Local proxy (/api/search)</sl-option>
-                  <sl-option value="direct">Direct intervals.icu</sl-option>
-                </sl-select>
-              </label>
-              <div class="form-actions save-actions">
-                <button type="button" id="settings-save-mode" class="btn primary">Save</button>
+    
+            <div class="card activity-lab-chart-card" style="margin-top:.75rem">
+              <div class="row space-between" style="margin-bottom:.35rem">
+                <span id="glucose-day-summary" class="muted"></span>
+              </div>
+              <p class="muted" style="margin:.15rem 0 .6rem">
+                Shaded bands mark activities from your Activities list that happened that day —
+                color reflects the average heart-rate zone (green = easiest zone, progressing through
+                orange/red/purple for harder zones), and the label shows the activity type.
+              </p>
+              <div id="chart-glucose-day" class="chart"></div>
+            </div>
+          </section>
+    
+          <!-- ── Intervals ─────────────────────────────────────────────────────── -->
+          <section id="screen-intervals" class="screen shoelace-forms">
+            <aside id="intervals-compare-sidebar" class="activities-sidebar compare-sidebar hidden" aria-label="Open comparisons">
+              <div class="activities-sidebar-scroll" id="intervals-compare-sidebar-list"></div>
+            </aside>
+            <div class="card">
+              <div class="row space-between">
+                <h1>Intervals</h1>
+                <div id="result-summary" class="muted"></div>
+              </div>
+    
+              <div class="filters filters-row">
+                <label>Label
+                  <sl-input id="filter-label" placeholder="e.g. fahrtkopf"></sl-input>
+                </label>
+                <label>Date from
+                  <input id="filter-date-from" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                </label>
+                <label>Date to
+                  <input id="filter-date-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
+                </label>
+                <button id="intervals-advanced-toggle" class="btn secondary advanced-toggle" type="button" aria-expanded="false">+</button>
+              </div>
+              <div id="intervals-advanced-filters" class="filters intervals-advanced-filters advanced-filters hidden">
+                <label>Source
+                  <sl-select id="filter-source" value="">
+                    <sl-option value="">All sources</sl-option>
+                    <sl-option value="intervals">Intervals.icu</sl-option>
+                    <sl-option value="strava">Strava</sl-option>
+                  </sl-select>
+                </label>
+                <label>Activity type
+                  <sl-select id="filter-type" value="">
+                    <sl-option value="">All types</sl-option>
+                    <sl-option value="Run">Run</sl-option>
+                    <sl-option value="VirtualRun">VirtualRun</sl-option>
+                  </sl-select>
+                </label>
+                <label>Time from (mm:ss)
+                  <sl-input id="filter-time-from" placeholder="22:00"></sl-input>
+                </label>
+                <label>Time to (mm:ss)
+                  <sl-input id="filter-time-to" placeholder="27:00"></sl-input>
+                </label>
+              </div>
+              <div class="form-actions filters-actions">
+                <button id="apply-filters" class="btn primary" type="button">Apply</button>
+                <button id="clear-filters" class="btn secondary" type="button">Clear</button>
+              </div>
+    
+              <div class="selection-bar">
+                <button id="select-all" class="btn secondary" type="button">Select all</button>
+                <button id="select-none" class="btn secondary" type="button">Select none</button>
+                <button id="group-intervals" class="btn secondary" type="button" aria-pressed="false">Group</button>
+                <span id="selected-count" class="muted">0 selected</span>
+                <button id="go-compare" class="btn primary" type="button">Compare selected</button>
+              </div>
+    
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th class="center">Sel</th>
+                      <th class="center">Src</th>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>Label</th>
+                      <th class="right">Time</th>
+                      <th class="right">Avg W</th>
+                      <th class="right">W/kg</th>
+                      <th class="right">Avg HR</th>
+                      <th class="right">Max HR</th>
+                      <th class="right">Load</th>
+                      <th class="right">Zone</th>
+                      <th class="right">Dec%</th>
+                    </tr>
+                  </thead>
+                  <tbody id="intervals-body"></tbody>
+                </table>
               </div>
             </div>
-          </div>
-
-          <hr class="settings-divider" />
-
-          <!-- ── Group 5: HR Zone Model ── -->
-          <div class="settings-group">
-            <h2>HR Zone Model</h2>
-            <div id="callout-zone-model" class="callout hidden">
-              <span class="callout-icon">ℹ</span>
-              <span class="callout-body">
-                Without a zone model the zone histogram uses a generic Z1–Z5 split. Load your sport
-                settings from intervals.icu to get named zones with your actual LTHR thresholds and
-                coloured HR stream bands.
-              </span>
-              <button class="callout-dismiss" data-dismiss="callout-zone-model" title="Dismiss">✕</button>
-            </div>
-            <div class="form-grid">
-              <label>Zone model
-                <sl-select id="settings-zone-model" value="">
-                  <sl-option value="">Default (Z1–Z5)</sl-option>
-                </sl-select>
-              </label>
-              <div class="form-actions">
-                <button type="button" id="load-zone-models" class="btn secondary">Load from intervals.icu</button>
+          </section>
+    
+          <!-- ── Compare ───────────────────────────────────────────────────────── -->
+          <section id="screen-compare" class="screen">
+            <aside id="compare-sidebar" class="activities-sidebar compare-sidebar hidden" aria-label="Open comparisons">
+              <div class="activities-sidebar-scroll" id="compare-sidebar-list"></div>
+            </aside>
+            <div class="card compare-main">
+              <div class="row space-between">
+                <h1>Comparison Dashboard</h1>
+                <button id="back-to-list" class="btn secondary" type="button">Back to intervals</button>
               </div>
+              <p id="compare-summary" class="muted"></p>
+              <p class="hint muted">Click any point in the top row to pin zone distribution and HR stream to that interval.</p>
+    
+              <div class="chart-grid chart-grid-3">
+                <div id="chart-progression" class="chart"></div>
+                <div id="chart-hr" class="chart"></div>
+                <div id="chart-scatter" class="chart"></div>
+              </div>
+              <div class="chart-grid chart-grid-3" style="margin-top:.75rem">
+                <div id="chart-zones" class="chart"></div>
+                <div id="chart-hr-stream" class="chart chart-span2"></div>
+              </div>
+              <details id="hr-diagnostics-wrap" class="hr-diagnostics">
+                <summary>HR diagnostics (copy/paste)</summary>
+                <pre id="hr-diagnostics">No interval selected yet.</pre>
+              </details>
             </div>
-            <p id="zone-model-status" class="muted" style="margin:.5rem 0"></p>
-            <div id="zone-model-preview"></div>
-          </div>
+          </section>
+    
+          <!-- ── Settings ──────────────────────────────────────────────────────── -->
+          <section id="screen-settings" class="screen shoelace-forms">
+            <div class="card">
+              <h1>Settings</h1>
+              <div class="settings-group">
+                <h2>Data privacy</h2>
+                <div class="callout">
+                  <span class="callout-icon">ℹ</span>
+                  <span class="callout-body">
+                    This app stores settings and optional intervals cache in your browser <strong>Local Storage</strong>.
+                    This implementation has no built-in analytics, tracking pixels, or telemetry.
+                    Data is sent only when you trigger API actions, and only to
+                    <a href="https://intervals.icu/" target="_blank" rel="noopener">intervals.icu</a>,
+                    <a href="https://www.strava.com/" target="_blank" rel="noopener">Strava</a>,
+                    and optionally your own local proxy endpoint (<code>/api/*</code>) when using Proxy mode.
+                    On page load, the chart library is also fetched from
+                    <a href="https://www.jsdelivr.com/" target="_blank" rel="noopener">jsDelivr CDN</a>.
+                    Use <strong>Reset all settings</strong> to remove stored values from this browser.
+                  </span>
+                </div>
+                <p class="muted" style="margin:0">
+                  Note: this is a technical transparency summary, not a complete GDPR privacy notice.
+                </p>
+              </div>
+    
+              <hr class="settings-divider" />
+    
+              <!-- ── Group 1: Account ── -->
+              <div class="settings-group">
+                <h2>Intervals.icu Connection</h2>
+                <div id="callout-account" class="callout callout-warn">
+                  <span class="callout-icon">⚠</span>
+                  <span class="callout-body">
+                    Enter your <strong>Athlete ID</strong> and <strong>API key</strong> to enable search.
+                    Find your athlete ID at the bottom of
+                    <a href="https://intervals.icu/settings" target="_blank" rel="noopener">intervals.icu/settings</a>
+                    and generate an API key under <em>Account → API access</em>.
+                  </span>
+                  <button class="callout-dismiss" data-dismiss="callout-account" title="Dismiss">✕</button>
+                </div>
+                <form id="settings-form" class="form-grid">
+                  <label>Athlete ID
+                    <sl-input id="settings-athlete-id" placeholder="e.g. i75074"></sl-input>
+                  </label>
+                  <label>API Key
+                    <sl-input id="settings-api-key" type="password" placeholder="intervals.icu API key"></sl-input>
+                  </label>
+                  <div class="form-actions save-actions">
+                    <button type="submit" class="btn primary">Save</button>
+                  </div>
+                </form>
+                <p id="settings-status" class="muted" style="margin-top:.5rem"></p>
+              </div>
+    
+              <hr class="settings-divider" />
+    
+              <!-- ── Group 3: Strava Connection ── -->
+              <div class="settings-group">
+                <h2>Strava Connection</h2>
+                <p class="muted" style="margin:0 0 .5rem">Stored locally in this browser only.</p>
+                <div id="callout-strava" class="callout callout-warn hidden">
+                  <span class="callout-icon">⚠</span>
+                  <span class="callout-body">
+                    Enter your Strava <strong>Client ID</strong> and <strong>Client Secret</strong>, then connect OAuth to
+                    retrieve an access token with <em>read + activity:read_all</em> scope for segment search and HR streams.
+                    If Strava shows <em>redirect_uri invalid</em>, set <strong>OAuth Redirect URI</strong> to exactly the
+                    callback URL configured in your Strava app.
+                  </span>
+                  <button class="callout-dismiss" data-dismiss="callout-strava" title="Dismiss">✕</button>
+                </div>
+                <div class="row" style="margin-bottom:.5rem; flex-wrap:wrap">
+                  <button type="button" id="settings-strava-connect" class="btn secondary">Connect Strava (OAuth read + activity:read_all)</button>
+                  <span id="settings-strava-oauth-status" class="muted"></span>
+                </div>
+                <div class="form-grid">
+                  <label>Client ID
+                    <sl-input id="settings-strava-client-id" placeholder="e.g. 29670"></sl-input>
+                  </label>
+                  <label>Client Secret
+                    <sl-input id="settings-strava-client-secret" type="password" placeholder="Strava client secret"></sl-input>
+                  </label>
+                  <label>Access Token
+                    <sl-input id="settings-strava-access-token" type="password" placeholder="Strava access token"></sl-input>
+                  </label>
+                  <label>OAuth Redirect URI (optional)
+                    <sl-input id="settings-strava-redirect-uri" placeholder="e.g. https://oliver-koeth.github.io/intervals-spa"></sl-input>
+                  </label>
+                  <div class="form-actions save-actions">
+                    <button type="button" id="settings-save-strava" class="btn primary">Save</button>
+                  </div>
+                </div>
+                <p id="settings-strava-status" class="muted" style="margin:.5rem 0 0"></p>
+              </div>
+    
+              <hr class="settings-divider" />
+    
+              <!-- ── Group 4: API Mode ── -->
+              <div class="settings-group">
+                <h2>API Mode</h2>
+                <div id="callout-api-mode" class="callout hidden">
+                  <span class="callout-icon">ℹ</span>
+                  <span class="callout-body">
+                    <strong>Auto</strong> is recommended — it uses the local Python proxy when running on
+                    localhost and direct API access on GitHub Pages. Set to <em>Proxy</em> only if you are
+                    running <code>server.py</code> locally and want to force it. Set to <em>Direct</em>
+                    only for debugging.
+                  </span>
+                  <button class="callout-dismiss" data-dismiss="callout-api-mode" title="Dismiss">✕</button>
+                </div>
+                <div class="form-grid">
+                  <label>API mode
+                    <sl-select id="settings-api-mode" value="auto">
+                      <sl-option value="auto">Auto (recommended)</sl-option>
+                      <sl-option value="proxy">Local proxy (/api/search)</sl-option>
+                      <sl-option value="direct">Direct intervals.icu</sl-option>
+                    </sl-select>
+                  </label>
+                  <div class="form-actions save-actions">
+                    <button type="button" id="settings-save-mode" class="btn primary">Save</button>
+                  </div>
+                </div>
+              </div>
+    
+              <hr class="settings-divider" />
 
-          <hr class="settings-divider" />
+              <!-- ── Group 5: Developer mode ── -->
+              <div class="settings-group">
+                <h2>Developer mode</h2>
+                <sl-checkbox id="settings-developer-mode">Enable developer features</sl-checkbox>
+                <p class="muted" style="margin:.4rem 0 0">Shows experimental screens such as Activity Similarity.</p>
+                <div class="form-actions save-actions" style="margin-top:.75rem">
+                  <button type="button" id="settings-save-developer-mode" class="btn primary">Save</button>
+                </div>
+              </div>
 
-          <!-- ── Reset ── -->
-          <div class="settings-reset-row">
-            <button type="button" id="settings-reset" class="btn secondary">Reset all settings</button>
-            <button type="button" id="settings-clear-interval-cache" class="btn secondary">Delete intervals cache</button>
-            <button type="button" id="settings-clear-hr-cache" class="btn secondary">Delete HR stream cache</button>
-            <span class="muted" style="font-size:.8rem">Removes all data from local storage and reloads the form.</span>
-          </div>
+              <hr class="settings-divider" />
 
+              <!-- ── Group 6: HR Zone Model ── -->
+              <div class="settings-group">
+                <h2>HR Zone Model</h2>
+                <div id="callout-zone-model" class="callout hidden">
+                  <span class="callout-icon">ℹ</span>
+                  <span class="callout-body">
+                    Without a zone model the zone histogram uses a generic Z1–Z5 split. Load your sport
+                    settings from intervals.icu to get named zones with your actual LTHR thresholds and
+                    coloured HR stream bands.
+                  </span>
+                  <button class="callout-dismiss" data-dismiss="callout-zone-model" title="Dismiss">✕</button>
+                </div>
+                <div class="form-grid">
+                  <label>Zone model
+                    <sl-select id="settings-zone-model" value="">
+                      <sl-option value="">Default (Z1–Z5)</sl-option>
+                    </sl-select>
+                  </label>
+                  <div class="form-actions">
+                    <button type="button" id="load-zone-models" class="btn secondary">Load from intervals.icu</button>
+                  </div>
+                </div>
+                <p id="zone-model-status" class="muted" style="margin:.5rem 0"></p>
+                <div id="zone-model-preview"></div>
+              </div>
+    
+              <hr class="settings-divider" />
+    
+              <!-- ── Group 7: Danger Zone ── -->
+              <div class="settings-group settings-danger-zone">
+                <h2>Danger Zone</h2>
+                <p class="muted" style="margin:0 0 .75rem">These actions remove browser-local data and cannot be undone.</p>
+                <div class="settings-reset-row">
+                  <button type="button" id="settings-reset" class="btn secondary">Reset all settings</button>
+                  <button type="button" id="settings-clear-interval-cache" class="btn secondary">Delete intervals cache</button>
+                  <button type="button" id="settings-clear-hr-cache" class="btn secondary">Delete HR stream cache</button>
+                  <span class="muted" style="font-size:.8rem">Removes all data from local storage and reloads the form.</span>
+                </div>
+              </div>
+    
+            </div>
+          </section>
+    
+          <!-- ── Manual ─────────────────────────────────────────────────────────── -->
+          <section id="screen-manual" class="screen">
+            <div class="card manual-content">
+              <h1>Manual</h1>
+              <p class="muted">
+                This guide walks through the complete local workflow: configure the external accounts,
+                connect the app, search for activities or intervals, store the results in your browser,
+                and compare selected efforts in the dashboard. The screenshots are thumbnails; click any
+                thumbnail to inspect the full-size image in the built-in viewer.
+              </p>
+    
+              <h2>1. Configuration first</h2>
+              <p>
+                Before using search or comparison, collect the credentials that allow the app to talk to
+                Strava and Intervals.icu. The app stores these values only in your browser's local storage,
+                so setup is per browser and per device. If you switch machines or clear browser storage,
+                you will need to enter the values again.
+              </p>
+    
+              <h3>Strava</h3>
+              <p>
+                Open <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener">Strava API settings</a>,
+                click <strong>Edit</strong>, and set <strong>Authorization Callback Domain</strong> to
+                <code>oliver-koeth.github.io</code>. This domain must match the hosted app domain because
+                Strava checks it during OAuth. If the domain is different, Strava will reject the connection
+                before the app receives an access token.
+              </p>
+              <p>
+                After saving the Strava app configuration, note the <strong>Client ID</strong>,
+                <strong>Client Secret</strong>, <strong>Access Token</strong>, and <strong>Refresh Token</strong>.
+                The refresh token is especially important because it allows the app to request a fresh access
+                token when the short-lived token expires.
+              </p>
+              <div class="manual-gallery">
+                <figure class="manual-shot">
+                  <a href="./manual-assets/strava_api_settings_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/strava_api_settings_grayscale.png" data-caption="Strava API settings">
+                    <img src="./manual-assets/strava_api_settings_grayscale.png" alt="Strava API settings" loading="lazy" />
+                  </a>
+                  <figcaption>Strava API settings</figcaption>
+                </figure>
+                <figure class="manual-shot">
+                  <a href="./manual-assets/strava_edit_application_callback_domain_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/strava_edit_application_callback_domain_grayscale.png" data-caption="Strava edit app dialog with callback domain">
+                    <img src="./manual-assets/strava_edit_application_callback_domain_grayscale.png" alt="Strava edit application callback domain dialog" loading="lazy" />
+                  </a>
+                  <figcaption>Set callback domain</figcaption>
+                </figure>
+              </div>
+    
+              <h3>Intervals.icu</h3>
+              <p>
+                Open <a href="https://intervals.icu/settings" target="_blank" rel="noopener">intervals.icu settings</a>,
+                scroll to <strong>Developer Settings</strong>, and note your <strong>Athlete ID</strong> and
+                <strong>API Key</strong>. The Athlete ID identifies which account to query, while the API key
+                authorizes private workout, interval, stream, and sport-settings requests.
+              </p>
+              <p>
+                If you use the local proxy mode while developing, these values are sent to the local server
+                and then forwarded to Intervals.icu. In direct mode, the browser calls Intervals.icu itself.
+                In both cases, the values remain under your control and are not sent to any analytics service.
+              </p>
+              <div class="manual-gallery">
+                <figure class="manual-shot">
+                  <a href="./manual-assets/intervals_icu_developer_settings_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/intervals_icu_developer_settings_grayscale.png" data-caption="Intervals.icu developer settings">
+                    <img src="./manual-assets/intervals_icu_developer_settings_grayscale.png" alt="Intervals.icu developer settings" loading="lazy" />
+                  </a>
+                  <figcaption>Intervals.icu developer settings</figcaption>
+                </figure>
+              </div>
+    
+              <h2>2. Enter settings in Intervals SPA</h2>
+              <p>
+                Open <strong>Settings</strong> in this app and enter the Intervals.icu and Strava values in the
+                corresponding fields. Click <strong>Save</strong> before testing any connection; the app reads
+                the saved values when it performs searches, stream requests, and token refreshes.
+              </p>
+              <p>
+                Then use <strong>Connect Strava</strong> to complete OAuth. If you are running a local copy or a
+                different deployment, check the <strong>OAuth Redirect URI</strong> carefully. It must match the
+                callback URL that Strava expects for the current app location. A mismatch usually shows up as
+                a Strava authorization error rather than an app-side error.
+              </p>
+              <p>
+                After the account fields are saved, optionally load the HR zone model from Intervals.icu. The
+                zone model improves chart readability because the dashboard can color HR streams and zone
+                histograms with your real sport-specific thresholds instead of a generic fallback.
+              </p>
+              <div class="manual-gallery">
+                <figure class="manual-shot">
+                  <a href="./manual-assets/intervals_settings_connections_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/intervals_settings_connections_grayscale.png" data-caption="Intervals SPA settings connections">
+                    <img src="./manual-assets/intervals_settings_connections_grayscale.png" alt="Intervals SPA settings with connection fields" loading="lazy" />
+                  </a>
+                  <figcaption>Settings: connection fields</figcaption>
+                </figure>
+                <figure class="manual-shot">
+                  <a href="./manual-assets/intervals_settings_connected_hr_zones_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/intervals_settings_connected_hr_zones_grayscale.png" data-caption="Connected state and HR zone setup">
+                    <img src="./manual-assets/intervals_settings_connected_hr_zones_grayscale.png" alt="Connected state and HR zones in settings" loading="lazy" />
+                  </a>
+                  <figcaption>Connected state + HR zones</figcaption>
+                </figure>
+              </div>
+    
+              <h2>3. Search and save results</h2>
+              <p>
+                Use <strong>Search Activities</strong> when you want to inspect complete workouts in Activity
+                Lab. Use <strong>Search Intervals</strong> when you already know the interval label or target
+                duration you want to compare. Use <strong>Search Strava Segments</strong> when the effort is
+                represented as a Strava segment rather than an Intervals.icu workout interval.
+              </p>
+              <p>
+                Each search first opens a preview table. Review the preview before adding results, especially
+                when using broad date ranges or loose labels. When the preview looks right, click
+                <strong>Add all to activities</strong> or <strong>Add all to intervals</strong>. The rows are stored
+                in local browser storage so you can filter and compare them without repeating the same remote
+                search every time.
+              </p>
+              <div class="manual-gallery">
+                <figure class="manual-shot">
+                  <a href="./manual-assets/search_page_results_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/search_page_results_grayscale.png" data-caption="Search page and results preview">
+                    <img src="./manual-assets/search_page_results_grayscale.png" alt="Search page and results preview" loading="lazy" />
+                  </a>
+                  <figcaption>Search and preview</figcaption>
+                </figure>
+              </div>
+    
+              <h2>4. Work with stored intervals</h2>
+              <p>
+                On the <strong>Intervals</strong> page, use the filters to narrow the stored rows by label, source,
+                activity type, duration, and date range. This page is meant to be the staging area before
+                comparison: reduce the list to a meaningful cohort, then select the intervals that should be
+                plotted together.
+              </p>
+              <p>
+                Select specific rows when you want a focused comparison. If nothing is selected, the comparison
+                dashboard can still use the currently filtered set, which is useful for quick exploration. For
+                cleaner charts, keep the selected set small enough that each point still represents a distinct
+                workout or effort.
+              </p>
+              <div class="manual-gallery">
+                <figure class="manual-shot">
+                  <a href="./manual-assets/intervals_page_filters_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/intervals_page_filters_grayscale.png" data-caption="Intervals page with filter controls">
+                    <img src="./manual-assets/intervals_page_filters_grayscale.png" alt="Intervals page filters and list" loading="lazy" />
+                  </a>
+                  <figcaption>Intervals list and filters</figcaption>
+                </figure>
+              </div>
+    
+              <h2>5. Compare in dashboard</h2>
+              <p>
+                The <strong>Compare</strong> dashboard shows progression, heart-rate behavior, and relationships
+                between effort metrics across the selected interval set. The upper charts are designed for
+                comparison across time; the lower row is designed for inspecting one pinned interval in detail.
+              </p>
+              <p>
+                Click any point in the top charts to pin that interval. The zone distribution and HR stream
+                then update to the pinned effort, making it easier to explain why two intervals with similar
+                pace or power may have different physiological cost. If stream data is unavailable for a
+                workout, the dashboard falls back to the metadata it has and shows a diagnostic note.
+              </p>
+              <div class="manual-gallery">
+                <figure class="manual-shot">
+                  <a href="./manual-assets/comparison_dashboard_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/comparison_dashboard_grayscale.png" data-caption="Comparison dashboard">
+                    <img src="./manual-assets/comparison_dashboard_grayscale.png" alt="Comparison dashboard" loading="lazy" />
+                  </a>
+                  <figcaption>Comparison dashboard</figcaption>
+                </figure>
+              </div>
+    
+              <h2>Quick summary</h2>
+              <ol>
+                <li>Collect Strava and Intervals.icu credentials before using search.</li>
+                <li>Save credentials in Settings, connect Strava, and confirm the redirect URI if OAuth fails.</li>
+                <li>Load HR zones when you want chart bands and histograms to use your real thresholds.</li>
+                <li>Search, review the preview table, and add only the rows you want to keep locally.</li>
+                <li>Filter stored intervals, select a comparison cohort, then inspect pinned efforts in the dashboard.</li>
+              </ol>
+            </div>
+          </section>
+    
+        </main>
+        <div id="manual-lightbox" class="manual-lightbox hidden" role="dialog" aria-modal="true" aria-label="Manual screenshot">
+          <button id="manual-lightbox-close" type="button" class="manual-lightbox-close" aria-label="Close image viewer">×</button>
+          <img id="manual-lightbox-image" src="" alt="" />
+          <p id="manual-lightbox-caption" class="muted"></p>
         </div>
-      </section>
-
-      <!-- ── Manual ─────────────────────────────────────────────────────────── -->
-      <section id="screen-manual" class="screen">
-        <div class="card manual-content">
-          <h1>Manual</h1>
-          <p class="muted">
-            This guide walks through the complete local workflow: configure the external accounts,
-            connect the app, search for activities or intervals, store the results in your browser,
-            and compare selected efforts in the dashboard. The screenshots are thumbnails; click any
-            thumbnail to inspect the full-size image in the built-in viewer.
-          </p>
-
-          <h2>1. Configuration first</h2>
-          <p>
-            Before using search or comparison, collect the credentials that allow the app to talk to
-            Strava and Intervals.icu. The app stores these values only in your browser's local storage,
-            so setup is per browser and per device. If you switch machines or clear browser storage,
-            you will need to enter the values again.
-          </p>
-
-          <h3>Strava</h3>
-          <p>
-            Open <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener">Strava API settings</a>,
-            click <strong>Edit</strong>, and set <strong>Authorization Callback Domain</strong> to
-            <code>oliver-koeth.github.io</code>. This domain must match the hosted app domain because
-            Strava checks it during OAuth. If the domain is different, Strava will reject the connection
-            before the app receives an access token.
-          </p>
-          <p>
-            After saving the Strava app configuration, note the <strong>Client ID</strong>,
-            <strong>Client Secret</strong>, <strong>Access Token</strong>, and <strong>Refresh Token</strong>.
-            The refresh token is especially important because it allows the app to request a fresh access
-            token when the short-lived token expires.
-          </p>
-          <div class="manual-gallery">
-            <figure class="manual-shot">
-              <a href="./manual-assets/strava_api_settings_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/strava_api_settings_grayscale.png" data-caption="Strava API settings">
-                <img src="./manual-assets/strava_api_settings_grayscale.png" alt="Strava API settings" loading="lazy" />
-              </a>
-              <figcaption>Strava API settings</figcaption>
-            </figure>
-            <figure class="manual-shot">
-              <a href="./manual-assets/strava_edit_application_callback_domain_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/strava_edit_application_callback_domain_grayscale.png" data-caption="Strava edit app dialog with callback domain">
-                <img src="./manual-assets/strava_edit_application_callback_domain_grayscale.png" alt="Strava edit application callback domain dialog" loading="lazy" />
-              </a>
-              <figcaption>Set callback domain</figcaption>
-            </figure>
+        <footer class="footer">
+          <div class="footer-inner">
+            <span>© Oliver Koeth</span>
+            <a href="./impressum.html">Impressum</a>
+            <a href="./datenschutz.html">Datenschutz</a>
+            <a href="./license.html">Lizenz (GPL)</a>
+            <a href="https://github.com/oliver-koeth/intervals-spa" target="_blank" rel="noopener noreferrer">Source</a>
           </div>
-
-          <h3>Intervals.icu</h3>
-          <p>
-            Open <a href="https://intervals.icu/settings" target="_blank" rel="noopener">intervals.icu settings</a>,
-            scroll to <strong>Developer Settings</strong>, and note your <strong>Athlete ID</strong> and
-            <strong>API Key</strong>. The Athlete ID identifies which account to query, while the API key
-            authorizes private workout, interval, stream, and sport-settings requests.
-          </p>
-          <p>
-            If you use the local proxy mode while developing, these values are sent to the local server
-            and then forwarded to Intervals.icu. In direct mode, the browser calls Intervals.icu itself.
-            In both cases, the values remain under your control and are not sent to any analytics service.
-          </p>
-          <div class="manual-gallery">
-            <figure class="manual-shot">
-              <a href="./manual-assets/intervals_icu_developer_settings_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/intervals_icu_developer_settings_grayscale.png" data-caption="Intervals.icu developer settings">
-                <img src="./manual-assets/intervals_icu_developer_settings_grayscale.png" alt="Intervals.icu developer settings" loading="lazy" />
-              </a>
-              <figcaption>Intervals.icu developer settings</figcaption>
-            </figure>
-          </div>
-
-          <h2>2. Enter settings in Intervals SPA</h2>
-          <p>
-            Open <strong>Settings</strong> in this app and enter the Intervals.icu and Strava values in the
-            corresponding fields. Click <strong>Save</strong> before testing any connection; the app reads
-            the saved values when it performs searches, stream requests, and token refreshes.
-          </p>
-          <p>
-            Then use <strong>Connect Strava</strong> to complete OAuth. If you are running a local copy or a
-            different deployment, check the <strong>OAuth Redirect URI</strong> carefully. It must match the
-            callback URL that Strava expects for the current app location. A mismatch usually shows up as
-            a Strava authorization error rather than an app-side error.
-          </p>
-          <p>
-            After the account fields are saved, optionally load the HR zone model from Intervals.icu. The
-            zone model improves chart readability because the dashboard can color HR streams and zone
-            histograms with your real sport-specific thresholds instead of a generic fallback.
-          </p>
-          <div class="manual-gallery">
-            <figure class="manual-shot">
-              <a href="./manual-assets/intervals_settings_connections_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/intervals_settings_connections_grayscale.png" data-caption="Intervals SPA settings connections">
-                <img src="./manual-assets/intervals_settings_connections_grayscale.png" alt="Intervals SPA settings with connection fields" loading="lazy" />
-              </a>
-              <figcaption>Settings: connection fields</figcaption>
-            </figure>
-            <figure class="manual-shot">
-              <a href="./manual-assets/intervals_settings_connected_hr_zones_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/intervals_settings_connected_hr_zones_grayscale.png" data-caption="Connected state and HR zone setup">
-                <img src="./manual-assets/intervals_settings_connected_hr_zones_grayscale.png" alt="Connected state and HR zones in settings" loading="lazy" />
-              </a>
-              <figcaption>Connected state + HR zones</figcaption>
-            </figure>
-          </div>
-
-          <h2>3. Search and save results</h2>
-          <p>
-            Use <strong>Search Activities</strong> when you want to inspect complete workouts in Activity
-            Lab. Use <strong>Search Intervals</strong> when you already know the interval label or target
-            duration you want to compare. Use <strong>Search Strava Segments</strong> when the effort is
-            represented as a Strava segment rather than an Intervals.icu workout interval.
-          </p>
-          <p>
-            Each search first opens a preview table. Review the preview before adding results, especially
-            when using broad date ranges or loose labels. When the preview looks right, click
-            <strong>Add all to activities</strong> or <strong>Add all to intervals</strong>. The rows are stored
-            in local browser storage so you can filter and compare them without repeating the same remote
-            search every time.
-          </p>
-          <div class="manual-gallery">
-            <figure class="manual-shot">
-              <a href="./manual-assets/search_page_results_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/search_page_results_grayscale.png" data-caption="Search page and results preview">
-                <img src="./manual-assets/search_page_results_grayscale.png" alt="Search page and results preview" loading="lazy" />
-              </a>
-              <figcaption>Search and preview</figcaption>
-            </figure>
-          </div>
-
-          <h2>4. Work with stored intervals</h2>
-          <p>
-            On the <strong>Intervals</strong> page, use the filters to narrow the stored rows by label, source,
-            activity type, duration, and date range. This page is meant to be the staging area before
-            comparison: reduce the list to a meaningful cohort, then select the intervals that should be
-            plotted together.
-          </p>
-          <p>
-            Select specific rows when you want a focused comparison. If nothing is selected, the comparison
-            dashboard can still use the currently filtered set, which is useful for quick exploration. For
-            cleaner charts, keep the selected set small enough that each point still represents a distinct
-            workout or effort.
-          </p>
-          <div class="manual-gallery">
-            <figure class="manual-shot">
-              <a href="./manual-assets/intervals_page_filters_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/intervals_page_filters_grayscale.png" data-caption="Intervals page with filter controls">
-                <img src="./manual-assets/intervals_page_filters_grayscale.png" alt="Intervals page filters and list" loading="lazy" />
-              </a>
-              <figcaption>Intervals list and filters</figcaption>
-            </figure>
-          </div>
-
-          <h2>5. Compare in dashboard</h2>
-          <p>
-            The <strong>Compare</strong> dashboard shows progression, heart-rate behavior, and relationships
-            between effort metrics across the selected interval set. The upper charts are designed for
-            comparison across time; the lower row is designed for inspecting one pinned interval in detail.
-          </p>
-          <p>
-            Click any point in the top charts to pin that interval. The zone distribution and HR stream
-            then update to the pinned effort, making it easier to explain why two intervals with similar
-            pace or power may have different physiological cost. If stream data is unavailable for a
-            workout, the dashboard falls back to the metadata it has and shows a diagnostic note.
-          </p>
-          <div class="manual-gallery">
-            <figure class="manual-shot">
-              <a href="./manual-assets/comparison_dashboard_grayscale.png" class="manual-thumb-link" data-full-image="./manual-assets/comparison_dashboard_grayscale.png" data-caption="Comparison dashboard">
-                <img src="./manual-assets/comparison_dashboard_grayscale.png" alt="Comparison dashboard" loading="lazy" />
-              </a>
-              <figcaption>Comparison dashboard</figcaption>
-            </figure>
-          </div>
-
-          <h2>Quick summary</h2>
-          <ol>
-            <li>Collect Strava and Intervals.icu credentials before using search.</li>
-            <li>Save credentials in Settings, connect Strava, and confirm the redirect URI if OAuth fails.</li>
-            <li>Load HR zones when you want chart bands and histograms to use your real thresholds.</li>
-            <li>Search, review the preview table, and add only the rows you want to keep locally.</li>
-            <li>Filter stored intervals, select a comparison cohort, then inspect pinned efforts in the dashboard.</li>
-          </ol>
-        </div>
-      </section>
-
-    </main>
-    <div id="manual-lightbox" class="manual-lightbox hidden" role="dialog" aria-modal="true" aria-label="Manual screenshot">
-      <button id="manual-lightbox-close" type="button" class="manual-lightbox-close" aria-label="Close image viewer">×</button>
-      <img id="manual-lightbox-image" src="" alt="" />
-      <p id="manual-lightbox-caption" class="muted"></p>
-    </div>
-    <footer class="footer">
-      <div class="footer-inner">
-        <span>© Oliver Koeth</span>
-        <a href="./impressum.html">Impressum</a>
-        <a href="./datenschutz.html">Datenschutz</a>
-        <a href="./license.html">Lizenz (GPL)</a>
-        <a href="https://github.com/oliver-koeth/intervals-spa" target="_blank" rel="noopener noreferrer">Source</a>
+        </footer>
       </div>
-    </footer>
+    </div>
     <script src="./src/state.js?v=20260816-1"></script>
     <script src="./src/utils.js?v=20260816-1"></script>
     <script src="./src/similarity.js?v=20260816-1"></script>

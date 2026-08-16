@@ -26,10 +26,12 @@ function init() {
 
   loadSettingsToForm();
   updateSettingsCallouts();
+  updateDeveloperModeVisibility(getSettings().developerMode);
   handleStravaOAuthCallback();
   initManualGallery();
   initSearchDatePickers();
   setScreen("search");
+  initSidebar();
 
   document.getElementById("activity-search-form").addEventListener("submit", handleActivitySearchSubmit);
   document.getElementById("activity-search-form").addEventListener("reset", () => {
@@ -92,6 +94,8 @@ function init() {
   });
   document.getElementById("settings-form").addEventListener("submit", saveSettings);
   document.getElementById("settings-save-mode").addEventListener("click", saveApiMode);
+  const saveDevModeBtn = document.getElementById("settings-save-developer-mode");
+  if (saveDevModeBtn) saveDevModeBtn.addEventListener("click", saveApiMode);
   document.getElementById("settings-save-strava").addEventListener("click", saveStravaSettings);
   document.getElementById("settings-strava-connect").addEventListener("click", startStravaOAuth);
   document.getElementById("settings-reset").addEventListener("click", clearSettings);
@@ -137,26 +141,50 @@ function init() {
     topbarMenuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
   });
   document.getElementById("back-to-list").addEventListener("click", () => setScreen("intervals"));
-  document.getElementById("go-compare").addEventListener("click", () => setScreen("compare"));
+  document.getElementById("go-compare").addEventListener("click", openCompareTab);
 
-  // Activity tab bar — delegated click handler
-  document.getElementById("activity-tab-bar").addEventListener("click", (e) => {
-    const closeBtn = e.target.closest("[data-close-tab]");
-    if (closeBtn) {
-      e.stopPropagation();
-      closeActivityTab(closeBtn.dataset.closeTab);
-      return;
-    }
-    const tab = e.target.closest(".activity-tab");
-    if (tab) {
-      const id = tab.dataset.tabId;
-      const entry = state.openActivityTabs.find((t) => t.id === id);
-      if (entry) {
-        state.activeActivityTabId = id;
-        renderActivityTabBar();
-        openActivityLab(entry.activity);
+  // Activity tab sidebars — delegated click handler
+  ["activities-sidebar", "activity-detail-sidebar"].forEach((id) => {
+    const sidebar = document.getElementById(id);
+    if (!sidebar) return;
+    sidebar.addEventListener("click", (e) => {
+      const closeBtn = e.target.closest("[data-close-tab]");
+      if (closeBtn) {
+        e.stopPropagation();
+        closeActivityTab(closeBtn.dataset.closeTab);
+        return;
       }
-    }
+      const item = e.target.closest(".activities-sidebar-item");
+      if (item) {
+        const id = item.dataset.tabId;
+        const entry = state.openActivityTabs.find((t) => t.id === id);
+        if (entry) {
+          state.activeActivityTabId = id;
+          updateActivitiesSidebars();
+          openActivityLab(entry.activity);
+        }
+      }
+    });
+  });
+
+  ["intervals-compare-sidebar", "compare-sidebar"].forEach((id) => {
+    const sidebar = document.getElementById(id);
+    if (!sidebar) return;
+    sidebar.addEventListener("click", (e) => {
+      const closeBtn = e.target.closest("[data-close-compare-tab]");
+      if (closeBtn) {
+        e.stopPropagation();
+        closeCompareTab(closeBtn.dataset.closeCompareTab);
+        return;
+      }
+      const item = e.target.closest(".activities-sidebar-item");
+      if (!item) return;
+      const tab = state.openCompareTabs.find((t) => t.id === item.dataset.compareTabId);
+      if (!tab) return;
+      state.activeCompareTabId = tab.id;
+      updateCompareSidebars();
+      setScreen("compare");
+    });
   });
 
   document.getElementById("activity-lab-stream-list").addEventListener("click", (e) => {
@@ -201,6 +229,7 @@ function init() {
     btn.addEventListener("click", () => {
       const key = btn.dataset.activityLabLabel;
       if (!key) return;
+      if (key === "elevation") return;
       const current = state.activityLab.visibleSeries[key] || "off";
       state.activityLab.visibleSeries[key] = SERIES_TOGGLE_CYCLE[current] || "on";
       const tabActivity = getActiveTabActivity();
@@ -229,6 +258,10 @@ function init() {
       "activities-filter-label",
       "activities-filter-date-from",
       "activities-filter-date-to",
+      "activities-filter-time-from",
+      "activities-filter-time-to",
+      "activities-filter-distance-from",
+      "activities-filter-distance-to",
     ].forEach((id) => {
       document.getElementById(id).value = "";
     });
@@ -237,6 +270,30 @@ function init() {
     state.activitiesFiltered = [...state.activities];
     renderActivities();
   });
+
+  const advancedToggle = document.getElementById("activities-advanced-toggle");
+  const advancedFilters = document.getElementById("activities-advanced-filters");
+  const timeFilters = document.getElementById("activities-time-filters");
+  const distanceFilters = document.getElementById("activities-distance-filters");
+  advancedToggle.addEventListener("click", () => {
+    const expanded = advancedFilters.classList.toggle("hidden");
+    timeFilters.classList.toggle("hidden", expanded);
+    distanceFilters.classList.toggle("hidden", expanded);
+    advancedToggle.setAttribute("aria-expanded", String(!expanded));
+    advancedToggle.textContent = expanded ? "+" : "−";
+  });
+
+  document.addEventListener("click", (e) => {
+    const intervalsAdvancedToggle = e.target.closest("#intervals-advanced-toggle");
+    if (!intervalsAdvancedToggle) return;
+    const intervalsAdvancedFilters = document.getElementById("intervals-advanced-filters");
+    if (!intervalsAdvancedFilters) return;
+    const showAdvanced = intervalsAdvancedFilters.classList.contains("hidden");
+    intervalsAdvancedFilters.classList.toggle("hidden", !showAdvanced);
+    intervalsAdvancedToggle.setAttribute("aria-expanded", String(showAdvanced));
+    intervalsAdvancedToggle.textContent = showAdvanced ? "−" : "+";
+  });
+
   document.getElementById("select-none").addEventListener("click", () => {
     state.selected.clear();
     renderIntervals();

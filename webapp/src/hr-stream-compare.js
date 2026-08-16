@@ -619,16 +619,28 @@ async function renderRow2(item) {
   }
 }
 
-function attachRow1Click(chartName, indexFn) {
+function attachRow1Click(chartName, indexFn, options = {}) {
   const c = state.charts[chartName];
   if (!c) return;
   let lastIndex = -1;
   let lastPickAt = 0;
+  let lastPointerIndex = -1;
+
+  function normalizeIndex(index) {
+    if (!state.compareSource.length) return null;
+    const idx = Number(index);
+    if (!Number.isFinite(idx)) return null;
+    return Math.max(0, Math.min(state.compareSource.length - 1, Math.round(idx)));
+  }
+
+  function rememberPointerIndex(index) {
+    const rounded = normalizeIndex(index);
+    if (rounded !== null) lastPointerIndex = rounded;
+  }
 
   function selectByIndex(index) {
-    const idx = Number(index);
-    if (!Number.isFinite(idx)) return;
-    const rounded = Math.round(idx);
+    const rounded = normalizeIndex(index);
+    if (rounded === null) return;
     const now = Date.now();
     if (rounded === lastIndex && now - lastPickAt < 250) return;
     lastIndex = rounded;
@@ -639,33 +651,142 @@ function attachRow1Click(chartName, indexFn) {
     renderRow2(item);
   }
 
+  function indexFromCategoryValue(value) {
+    const opt = c.getOption?.() || {};
+    const xAxis = Array.isArray(opt.xAxis) ? opt.xAxis[0] : opt.xAxis;
+    const data = Array.isArray(xAxis?.data) ? xAxis.data : [];
+    const idx = data.findIndex((entry) => String(entry) === String(value));
+    return idx >= 0 ? idx : value;
+  }
+
+  function indexFromPixel(evt) {
+    if (!evt) return null;
+    const opt = c.getOption?.() || {};
+    const xAxis = Array.isArray(opt.xAxis) ? opt.xAxis[0] : opt.xAxis;
+    if (!xAxis || xAxis.type !== "category") return null;
+    const pixel = [evt.offsetX, evt.offsetY];
+    if (!c.containPixel({ gridIndex: 0 }, pixel)) return null;
+    const dataPoint = c.convertFromPixel({ xAxisIndex: 0 }, pixel);
+    const rawIndex = Array.isArray(dataPoint) ? dataPoint[0] : dataPoint;
+    return normalizeIndex(rawIndex);
+  }
+
   c.on("click", (params) => {
-    selectByIndex(indexFn(params));
+    const exactIndex = indexFn(params || {});
+    if (Number.isFinite(Number(exactIndex))) {
+      selectByIndex(exactIndex);
+    } else if (options.usePointerFallback) {
+      selectByIndex(lastPointerIndex);
+    }
   });
+
+  if (options.usePointerFallback) {
+    c.on("updateAxisPointer", (evt) => {
+      const axisInfo = (evt?.axesInfo || []).find((info) => info.axisDim === "x") || evt?.axesInfo?.[0];
+      if (axisInfo) rememberPointerIndex(indexFromCategoryValue(axisInfo.value));
+    });
+    c.on("showTip", (evt) => {
+      if (Number.isFinite(Number(evt?.dataIndex))) rememberPointerIndex(evt.dataIndex);
+    });
+    c.on("mouseover", (params) => {
+      if (Number.isFinite(Number(params?.dataIndex))) rememberPointerIndex(params.dataIndex);
+    });
+  }
 
   // Touch devices may not emit a useful series click for dense line charts.
   // Fallback: map tap position on the plot to nearest x-axis data index.
   const zr = c.getZr?.();
+  if (options.usePointerFallback) {
+    zr?.on("mousemove", (evt) => {
+      const idx = indexFromPixel(evt);
+      if (idx !== null) rememberPointerIndex(idx);
+    });
+  }
   zr?.on("click", (evt) => {
-    if (!evt) return;
-    const opt = c.getOption?.() || {};
-    const xAxis = Array.isArray(opt.xAxis) ? opt.xAxis[0] : opt.xAxis;
-    if (!xAxis || xAxis.type !== "category") return;
-    const pixel = [evt.offsetX, evt.offsetY];
-    if (!c.containPixel({ gridIndex: 0 }, pixel)) return;
-    const dataPoint = c.convertFromPixel({ xAxisIndex: 0 }, pixel);
-    const rawIndex = Array.isArray(dataPoint) ? dataPoint[0] : dataPoint;
-    selectByIndex(rawIndex);
+    const idx = indexFromPixel(evt);
+    if (idx !== null) {
+      selectByIndex(idx);
+    } else if (options.usePointerFallback) {
+      selectByIndex(lastPointerIndex);
+    }
   });
 }
 
+function getCompareIndexLabel(index) {
+  if (index < 9) return String(index + 1);
+  return String.fromCharCode(65 + (index - 9));
+}
+
+function compareTabLabel(index, intervals) {
+  return `${getCompareIndexLabel(index)} - ${intervals.length} Intervals`;
+}
+
+function renderCompareSidebar(hostId) {
+  const list = document.getElementById(hostId);
+  if (!list) return;
+  list.innerHTML = "";
+  const collapsed = document.querySelector("#sidebar.collapsed") != null;
+  state.openCompareTabs.forEach(({ id, intervals }, index) => {
+    const btn = document.createElement("button");
+    btn.className = "btn activities-sidebar-item" + (id === state.activeCompareTabId ? " active" : "");
+    btn.type = "button";
+    btn.dataset.compareTabId = id;
+    btn.title = compareTabLabel(index, intervals);
+    btn.innerHTML = `<span class="activities-sidebar-label">${collapsed ? getCompareIndexLabel(index) : compareTabLabel(index, intervals)}</span>`
+      + `<span class="activities-sidebar-close" data-close-compare-tab="${id}" title="Close">×</span>`;
+    list.appendChild(btn);
+  });
+}
+
+function updateCompareSidebars() {
+  const hasTabs = state.openCompareTabs.length > 0;
+  const onIntervals = state.screen === "intervals";
+  const onCompare = state.screen === "compare";
+  const intervalsSidebar = document.getElementById("intervals-compare-sidebar");
+  const compareSidebar = document.getElementById("compare-sidebar");
+  if (intervalsSidebar) intervalsSidebar.classList.toggle("hidden", !(onIntervals && hasTabs));
+  if (compareSidebar) compareSidebar.classList.toggle("hidden", !(onCompare && hasTabs));
+  if (onIntervals) renderCompareSidebar("intervals-compare-sidebar-list");
+  if (onCompare) renderCompareSidebar("compare-sidebar-list");
+}
+
+function openCompareTab() {
+  const selected = state.filtered.filter((x) => state.selected.has(String(x.interval_id)));
+  const intervals = [...(selected.length ? selected : state.filtered)].sort(compareIntervalsChronologically);
+  const id = `compare-${++state.compareTabCounter}`;
+  state.openCompareTabs.push({ id, intervals });
+  state.activeCompareTabId = id;
+  updateCompareSidebars();
+  setScreen("compare");
+}
+
+function closeCompareTab(id) {
+  const idx = state.openCompareTabs.findIndex((t) => t.id === id);
+  if (idx === -1) return;
+  state.openCompareTabs.splice(idx, 1);
+  if (state.activeCompareTabId === id) {
+    const next = state.openCompareTabs[Math.max(0, idx - 1)];
+    state.activeCompareTabId = next ? next.id : null;
+    if (next && state.screen === "compare") {
+      updateCompareSidebars();
+      renderCompare();
+    } else {
+      updateCompareSidebars();
+      if (state.screen === "compare") setScreen("intervals");
+    }
+  } else {
+    updateCompareSidebars();
+  }
+}
+
 function renderCompare() {
+  const activeTab = state.openCompareTabs.find((t) => t.id === state.activeCompareTabId);
   const sel = state.filtered.filter((x) => state.selected.has(String(x.interval_id)));
-  const src = sel.length ? sel : state.filtered;
+  const src = activeTab?.intervals || (sel.length ? sel : state.filtered);
   state.compareSource = [...src].sort(compareIntervalsChronologically);
   state.pinnedInterval = null;
   document.getElementById("compare-summary").textContent =
-    `${state.compareSource.length} interval(s) shown${sel.length ? " (selected)" : " (all filtered)"}`;
+    `${state.compareSource.length} interval(s) shown${activeTab ? "" : sel.length ? " (selected)" : " (all filtered)"}`;
 
   const sorted = state.compareSource;
   const dates  = sorted.map((x) => x.date);
@@ -712,7 +833,7 @@ function renderCompare() {
       },
     ],
   });
-  attachRow1Click("progression", (p) => p.dataIndex);
+  attachRow1Click("progression", (p) => p.dataIndex, { usePointerFallback: true });
 
   // ── HR trends ──
   const hr = mkChart("hr");
@@ -729,7 +850,7 @@ function renderCompare() {
       { type: "line", name: "Decoupling %", smooth: true, data: sorted.map((x) => +(x.decoupling||0).toFixed(1)) },
     ],
   });
-  attachRow1Click("hr", (p) => p.dataIndex);
+  attachRow1Click("hr", (p) => p.dataIndex, { usePointerFallback: true });
 
   // ── Power vs HR scatter ──
   const sc = mkChart("scatter");
@@ -752,4 +873,3 @@ function renderCompare() {
 
   renderRow2Empty();
 }
-

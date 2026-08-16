@@ -5,9 +5,15 @@ const ZONE_COLORS = {
 };
 const TOOLTIP_CSS = "background:#101820;border:1px solid rgba(148,163,184,0.34);border-radius:10px;padding:10px 14px;box-shadow:0 16px 48px rgba(0,0,0,0.48);color:#eef4f8;font-size:12px;max-width:260px";
 
-/* Tri-state series toggle (Activity Lab chart): on → dimmed → off → on, cycling on each click. */
-const SERIES_TOGGLE_CYCLE = { on: "dimmed", dimmed: "off", off: "on" };
+/* Activity Lab chart toggles switch each value between its colour and grey. */
+const SERIES_TOGGLE_CYCLE = { on: "dimmed", dimmed: "on", off: "on" };
 const SERIES_DIMMED_COLOR = "#94a3b8";
+const SERIES_COLORS = {
+  hr: "#ef4444",
+  pace: "#51b8ff",
+  elevation: "#64748b",
+  glucose: "#54e0a1",
+};
 
 /* Activity-similarity search: exactly one of three independent similarity types is
    used at a time (never blended) — duration, work-interval shape (avg + variance of
@@ -48,6 +54,9 @@ const state = {
   charts: {},
   activityLabCharts: {},
   compareSource: [],
+  openCompareTabs: [],     // [{id, intervals}]
+  activeCompareTabId: null,
+  compareTabCounter: 0,
   pinnedInterval: null,
   dismissedCallouts: new Set(),
   similarity: {
@@ -69,7 +78,7 @@ const state = {
     visibleSeries: {
       hr: "on",
       pace: "on",
-      elevation: "on",
+      elevation: "dimmed",
       glucose: "on",
     },
   },
@@ -127,4 +136,3 @@ function clearHrStreamCache() {
   }
   toRemove.forEach((k) => localStorage.removeItem(k));
 }
-
