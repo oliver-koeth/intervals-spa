@@ -16,6 +16,8 @@ function normalizeStravaStream(raw) {
     velocity: extractStreamArray(raw, ["velocity_smooth"]),
     pace: extractStreamArray(raw, ["pace"]),
     gap: extractStreamArray(raw, ["grade_adjusted_pace", "gap"]),
+    cadence: extractStreamArray(raw, ["cadence"]),
+    __enhanced_streams_loaded: true,
   };
 }
 
@@ -32,6 +34,77 @@ async function fetchStravaStreamFromCandidates(candidates, settings, token) {
     }
   }
   throw lastErr || new Error("Strava stream request failed.");
+}
+
+function mergeStreamResponses(...responses) {
+  const byType = new Map();
+  for (const raw of responses) {
+    if (!Array.isArray(raw)) continue;
+    for (const streamPart of raw) {
+      const type = streamPart?.type;
+      if (type && !byType.has(type)) byType.set(type, streamPart);
+    }
+  }
+  return [...byType.values()];
+}
+
+async function fetchIntervalsStreamPart(activityId, auth, types) {
+  const res = await fetch(
+    `https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/streams?types=${types}`,
+    { headers: { Authorization: auth, Accept: "application/json" } }
+  );
+  if (!res.ok) {
+    const err = new Error(
+      isStreamUnavailableStatus(res.status)
+        ? `No stream data available (${res.status})`
+        : `Streams request failed (${res.status})`
+    );
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
+
+async function fetchIntervalsStreamRaw(activityId, auth) {
+  let raw;
+  try {
+    raw = await fetchIntervalsStreamPart(
+      activityId,
+      auth,
+      "heartrate,time,velocity_smooth,watts,distance,altitude,grade,pace,gap,cadence"
+    );
+  } catch (err) {
+    if (!isStreamFallbackStatus(err?.status)) throw err;
+    try {
+      raw = await fetchIntervalsStreamPart(
+        activityId,
+        auth,
+        "heartrate,time,velocity_smooth,watts,distance,altitude,grade"
+      );
+    } catch (fallbackErr) {
+      if (!isStreamFallbackStatus(fallbackErr?.status)) throw fallbackErr;
+      raw = await fetchIntervalsStreamPart(
+        activityId,
+        auth,
+        "heartrate,time,velocity_smooth,altitude"
+      );
+    }
+  }
+
+  const optionalTypes = [
+    "pace",
+    "gap",
+    "grade_adjusted_pace",
+    "cadence",
+  ];
+  for (const type of optionalTypes) {
+    try {
+      raw = mergeStreamResponses(raw, await fetchIntervalsStreamPart(activityId, auth, type));
+    } catch (err) {
+      if (!isStreamUnavailableStatus(err?.status)) throw err;
+    }
+  }
+  return raw;
 }
 
 async function fetchHrStream(
@@ -67,6 +140,8 @@ async function fetchHrStream(
     if (!token) throw new Error("No Strava access token. Use Connect Strava first.");
     try {
       const activityCandidates = [
+        `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate,velocity_smooth,altitude,watts,distance,cadence&key_by_type=true`,
+        `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate,velocity_smooth,altitude,watts,distance,cadence`,
         `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate,velocity_smooth,altitude&key_by_type=true`,
         `/activities/${encodeURIComponent(activityId)}/streams?keys=time,heartrate,velocity_smooth,altitude`,
       ];
@@ -82,6 +157,8 @@ async function fetchHrStream(
         velocity: normalized.velocity,
         pace: normalized.pace,
         gap: normalized.gap,
+        cadence: normalized.cadence,
+        __enhanced_streams_loaded: true,
         __stream_scope: "activity",
         __stream_path: path,
       };
@@ -92,6 +169,8 @@ async function fetchHrStream(
       }
       if (msg.includes("404") && stravaEffortId) {
         const effortCandidates = [
+          `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate,velocity_smooth,altitude,watts,distance,cadence&key_by_type=true`,
+          `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate,velocity_smooth,altitude,watts,distance,cadence`,
           `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate,velocity_smooth,altitude&key_by_type=true`,
           `/segment_efforts/${encodeURIComponent(stravaEffortId)}/streams?keys=time,heartrate,velocity_smooth,altitude`,
         ];
@@ -107,6 +186,8 @@ async function fetchHrStream(
           velocity: normalized.velocity,
           pace: normalized.pace,
           gap: normalized.gap,
+          cadence: normalized.cadence,
+          __enhanced_streams_loaded: true,
           __stream_scope: "segment_effort",
           __segment_effort_id: stravaEffortId,
           __stream_path: path,
@@ -135,22 +216,7 @@ async function fetchHrStream(
 
     if (!result) {
       const auth = `Basic ${btoa(`API_KEY:${settings.apiKey}`)}`;
-      const fullStreamTypes = "heartrate,time,velocity_smooth,altitude";
-      let res = await fetch(
-        `https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/streams?types=${fullStreamTypes}`,
-        { headers: { Authorization: auth, Accept: "application/json" } }
-      );
-      if (!res.ok && isStreamFallbackStatus(res.status)) {
-        res = await fetch(
-          `https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/streams?types=heartrate,time,velocity_smooth,altitude`,
-          { headers: { Authorization: auth, Accept: "application/json" } }
-        );
-      }
-      if (!res.ok && isStreamUnavailableStatus(res.status)) {
-        throw new Error(`No stream data available (${res.status})`);
-      }
-      if (!res.ok) throw new Error(`Streams request failed (${res.status})`);
-      const raw = await res.json();
+      const raw = await fetchIntervalsStreamRaw(activityId, auth);
       result = {
         time: extractStreamArray(raw, ["time"]),
         heartrate: extractStreamArray(raw, ["heartrate"]),
@@ -161,6 +227,7 @@ async function fetchHrStream(
         velocity: extractStreamArray(raw, ["velocity_smooth", "velocity", "speed"]),
         pace: extractStreamArray(raw, ["pace"]),
         gap: extractStreamArray(raw, ["grade_adjusted_pace", "gap"]),
+        cadence: extractStreamArray(raw, ["cadence"]),
       };
     }
   }

@@ -32,7 +32,7 @@ ACTIVITY_SEARCH_FIELDS = ",".join(
         "moving_time", "distance", "average_heartrate", "max_heartrate",
         "total_elevation_gain", "icu_training_load", "icu_intensity",
         "icu_average_watts", "icu_weighted_avg_watts", "average_speed",
-        "icu_hr_zone_times",
+        "icu_hr_zone_times", "race",
     ]
 )
 
@@ -86,20 +86,44 @@ def _normalize_type(value: str) -> str:
     return "".join(value.split()).lower()
 
 
-def run_streams(activity_id: str, api_key: str) -> dict[str, list[int | float]]:
+def run_streams(activity_id: str, api_key: str) -> dict[str, Any]:
     auth = "Basic " + base64.b64encode(f"API_KEY:{api_key}".encode()).decode("ascii")
-    stream_types = "heartrate,time,velocity_smooth,watts,distance,altitude,grade"
-    url = f"{API_BASE}/activity/{quote(activity_id)}/streams?types={stream_types}"
+    activity_path = f"{API_BASE}/activity/{quote(activity_id)}/streams"
+
+    def fetch_streams(types: str) -> list[dict[str, Any]]:
+        return _api_get(f"{activity_path}?types={types}", auth)
+
+    def fallback_status(exc: HTTPError) -> bool:
+        return exc.code in {HTTPStatus.BAD_REQUEST, HTTPStatus.UNPROCESSABLE_ENTITY}
+
     try:
-        raw = _api_get(url, auth)
-    except HTTPError as exc:
-        if exc.code not in {HTTPStatus.BAD_REQUEST, HTTPStatus.UNPROCESSABLE_ENTITY}:
-            raise
-        fallback_url = (
-            f"{API_BASE}/activity/{quote(activity_id)}/streams"
-            "?types=heartrate,time,velocity_smooth,altitude"
+        raw = fetch_streams(
+            "heartrate,time,velocity_smooth,watts,distance,altitude,grade,pace,gap,cadence"
         )
-        raw = _api_get(fallback_url, auth)
+    except HTTPError as exc:
+        if not fallback_status(exc):
+            raise
+        try:
+            raw = fetch_streams("heartrate,time,velocity_smooth,watts,distance,altitude,grade")
+        except HTTPError as fallback_exc:
+            if not fallback_status(fallback_exc):
+                raise
+            raw = fetch_streams("heartrate,time,velocity_smooth,altitude")
+
+    by_type = {s.get("type"): s for s in raw}
+    for stream_type in ("pace", "gap", "grade_adjusted_pace", "cadence"):
+        try:
+            for stream in fetch_streams(stream_type):
+                by_type.setdefault(stream.get("type"), stream)
+        except HTTPError as exc:
+            if exc.code not in {
+                HTTPStatus.BAD_REQUEST,
+                HTTPStatus.NOT_FOUND,
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+            }:
+                raise
+    raw = list(by_type.values())
+
     return {
         "time":      next((s["data"] for s in raw if s.get("type") == "time"),      []),
         "heartrate": next((s["data"] for s in raw if s.get("type") == "heartrate"), []),
@@ -123,6 +147,8 @@ def run_streams(activity_id: str, api_key: str) -> dict[str, list[int | float]]:
             (s["data"] for s in raw if s.get("type") in {"gap", "grade_adjusted_pace"}),
             [],
         ),
+        "cadence":  next((s["data"] for s in raw if s.get("type") == "cadence"), []),
+        "__enhanced_streams_loaded": True,
     }
 
 
@@ -260,6 +286,7 @@ def run_activity_search(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "date": date,
                 "activity_name": name,
                 "activity_type": activity.get("type", ""),
+                "is_race": bool(activity.get("race")),
                 "source": "intervals",
                 "moving_time_s": int(activity.get("moving_time") or 0),
                 "distance_m": float(activity.get("distance") or 0),

@@ -405,6 +405,7 @@ OAuth scope: `ACTIVITY:READ` / `ACTIVITY:WRITE`
 | `average_speed` | number | m/s |
 | `icu_average_watts` | integer | Average power (watts) |
 | `icu_weighted_avg_watts` | integer | Normalised power (watts) |
+| `race` | boolean | Activity marked as a race |
 | `external_id` | string | Your external reference ID |
 | `tags` | array | User-applied tags |
 | `source` | string | `STRAVA`, `GARMIN`, `MANUAL`, etc. |
