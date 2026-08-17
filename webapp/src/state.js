@@ -11,6 +11,9 @@ const SERIES_DIMMED_COLOR = "#94a3b8";
 const SERIES_COLORS = {
   hr: "#ef4444",
   pace: "#51b8ff",
+  gap: "#a78bfa",
+  power: "#f59e0b",
+  cadence: "#f472b6",
   elevation: "#64748b",
   glucose: "#54e0a1",
 };
@@ -78,6 +81,9 @@ const state = {
     visibleSeries: {
       hr: "on",
       pace: "on",
+      gap: "on",
+      power: "on",
+      cadence: "on",
       elevation: "dimmed",
       glucose: "on",
     },
@@ -95,7 +101,7 @@ const ACTIVITIES_CACHE_KEY  = "intervals_cached_activities_v1";
 const INTERVALS_CACHE_KEY   = "intervals_cached_intervals_v1";
 const GLUCOSE_CACHE_KEY     = "intervals_cached_glucose_v1";
 const GLUCOSE_PAGE_SIZE     = 100;
-const HR_STREAM_LS_PREFIX   = "intervals_hr_stream_v5:";   // localStorage key prefix for activity streams
+const HR_STREAM_LS_PREFIX   = "intervals_hr_stream_v7:";   // localStorage key prefix for activity streams
 
 /**
  * Activity summary fields requested from intervals.icu's /activities endpoint.
@@ -107,7 +113,7 @@ const ACTIVITY_SEARCH_FIELDS = [
   "moving_time", "distance", "average_heartrate", "max_heartrate",
   "total_elevation_gain", "icu_training_load", "icu_intensity",
   "icu_average_watts", "icu_weighted_avg_watts", "average_speed",
-  "icu_hr_zone_times",
+  "icu_hr_zone_times", "race",
 ].join(",");
 
 /** Persist a stream object to localStorage (silently skips on quota errors). */

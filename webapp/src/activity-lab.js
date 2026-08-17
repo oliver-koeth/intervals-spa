@@ -71,6 +71,7 @@ function renderActivityDetail(tabActivity, focusActivity) {
     { label: "Avg Pace", value: formatAvgPace(activity.moving_time_s, activity.distance_m) },
     { label: "Avg HR", value: activity.avg_hr ? `${Math.round(activity.avg_hr)} bpm` : "-" },
     { label: "Load", value: activity.training_load != null ? Math.round(activity.training_load) : "-" },
+    { label: "Race", value: activity.is_race ? "Yes" : "-" },
     { label: "Source", value: activity.source || "intervals.icu" },
   ];
   card.innerHTML = `
@@ -154,10 +155,23 @@ function updateActivityLabValueToggleButtons() {
   });
 }
 
+function setActivityLabToggleVisible(key, visible) {
+  const btn = document.querySelector(`.activity-lab-series-toggle[data-activity-lab-label="${key}"]`);
+  if (btn) btn.classList.toggle("hidden", !visible);
+}
+
 /** Shows/hides the glucose series toggle button — it only ever appears when glucose data exists. */
 function setGlucoseToggleVisible(visible) {
-  const btn = document.querySelector('.activity-lab-series-toggle[data-activity-lab-label="glucose"]');
-  if (btn) btn.classList.toggle("hidden", !visible);
+  setActivityLabToggleVisible("glucose", visible);
+}
+
+function setExtraStreamTogglesVisible(visibility) {
+  ["gap", "power", "cadence"].forEach((key) => setActivityLabToggleVisible(key, !!visibility?.[key]));
+}
+
+function streamNeedsEnhancedRefresh(stream) {
+  return stream?.__enhanced_streams_loaded !== true
+    || ["watts", "gap", "cadence"].some((key) => !Array.isArray(stream?.[key]));
 }
 
 /**
@@ -464,6 +478,7 @@ function computeElevationAxisBounds(points) {
 function renderActivityLabTimeSeries(stream, focusActivity) {
   const time = Array.isArray(stream?.time) ? stream.time : [];
   const hr = sliceMetricStream(stream, stream?.heartrate, 0, Number.MAX_SAFE_INTEGER, (v) => Number(v));
+  const gap = sliceMetricStream(stream, stream?.gap, 0, Number.MAX_SAFE_INTEGER, normalizeExplicitPaceValue);
   const pace = sliceMetricStream(
     stream,
     stream?.velocity,
@@ -476,11 +491,20 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
       return minPerKm <= 20 ? minPerKm : null;
     }
   );
+  const power = sliceMetricStream(stream, stream?.watts, 0, Number.MAX_SAFE_INTEGER, (v) => {
+    const watts = Number(v);
+    return Number.isFinite(watts) && watts > 0 ? watts : null;
+  });
+  const cadence = sliceMetricStream(stream, stream?.cadence, 0, Number.MAX_SAFE_INTEGER, (v) => {
+    const rpm = Number(v);
+    return Number.isFinite(rpm) && rpm > 0 ? rpm : null;
+  });
   const elevation = sliceMetricStream(stream, stream?.altitude, 0, Number.MAX_SAFE_INTEGER, (v) => Number(v));
 
   if (!time.length) {
     setGlucoseToggleVisible(false);
-    renderActivityLabPlaceholder("lab-hr", "Heart rate, pace, elevation", "No stream data available");
+    setExtraStreamTogglesVisible({ gap: false, power: false, cadence: false });
+    renderActivityLabPlaceholder("lab-hr", "Heart rate, pace, GAP, power, cadence, elevation", "No stream data available");
     return;
   }
 
@@ -490,6 +514,9 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
 
   const hrState = state.activityLab.visibleSeries.hr === "dimmed" ? "dimmed" : "on";
   const paceState = state.activityLab.visibleSeries.pace === "dimmed" ? "dimmed" : "on";
+  const gapState = state.activityLab.visibleSeries.gap === "dimmed" ? "dimmed" : "on";
+  const powerState = state.activityLab.visibleSeries.power === "dimmed" ? "dimmed" : "on";
+  const cadenceState = state.activityLab.visibleSeries.cadence === "dimmed" ? "dimmed" : "on";
   const elevationState = "dimmed";
   const glucoseState = hasGlucose
     ? (state.activityLab.visibleSeries.glucose === "dimmed" ? "dimmed" : "on")
@@ -497,11 +524,18 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
 
   const showHr = hr.length > 0;
   const showPace = pace.length > 0;
+  const showGap = gap.length > 0;
+  const showPower = power.length > 0;
+  const showCadence = cadence.length > 0;
   const showElevation = elevationState !== "off" && elevation.length > 0;
   const showGlucose = glucoseState !== "off";
+  setExtraStreamTogglesVisible({ gap: showGap, power: showPower, cadence: showCadence });
 
   const hrDimmed = hrState === "dimmed";
   const paceDimmed = paceState === "dimmed";
+  const gapDimmed = gapState === "dimmed";
+  const powerDimmed = powerState === "dimmed";
+  const cadenceDimmed = cadenceState === "dimmed";
   const elevationDimmed = elevationState === "dimmed";
   const glucoseDimmed = glucoseState === "dimmed";
 
@@ -524,27 +558,58 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
   const elevationAxisBounds = showElevation ? computeElevationAxisBounds(elevation) : {};
   const useHrZoneColors = !!pieces && showHr && !hrDimmed
     && (!showPace || paceDimmed)
+    && (!showGap || gapDimmed)
+    && (!showPower || powerDimmed)
+    && (!showCadence || cadenceDimmed)
     && (!showElevation || elevationDimmed)
     && (!showGlucose || glucoseDimmed);
 
   // Build y-axes and series in tandem so each series' yAxisIndex/visualMap seriesIndex
   // always matches where it actually landed in the arrays below.
   const yAxisEntries = [{ type: "value", name: "bpm", min: yMin, show: showHr }];
+  let rightAxisCount = 0;
+  const nextRightAxisOffset = () => (rightAxisCount++ * 58);
   let paceAxisIndex = -1;
+  let powerAxisIndex = -1;
+  let cadenceAxisIndex = -1;
   let elevationAxisIndex = -1;
   let glucoseAxisIndex = -1;
 
-  if (showPace) {
+  if (showPace || showGap) {
     paceAxisIndex = yAxisEntries.length;
     yAxisEntries.push({
       type: "value",
       name: "min/km",
       position: "right",
-      offset: 0,
+      offset: nextRightAxisOffset(),
       alignTicks: true,
       inverse: true,
       max: 20,
       axisLabel: { formatter: (v) => formatPaceMinutes(v) },
+    });
+  }
+  if (showPower) {
+    powerAxisIndex = yAxisEntries.length;
+    yAxisEntries.push({
+      type: "value",
+      name: "W",
+      position: "right",
+      offset: nextRightAxisOffset(),
+      alignTicks: true,
+      axisLabel: { formatter: (v) => Math.round(v) },
+      splitLine: { show: false },
+    });
+  }
+  if (showCadence) {
+    cadenceAxisIndex = yAxisEntries.length;
+    yAxisEntries.push({
+      type: "value",
+      name: "rpm",
+      position: "right",
+      offset: nextRightAxisOffset(),
+      alignTicks: true,
+      axisLabel: { formatter: (v) => Math.round(v) },
+      splitLine: { show: false },
     });
   }
   if (showElevation) {
@@ -565,7 +630,7 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
       type: "value",
       name: "mg/dL",
       position: "right",
-      offset: showPace ? 58 : 0,
+      offset: nextRightAxisOffset(),
       min: GLUCOSE_AXIS_MIN,
       max: GLUCOSE_AXIS_MAX,
       axisLabel: { formatter: (v) => Math.round(v) },
@@ -611,6 +676,42 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
       data: pace,
     });
   }
+  if (showGap) {
+    seriesEntries.push({
+      type: "line",
+      name: "GAP",
+      yAxisIndex: paceAxisIndex,
+      smooth: true,
+      showSymbol: false,
+      z: 2,
+      lineStyle: { width: 1, color: gapDimmed ? SERIES_DIMMED_COLOR : SERIES_COLORS.gap, opacity: gapDimmed ? 0.6 : 1 },
+      data: gap,
+    });
+  }
+  if (showPower) {
+    seriesEntries.push({
+      type: "line",
+      name: "Power",
+      yAxisIndex: powerAxisIndex,
+      smooth: true,
+      showSymbol: false,
+      z: 2,
+      lineStyle: { width: 1, color: powerDimmed ? SERIES_DIMMED_COLOR : SERIES_COLORS.power, opacity: powerDimmed ? 0.6 : 1 },
+      data: power,
+    });
+  }
+  if (showCadence) {
+    seriesEntries.push({
+      type: "line",
+      name: "Cadence",
+      yAxisIndex: cadenceAxisIndex,
+      smooth: true,
+      showSymbol: false,
+      z: 2,
+      lineStyle: { width: 1, color: cadenceDimmed ? SERIES_DIMMED_COLOR : SERIES_COLORS.cadence, opacity: cadenceDimmed ? 0.6 : 1 },
+      data: cadence,
+    });
+  }
   if (showElevation) {
     seriesEntries.push({
       type: "line",
@@ -652,14 +753,22 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
     });
   }
 
-  const rightAxisCount = (showPace ? 1 : 0) + (showGlucose ? 1 : 0);
-  const gridRight = rightAxisCount === 0 ? 16 : rightAxisCount === 1 ? 58 : 100;
+  const gridRight = rightAxisCount === 0 ? 16 : 58 + ((rightAxisCount - 1) * 58);
+  const titleParts = [
+    showHr ? "heart rate" : null,
+    showPace ? "pace" : null,
+    showGap ? "GAP" : null,
+    showPower ? "power" : null,
+    showCadence ? "cadence" : null,
+    showElevation ? "elevation" : null,
+    showGlucose ? "glucose" : null,
+  ].filter(Boolean);
 
   const hrChart = mkActivityLabChart("lab-hr");
   hrChart.setOption({
     title: {
-      text: "Heart rate, pace, elevation" + (showGlucose ? ", glucose" : ""),
-      subtext: `${focusActivity.date || ""} · ${focusActivity.activity_name || ""} · pace from velocity_smooth`,
+      text: titleParts.length ? titleParts.join(", ") : "Activity streams",
+      subtext: `${focusActivity.date || ""} · ${focusActivity.activity_name || ""}`,
       top: 6,
       textStyle: { fontSize: 12 },
       subtextStyle: { fontSize: 10 },
@@ -671,6 +780,9 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
         for (const p of params) {
           if (p.seriesName === "HR") lines.push(`HR ${Math.round(p.value[1])} bpm`);
           else if (p.seriesName === "Pace") lines.push(`Pace ${formatPaceMinutes(p.value[1])} min/km`);
+          else if (p.seriesName === "GAP") lines.push(`GAP ${formatPaceMinutes(p.value[1])} min/km`);
+          else if (p.seriesName === "Power") lines.push(`Power ${Math.round(p.value[1])} W`);
+          else if (p.seriesName === "Cadence") lines.push(`Cadence ${Math.round(p.value[1])} rpm`);
           else if (p.seriesName === "Elevation") lines.push(`Elevation ${Math.round(p.value[1])} m`);
           else if (p.seriesName === "Glucose") lines.push(`Glucose ${Math.round(p.value[1])} mg/dL`);
         }
@@ -757,21 +869,32 @@ async function renderActivityLabFocus(tabActivity, focusActivity, forceRefresh =
   renderActivityDetail(tabActivity, focusActivity);
   updateActivityLabValueToggleButtons();
   setGlucoseToggleVisible(false);
+  setExtraStreamTogglesVisible({ gap: false, power: false, cadence: false });
   renderActivityLabPlaceholder("lab-hr", "Heart rate + pace stream", "Loading streams…");
   try {
     const settings = getSettings();
-    const stream = await fetchHrStream(
+    let stream = await fetchHrStream(
       focusActivity.activity_id,
       settings,
       focusActivity.source || "intervals",
       "",
       forceRefresh
     );
+    if (!forceRefresh && streamNeedsEnhancedRefresh(stream)) {
+      stream = await fetchHrStream(
+        focusActivity.activity_id,
+        settings,
+        focusActivity.source || "intervals",
+        "",
+        true
+      );
+    }
     renderActivityLabTimeSeries(stream, focusActivity);
   } catch (err) {
     const detail = String(err?.message || "Unknown stream error");
     setGlucoseToggleVisible(false);
-    renderActivityLabPlaceholder("lab-hr", "Heart rate, pace, elevation", detail);
+    setExtraStreamTogglesVisible({ gap: false, power: false, cadence: false });
+    renderActivityLabPlaceholder("lab-hr", "Heart rate, pace, GAP, power, cadence, elevation", detail);
   }
   try {
     const workIntervals = await loadWorkIntervals(focusActivity);

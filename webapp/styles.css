@@ -1372,6 +1372,18 @@ body:not(.theme-dark) .activity-lab-stream-item.is-focus-activity {
   font-size: 0.76rem;
   border-radius: 999px;
 }
+.activity-race-flag {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(249, 115, 22, 0.58);
+  border-radius: 999px;
+  padding: 0.12rem 0.42rem;
+  background: rgba(249, 115, 22, 0.14);
+  color: #fdba74;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
 #screen-activity-detail .activity-lab-series-toggle.is-active {
   color: var(--text);
 }
@@ -1384,6 +1396,21 @@ body:not(.theme-dark) .activity-lab-stream-item.is-focus-activity {
   border-color: rgba(81, 184, 255, 0.58);
   background: rgba(81, 184, 255, 0.14);
   box-shadow: inset 0 0 0 1px rgba(81, 184, 255, 0.12);
+}
+#screen-activity-detail .activity-lab-series-toggle[data-activity-lab-label="gap"].is-active {
+  border-color: rgba(167, 139, 250, 0.58);
+  background: rgba(167, 139, 250, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.12);
+}
+#screen-activity-detail .activity-lab-series-toggle[data-activity-lab-label="power"].is-active {
+  border-color: rgba(245, 158, 11, 0.58);
+  background: rgba(245, 158, 11, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.12);
+}
+#screen-activity-detail .activity-lab-series-toggle[data-activity-lab-label="cadence"].is-active {
+  border-color: rgba(244, 114, 182, 0.58);
+  background: rgba(244, 114, 182, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(244, 114, 182, 0.12);
 }
 #screen-activity-detail .activity-lab-series-toggle[data-activity-lab-label="glucose"].is-active {
   border-color: rgba(84, 224, 161, 0.58);
@@ -1472,7 +1499,7 @@ body:not(.theme-dark) .activity-lab-stream-item.is-focus-activity {
 
 @media (max-width: 900px), (hover: none) and (pointer: coarse) {
   .topbar {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 0.7rem;
     min-height: auto;
@@ -1480,24 +1507,10 @@ body:not(.theme-dark) .activity-lab-stream-item.is-focus-activity {
   }
   .brand::after { display: none; }
   .topbar-menu-toggle {
-    display: inline-flex;
-    margin-left: auto;
+    display: none;
   }
   .topbar-menu {
     display: none;
-    order: 4;
-    width: 100%;
-    margin-left: 0;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.5rem;
-  }
-  .topbar.menu-open .topbar-menu {
-    display: flex;
-  }
-  .topbar.menu-open .topbar-menu .btn {
-    width: 100%;
-    text-align: center;
   }
   .tab-bar-stack {
     top: 60px;

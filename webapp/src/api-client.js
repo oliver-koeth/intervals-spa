@@ -6,6 +6,7 @@ function mapActivity(activity) {
     date: String(activity.start_date_local || "").slice(0, 10),
     activity_name: activity.name || "",
     activity_type: activity.type || "",
+    is_race: activity.race === true,
     source: "intervals",
     moving_time_s: Number(activity.moving_time || 0),
     distance_m: Number(activity.distance || 0),
@@ -162,6 +163,7 @@ function renderActivities() {
     tr.innerHTML = `
       <td>${item.date || ""}</td>
       <td>${item.activity_type || ""}</td>
+      <td>${item.is_race ? '<span class="activity-race-flag" title="Race">Race</span>' : ""}</td>
       <td title="${item.activity_name || ""}">${(item.activity_name || "").slice(0, 48)}</td>
       <td class="right">${formatSeconds(item.moving_time_s)}</td>
       <td class="right">${formatDistance(item.distance_m)}</td>
@@ -199,4 +201,3 @@ function applyActivitiesFilters() {
   });
   renderActivities();
 }
-
