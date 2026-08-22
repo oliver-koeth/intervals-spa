@@ -31,7 +31,9 @@ function init() {
   handleStravaOAuthCallback();
   initManualGallery();
   initSearchDatePickers();
-  setScreen("search");
+  const initialScreen = location.hash.replace(/^#/, "");
+  const validInitialScreens = ["search", "activities", "race-analysis", "similarity", "intervals", "glucose", "settings", "manual"];
+  setScreen(validInitialScreens.includes(initialScreen) ? initialScreen : "search");
   initSidebar();
 
   document.getElementById("activity-search-form").addEventListener("submit", handleActivitySearchSubmit);
