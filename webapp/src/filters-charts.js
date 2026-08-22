@@ -34,6 +34,7 @@ function mkChart(name) {
 function resizeAll() {
   Object.values(state.charts).forEach((c) => c && c.resize());
   Object.values(state.activityLabCharts).forEach((c) => c && c.resize());
+  Object.values(state.raceAnalysisCharts).forEach((c) => c && c.resize());
 }
 
 function mockHrStream(item) {
@@ -48,4 +49,3 @@ function mockHrStream(item) {
   }
   return pts;
 }
-

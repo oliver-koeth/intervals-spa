@@ -1,0 +1,1123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Race Analysis · Trail Data Hub</title>
+    <style>
+      :root {
+        --bg: #03070d;
+        --panel: rgba(16, 22, 30, 0.88);
+        --panel-strong: rgba(28, 38, 49, 0.92);
+        --line: rgba(148, 163, 184, 0.24);
+        --line-strong: rgba(148, 163, 184, 0.38);
+        --text: #eef4f8;
+        --muted: #a2afbd;
+        --subtle: #748391;
+        --cyan: #51b8ff;
+        --green: #54e0a1;
+        --amber: #ffb85c;
+        --violet: #a78bfa;
+        --rose: #ff647c;
+        --shadow: 0 24px 80px rgba(0, 0, 0, 0.44);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 74% -16%, rgba(84, 224, 161, 0.16), transparent 32rem),
+          radial-gradient(circle at 22% 4%, rgba(81, 184, 255, 0.15), transparent 30rem),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 20rem),
+          var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Segoe UI", sans-serif;
+        line-height: 1.5;
+      }
+
+      a { color: inherit; }
+
+      .page {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        min-height: 78px;
+      }
+
+      .brand {
+        font-size: 1.15rem;
+        font-weight: 750;
+        letter-spacing: -0.03em;
+      }
+
+      .brand span {
+        margin-left: 0.55rem;
+        color: var(--muted);
+        font-size: 0.86rem;
+        font-weight: 500;
+        letter-spacing: 0;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        border: 1px solid var(--line-strong);
+        border-radius: 0.75rem;
+        padding: 0.65rem 0.9rem;
+        background: rgba(148, 163, 184, 0.08);
+        color: var(--text);
+        font-weight: 720;
+        text-decoration: none;
+      }
+
+      .btn.primary {
+        border-color: rgba(84, 224, 161, 0.46);
+        background: linear-gradient(135deg, rgba(84, 224, 161, 0.95), rgba(81, 184, 255, 0.88));
+        color: #07131a;
+        box-shadow: 0 14px 48px rgba(84, 224, 161, 0.18);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 0.92fr) minmax(420px, 1.08fr);
+        gap: 1.2rem;
+        align-items: center;
+        padding: 2.3rem 0 1.5rem;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        border: 1px solid rgba(167, 139, 250, 0.44);
+        border-radius: 999px;
+        padding: 0.28rem 0.62rem;
+        background: rgba(167, 139, 250, 0.12);
+        color: #ddd6fe;
+        font-size: 0.78rem;
+        font-weight: 750;
+      }
+
+      h1, h2, h3 { letter-spacing: -0.035em; line-height: 1.08; }
+      h1 {
+        margin: 0.9rem 0 0.75rem;
+        font-size: clamp(2.45rem, 6vw, 5.3rem);
+      }
+      h2 {
+        margin: 0 0 0.8rem;
+        font-size: clamp(1.65rem, 3vw, 2.55rem);
+      }
+      h3 {
+        margin: 0 0 0.35rem;
+        font-size: 1rem;
+      }
+
+      .lead {
+        max-width: 58ch;
+        color: var(--muted);
+        font-size: 1.08rem;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: center;
+        margin-top: 1.25rem;
+      }
+
+      .cta-note {
+        color: var(--subtle);
+        font-size: 0.85rem;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 1.1rem;
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.045), transparent 58%),
+          var(--panel);
+        box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      }
+
+      .hero-shot {
+        padding: 0.9rem;
+        transform: rotate(0.3deg);
+      }
+
+      .shot-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        border-bottom: 1px solid var(--line);
+        padding: 0.35rem 0.35rem 0.8rem;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .traffic {
+        display: flex;
+        gap: 0.35rem;
+      }
+
+      .traffic i {
+        width: 0.7rem;
+        height: 0.7rem;
+        border-radius: 999px;
+        background: var(--rose);
+      }
+      .traffic i:nth-child(2) { background: var(--amber); }
+      .traffic i:nth-child(3) { background: var(--green); }
+
+      .shot-body {
+        display: grid;
+        gap: 0.75rem;
+        padding-top: 0.85rem;
+      }
+
+      .kpis {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.55rem;
+      }
+
+      .kpi {
+        border: 1px solid var(--line);
+        border-radius: 0.7rem;
+        background: rgba(148, 163, 184, 0.07);
+        padding: 0.65rem;
+      }
+
+      .kpi span {
+        display: block;
+        color: var(--subtle);
+        font-size: 0.68rem;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .kpi strong {
+        display: block;
+        margin-top: 0.2rem;
+        font-size: 1rem;
+      }
+
+      .mock-chart {
+        position: relative;
+        min-height: 240px;
+        border: 1px solid var(--line);
+        border-radius: 0.85rem;
+        overflow: hidden;
+        background:
+          linear-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(148, 163, 184, 0.07) 1px, transparent 1px),
+          rgba(5, 10, 16, 0.62);
+        background-size: 100% 25%, 16.66% 100%, auto;
+      }
+
+      .profile svg,
+      .scatter svg,
+      .mini svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        justify-content: center;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.32rem;
+      }
+
+      .swatch {
+        width: 1.2rem;
+        height: 0.2rem;
+        border-radius: 999px;
+      }
+
+      .section {
+        padding: 3rem 0;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 1.5rem;
+        margin-bottom: 1rem;
+      }
+
+      .section-head p {
+        max-width: 54ch;
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.85rem;
+      }
+
+      .feature {
+        padding: 1rem;
+      }
+
+      .feature .icon {
+        display: grid;
+        width: 2.25rem;
+        height: 2.25rem;
+        place-items: center;
+        border-radius: 0.75rem;
+        background: rgba(81, 184, 255, 0.12);
+        color: var(--cyan);
+        font-weight: 800;
+      }
+
+      .feature p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .analysis-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 0.9rem;
+      }
+
+      .caption {
+        margin: 0.65rem 0 0;
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      .caption strong {
+        color: var(--text);
+      }
+
+      .sig-tag {
+        display: inline-block;
+        margin-bottom: 0.5rem;
+        padding: 0.2rem 0.55rem;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(167, 139, 250, 0.12);
+        color: #ddd6fe;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+
+      .thresholds {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin: 0.2rem 0 0.7rem;
+        padding: 0;
+        list-style: none;
+      }
+
+      .thresholds li {
+        font-size: 0.78rem;
+        font-weight: 650;
+        padding: 0.24rem 0.55rem;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+
+      .thresholds li b {
+        color: var(--text);
+      }
+
+      .sig-map {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 0.5rem;
+        font-size: 0.86rem;
+      }
+
+      .case-grid {
+        display: grid;
+        gap: 0.9rem;
+      }
+
+      .case-study {
+        padding: 1.1rem 1.2rem;
+        border-left: 3px solid var(--subtle);
+      }
+
+      .case-study.metabolic {
+        border-left-color: var(--rose);
+      }
+
+      .case-study.muscular {
+        border-left-color: var(--green);
+      }
+
+      .case-study.fueling {
+        border-left-color: var(--amber);
+      }
+
+      .case-study .sig-tag {
+        margin-bottom: 0.35rem;
+      }
+
+      .case-study .scenario {
+        color: var(--muted);
+        margin: 0.2rem 0 0.75rem;
+      }
+
+      .case-study .sig-map th,
+      .case-study .sig-map td {
+        font-size: 0.82rem;
+      }
+
+      .verdict {
+        margin: 0.85rem 0 0;
+        padding: 0.75rem 0.9rem;
+        border-radius: 0.7rem;
+        background: rgba(148, 163, 184, 0.08);
+        border: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      .verdict strong {
+        color: var(--text);
+      }
+
+      .caveat {
+        margin: 0.6rem 0 0;
+        padding: 0.6rem 0.85rem;
+        border-radius: 0.7rem;
+        background: rgba(255, 184, 92, 0.1);
+        border: 1px solid rgba(255, 184, 92, 0.35);
+        color: var(--muted);
+        font-size: 0.84rem;
+      }
+
+      .sig-map th,
+      .sig-map td {
+        text-align: left;
+        padding: 0.6rem 0.7rem;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+
+      .sig-map thead th {
+        color: var(--subtle);
+        font-weight: 700;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .sig-map td {
+        color: var(--muted);
+      }
+
+      .sig-map td:first-child {
+        color: var(--text);
+        font-weight: 650;
+        white-space: nowrap;
+      }
+
+      .source-note {
+        margin: 0.9rem 0 0;
+        color: var(--subtle);
+        font-size: 0.8rem;
+      }
+
+      .sources-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.9rem;
+      }
+
+      .source-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .source-list li {
+        border-top: 1px solid var(--line);
+        padding-top: 0.65rem;
+      }
+
+      .source-list li:first-child {
+        border-top: none;
+        padding-top: 0;
+      }
+
+      .source-list a {
+        color: var(--text);
+        font-weight: 650;
+        text-decoration: none;
+        display: inline-block;
+      }
+
+      .source-list a:hover {
+        color: var(--cyan);
+        text-decoration: underline;
+      }
+
+      .source-list .cite {
+        display: block;
+        margin-top: 0.2rem;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+
+      .table-scroll {
+        overflow-x: auto;
+      }
+
+      .mini-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        margin: 0.1rem 0 0.9rem;
+        color: var(--muted);
+        font-size: 0.8rem;
+        font-weight: 650;
+      }
+
+      .mini-legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.32rem;
+      }
+
+      .mini-legend i {
+        width: 0.65rem;
+        height: 0.65rem;
+        border-radius: 999px;
+      }
+
+      .insights {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.85rem;
+      }
+
+      .insight {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0.8rem;
+        padding: 1rem;
+      }
+
+      .badge {
+        display: inline-grid;
+        width: 2.4rem;
+        height: 2.4rem;
+        place-items: center;
+        border-radius: 999px;
+        background: rgba(167, 139, 250, 0.15);
+        color: var(--violet);
+        font-weight: 850;
+      }
+
+      .insight p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .privacy {
+        display: grid;
+        grid-template-columns: 0.9fr 1.1fr;
+        gap: 1rem;
+        align-items: center;
+      }
+
+      .privacy-card {
+        padding: 1.1rem;
+      }
+
+      .privacy-list {
+        display: grid;
+        gap: 0.55rem;
+        margin: 1rem 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .privacy-list li {
+        display: flex;
+        gap: 0.55rem;
+        color: var(--muted);
+      }
+
+      .privacy-list li::before {
+        content: "✓";
+        color: var(--green);
+        font-weight: 850;
+      }
+
+      .final-cta {
+        margin: 2.4rem 0 3rem;
+        padding: 1.35rem;
+        text-align: center;
+      }
+
+      .final-cta p {
+        max-width: 62ch;
+        margin: 0.55rem auto 1rem;
+        color: var(--muted);
+      }
+
+      .footer {
+        border-top: 1px solid var(--line);
+        padding: 1.2rem 0 1.8rem;
+        color: var(--subtle);
+        font-size: 0.84rem;
+      }
+
+      .footer-inner {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        justify-content: space-between;
+      }
+
+      .footer a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+
+      @media (max-width: 900px) {
+        .hero,
+        .analysis-grid,
+        .privacy,
+        .insights,
+        .sources-grid {
+          grid-template-columns: 1fr;
+        }
+        .hero { padding-top: 1rem; }
+        .grid-3 { grid-template-columns: 1fr; }
+        .section-head {
+          display: block;
+        }
+        .kpis {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="page topbar">
+      <div class="brand">Trail Data Hub <span>Race Analysis</span></div>
+      <a class="btn" href="https://github.com/oliver-koeth/intervals-spa" target="_blank" rel="noopener noreferrer">Source</a>
+    </header>
+
+    <main class="page">
+      <section class="hero">
+        <div>
+          <span class="eyebrow">Browser-only trail race diagnostics</span>
+          <h1>Turn one race file into your next training block.</h1>
+          <p class="lead">
+            Race Analysis splits your trail race into meaningful segments, compares performance across quarters,
+            and highlights where pace, heart rate, climbing, descending, and stops changed as fatigue accumulated.
+          </p>
+          <div class="hero-actions">
+            <a class="btn primary" href="./index.html">Try Race Analysis in the app</a>
+            <span class="cta-note">Open the app, choose <strong>Race Analysis</strong>, then select a cached activity or upload GPX.</span>
+          </div>
+        </div>
+
+        <div class="panel hero-shot" aria-label="Race Analysis screenshot mock-up">
+          <div class="shot-top">
+            <div class="traffic"><i></i><i></i><i></i></div>
+            <span>Race report · UTFS style trail race</span>
+          </div>
+          <div class="shot-body">
+            <div class="kpis">
+              <div class="kpi"><span>Distance</span><strong>68.4 km</strong></div>
+              <div class="kpi"><span>Moving</span><strong>8:42:16</strong></div>
+              <div class="kpi"><span>Ascent</span><strong>+3,180 m</strong></div>
+              <div class="kpi"><span>Avg HR</span><strong>146 bpm</strong></div>
+            </div>
+            <div class="mock-chart profile">
+              <svg viewBox="0 0 720 260" role="img" aria-label="Synthetic elevation profile screenshot">
+                <defs>
+                  <linearGradient id="area" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0" stop-color="#51b8ff" stop-opacity="0.34" />
+                    <stop offset="1" stop-color="#51b8ff" stop-opacity="0.03" />
+                  </linearGradient>
+                </defs>
+                <path d="M0,225 L0,190 C38,145 70,160 106,94 C150,26 198,82 232,78 C278,74 282,148 324,136 C364,126 375,45 426,52 C470,58 492,164 536,142 C578,122 612,64 646,94 C680,124 690,168 720,150 L720,225 Z" fill="url(#area)" />
+                <path d="M0,190 C38,145 70,160 106,94 C150,26 198,82 232,78 C278,74 282,148 324,136 C364,126 375,45 426,52 C470,58 492,164 536,142 C578,122 612,64 646,94 C680,124 690,168 720,150" fill="none" stroke="#51b8ff" stroke-width="4" />
+                <g stroke="#748391" stroke-dasharray="6 8" opacity="0.7">
+                  <line x1="180" x2="180" y1="20" y2="228" />
+                  <line x1="360" x2="360" y1="20" y2="228" />
+                  <line x1="540" x2="540" y1="20" y2="228" />
+                </g>
+                <g font-size="16" font-weight="800">
+                  <text x="88" y="42" fill="#51b8ff">Q1</text>
+                  <text x="268" y="42" fill="#54e0a1">Q2</text>
+                  <text x="448" y="42" fill="#ffb85c">Q3</text>
+                  <text x="628" y="42" fill="#a78bfa">Q4</text>
+                </g>
+              </svg>
+            </div>
+            <div class="legend">
+              <span><i class="swatch" style="background:#51b8ff"></i>Q1</span>
+              <span><i class="swatch" style="background:#54e0a1"></i>Q2</span>
+              <span><i class="swatch" style="background:#ffb85c"></i>Q3</span>
+              <span><i class="swatch" style="background:#a78bfa"></i>Q4</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>What it does</h2>
+          <p>Upload GPX or choose a cached activity. The report stays deterministic and local, then gives you race-specific diagnostics instead of another generic activity chart.</p>
+        </div>
+        <div class="grid-3">
+          <article class="panel feature">
+            <div class="icon">¼</div>
+            <h3>Quarter-based fatigue view</h3>
+            <p>Splits the course into equal-distance quarters and compares pace, estimated GAP, HR, power, cadence, and efficiency.</p>
+          </article>
+          <article class="panel feature">
+            <div class="icon">↕</div>
+            <h3>Terrain-aware breakdown</h3>
+            <p>Separates steep climbs, moderate climbs, flats, descents, extreme sections, and stationary clusters so the result is not averaged away.</p>
+          </article>
+          <article class="panel feature">
+            <div class="icon">●</div>
+            <h3>Scatter &amp; VAM diagnostics</h3>
+            <p>ECharts scatter plots for graded pace vs HR and slope vs HR, plus VAM (vertical metres/hour) bar charts per slope band and quarter, expose where physiology changed on specific terrain.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>From result to intervention</h2>
+          <p>Each chart maps to a known physiological signature. The report pairs an observable pattern with its likely mechanism and a concrete training response — the same logic coaches at Uphill Athlete, CTS and UESCA use to build durability, muscular endurance and eccentric resilience.</p>
+        </div>
+        <div class="analysis-grid">
+          <div class="panel feature">
+            <span class="sig-tag">Durability · muscular endurance</span>
+            <h3>Example: climbing fades late</h3>
+            <div class="mini-legend" aria-label="Quarter color legend">
+              <span><i style="background:#51b8ff"></i>Q1</span>
+              <span><i style="background:#54e0a1"></i>Q2</span>
+              <span><i style="background:#ffb85c"></i>Q3</span>
+              <span><i style="background:#a78bfa"></i>Q4</span>
+            </div>
+            <div class="mock-chart scatter mini" aria-label="Synthetic uphill slope heart rate screenshot">
+              <svg viewBox="0 0 520 260" role="img">
+                <g stroke="#748391" opacity="0.2">
+                  <line x1="48" x2="500" y1="52" y2="52" />
+                  <line x1="48" x2="500" y1="104" y2="104" />
+                  <line x1="48" x2="500" y1="156" y2="156" />
+                  <line x1="48" x2="500" y1="208" y2="208" />
+                </g>
+                <g opacity="0.85">
+                  <circle cx="88" cy="182" r="6" fill="#51b8ff" /><circle cx="145" cy="162" r="6" fill="#51b8ff" /><circle cx="196" cy="142" r="6" fill="#51b8ff" />
+                  <circle cx="102" cy="172" r="6" fill="#54e0a1" /><circle cx="178" cy="148" r="6" fill="#54e0a1" /><circle cx="246" cy="121" r="6" fill="#54e0a1" />
+                  <circle cx="112" cy="150" r="6" fill="#ffb85c" /><circle cx="206" cy="116" r="6" fill="#ffb85c" /><circle cx="298" cy="84" r="6" fill="#ffb85c" />
+                  <circle cx="122" cy="128" r="7" fill="#a78bfa" /><circle cx="226" cy="92" r="7" fill="#a78bfa" /><circle cx="340" cy="58" r="7" fill="#a78bfa" />
+                </g>
+                <text x="48" y="238" fill="#a2afbd" font-size="13">Uphill slope %</text>
+                <text x="18" y="30" fill="#a2afbd" font-size="13" transform="rotate(-90 18 30)">HR</text>
+              </svg>
+            </div>
+            <p class="caption">
+              <strong>Signature:</strong> Q4 dots sit higher (more HR) at the same uphill grade while graded pace slows — classic
+              <strong>durability</strong> loss, not a VO₂max ceiling. The aerobic and muscular systems are no longer holding output once
+              fatigue, micro-damage and glycogen depletion accumulate.
+              <br /><strong>Train it:</strong> pre-fatigued climbing (2–3 h easy, then 30–60 min strong uphill), weighted vert hikes,
+              back-to-back long days, and muscular-endurance hill repeats (e.g. 3×12 min uphill at Zone 3). Recheck fuelling — under-fuelling
+              amplifies late fade.
+            </p>
+          </div>
+          <div class="panel feature">
+            <span class="sig-tag">Eccentric load · repeated-bout effect</span>
+            <h3>Example: descending costs too much</h3>
+            <div class="mini-legend" aria-label="Quarter color legend">
+              <span><i style="background:#51b8ff"></i>Q1</span>
+              <span><i style="background:#54e0a1"></i>Q2</span>
+              <span><i style="background:#ffb85c"></i>Q3</span>
+              <span><i style="background:#a78bfa"></i>Q4</span>
+            </div>
+            <div class="mock-chart scatter mini" aria-label="Synthetic descent slope heart rate screenshot">
+              <svg viewBox="0 0 520 260" role="img">
+                <g stroke="#748391" opacity="0.2">
+                  <line x1="48" x2="500" y1="52" y2="52" />
+                  <line x1="48" x2="500" y1="104" y2="104" />
+                  <line x1="48" x2="500" y1="156" y2="156" />
+                  <line x1="48" x2="500" y1="208" y2="208" />
+                </g>
+                <g opacity="0.85">
+                  <circle cx="94" cy="142" r="6" fill="#51b8ff" /><circle cx="158" cy="154" r="6" fill="#51b8ff" /><circle cx="228" cy="170" r="6" fill="#51b8ff" />
+                  <circle cx="108" cy="136" r="6" fill="#54e0a1" /><circle cx="188" cy="150" r="6" fill="#54e0a1" /><circle cx="270" cy="166" r="6" fill="#54e0a1" />
+                  <circle cx="130" cy="116" r="6" fill="#ffb85c" /><circle cx="236" cy="126" r="6" fill="#ffb85c" /><circle cx="328" cy="150" r="6" fill="#ffb85c" />
+                  <circle cx="152" cy="94" r="7" fill="#a78bfa" /><circle cx="276" cy="104" r="7" fill="#a78bfa" /><circle cx="388" cy="134" r="7" fill="#a78bfa" />
+                </g>
+                <text x="48" y="238" fill="#a2afbd" font-size="13">Downhill slope %</text>
+                <text x="18" y="30" fill="#a2afbd" font-size="13" transform="rotate(-90 18 30)">HR</text>
+              </svg>
+            </div>
+            <p class="caption">
+              <strong>Signature:</strong> HR (and metabolic cost) climbs on descents late in the race while descending pace stalls. This points to
+              <strong>exercise-induced muscle damage</strong> — eccentric braking micro-tears the quads, so each stride recruits more fibres for the
+              same speed.
+              <br /><strong>Train it:</strong> build the <strong>repeated-bout effect</strong> with progressive downhill volume, eccentric strength
+              (slow tempo squats/step-downs), plyometrics and technical descent repeats. Add a pacing rule to hold back on early descents so damage
+              accrues later.
+            </p>
+          </div>
+          <div class="panel feature" style="grid-column: 1 / -1">
+            <span class="sig-tag">Climbing economy · VAM</span>
+            <h3>Example: climbing power collapses on the steeps</h3>
+            <div class="mini-legend" aria-label="Quarter color legend">
+              <span><i style="background:#51b8ff"></i>Q1</span>
+              <span><i style="background:#54e0a1"></i>Q2</span>
+              <span><i style="background:#ffb85c"></i>Q3</span>
+              <span><i style="background:#a78bfa"></i>Q4</span>
+            </div>
+            <div class="mock-chart scatter mini" aria-label="Synthetic ascending VAM by slope segment screenshot">
+              <svg viewBox="0 0 520 260" role="img">
+                <g stroke="#748391" opacity="0.2">
+                  <line x1="48" x2="500" y1="52" y2="52" />
+                  <line x1="48" x2="500" y1="104" y2="104" />
+                  <line x1="48" x2="500" y1="156" y2="156" />
+                  <line x1="48" x2="500" y1="208" y2="208" />
+                </g>
+                <g>
+                  <rect x="70" y="150" width="14" height="58" fill="#51b8ff" /><rect x="86" y="158" width="14" height="50" fill="#54e0a1" /><rect x="102" y="166" width="14" height="42" fill="#ffb85c" /><rect x="118" y="176" width="14" height="32" fill="#a78bfa" />
+                  <rect x="180" y="118" width="14" height="90" fill="#51b8ff" /><rect x="196" y="130" width="14" height="78" fill="#54e0a1" /><rect x="212" y="150" width="14" height="58" fill="#ffb85c" /><rect x="228" y="172" width="14" height="36" fill="#a78bfa" />
+                  <rect x="290" y="96" width="14" height="112" fill="#51b8ff" /><rect x="306" y="120" width="14" height="88" fill="#54e0a1" /><rect x="322" y="152" width="14" height="56" fill="#ffb85c" /><rect x="338" y="184" width="14" height="24" fill="#a78bfa" />
+                  <rect x="400" y="86" width="14" height="122" fill="#51b8ff" /><rect x="416" y="118" width="14" height="90" fill="#54e0a1" /><rect x="432" y="158" width="14" height="50" fill="#ffb85c" /><rect x="448" y="192" width="14" height="16" fill="#a78bfa" />
+                </g>
+                <text x="48" y="238" fill="#a2afbd" font-size="13">Slope segment (steeper →)</text>
+                <text x="18" y="40" fill="#a2afbd" font-size="13" transform="rotate(-90 18 40)">VAM m/h</text>
+              </svg>
+            </div>
+            <p class="caption">
+              <strong>Signature:</strong> ascending <strong>VAM</strong> (vertical metres/hour) holds on gentle grades but drops quarter-by-quarter on the
+              steepest bands. Gentle-grade climbing is largely aerobic; steep-grade VAM exposes <strong>climbing-specific force and power-to-weight</strong>,
+              which fail first under fatigue.
+              <br /><strong>Train it:</strong> steep hill repeats and vertical-focused strength (uphill treadmill or power-hiking with load), plus economy work
+              on race-relevant gradients. Pace to protect the hardest climbs for the back half — VAM at a fixed HR is your progress benchmark between blocks.
+            </p>
+          </div>
+          <div class="panel feature" style="grid-column: 1 / -1">
+            <span class="sig-tag">Aerobic decoupling · the durability number</span>
+            <h3>Example: heart rate drifts away from pace</h3>
+            <div class="mock-chart mini" aria-label="Synthetic aerobic decoupling screenshot: steady pace with rising heart rate">
+              <svg viewBox="0 0 720 220" role="img">
+                <g stroke="#748391" opacity="0.2">
+                  <line x1="48" x2="700" y1="52" y2="52" />
+                  <line x1="48" x2="700" y1="104" y2="104" />
+                  <line x1="48" x2="700" y1="156" y2="156" />
+                </g>
+                <path d="M48,150 C160,148 260,152 372,150 C484,148 588,153 700,150" fill="none" stroke="#51b8ff" stroke-width="4" />
+                <path d="M48,150 C160,138 260,128 372,110 C484,92 588,72 700,58" fill="none" stroke="#ff647c" stroke-width="4" stroke-dasharray="2 0" />
+                <text x="360" y="176" fill="#51b8ff" font-size="13">GAP pace (steady)</text>
+                <text x="470" y="48" fill="#ff647c" font-size="13">Heart rate (rising)</text>
+                <text x="48" y="206" fill="#a2afbd" font-size="13">Race progress →</text>
+              </svg>
+            </div>
+            <ul class="thresholds" aria-label="Aerobic decoupling reference bands">
+              <li><b>&lt;5%</b> · aerobically durable at this effort</li>
+              <li><b>5–10%</b> · moderate limitation</li>
+              <li><b>&gt;10%</b> · base, pacing or fuelling shortfall</li>
+            </ul>
+            <p class="caption">
+              The report now prints an <strong>Aerobic decoupling (GAP:HR)</strong> KPI — the drop in graded-pace-to-heart-rate efficiency from the first
+              half to the second half. It is the single most practical durability number: rising HR at a stable graded pace signals plasma-volume loss,
+              heat, dehydration or glycogen depletion eroding aerobic efficiency.
+              <br /><strong>Train it:</strong> high-volume aerobic base, disciplined (slow) starts, earlier and more consistent fuelling/hydration, heat
+              acclimation, and back-to-back long days. As you adapt, the same effort decouples later and by less.
+            </p>
+          </div>
+        </div>
+
+        <div class="panel feature" style="margin-top: 0.9rem">
+          <h3>Training-response map</h3>
+          <div class="table-scroll">
+            <table class="sig-map">
+              <thead>
+                <tr><th>What you see in the report</th><th>Likely mechanism</th><th>Primary intervention</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Uphill HR drifts up &amp; pace drops in Q3–Q4</td>
+                  <td>Durability / muscular-endurance limit</td>
+                  <td>Pre-fatigued climbs, weighted vert, ME hill repeats, back-to-back long days</td>
+                </tr>
+                <tr>
+                  <td>Ascending VAM falls on the steepest bands late</td>
+                  <td>Climbing-specific force &amp; power-to-weight</td>
+                  <td>Steep hill repeats, vertical strength, grade-specific economy work</td>
+                </tr>
+                <tr>
+                  <td>Descending HR/cost rises, descent pace stalls late</td>
+                  <td>Eccentric muscle damage (EIMD) in the quads</td>
+                  <td>Progressive downhill volume (repeated-bout effect), eccentric strength, plyos, technique</td>
+                </tr>
+                <tr>
+                  <td>Aerobic decoupling &gt;10% (GAP:HR, half 1 → half 2)</td>
+                  <td>Aerobic base, fuelling or heat/hydration shortfall</td>
+                  <td>Aerobic base volume, earlier fuelling, heat acclimation, disciplined starts</td>
+                </tr>
+                <tr>
+                  <td>Q1 much faster than Q2–Q4 (positive split)</td>
+                  <td>Pacing error accelerating glycogen &amp; muscle cost</td>
+                  <td>Even/negative-split practice, effort-capped climbs, GAP-based pacing</td>
+                </tr>
+                <tr>
+                  <td>Long or clustered late stationary stops</td>
+                  <td>Aid-station, GI or cramp management</td>
+                  <td>Rehearse fuelling &amp; transitions, sodium/hydration plan, gut training</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="source-note">
+            Framework informed by Uphill Athlete, Evoke Endurance and peer-reviewed exercise-physiology research on downhill-running muscle damage,
+            aerobic decoupling and grade-specific climbing economy (see <a href="#sources" style="color:inherit;text-decoration:underline;">Sources &amp; further reading</a> below).
+            Guidance is educational, not a substitute for individual coaching.
+          </p>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>Case studies: pattern-matching your race</h2>
+          <p>Three common ways a race goes wrong look similar on a finish-line photo but very different in the report. Find the one that matches your data.</p>
+        </div>
+        <div class="case-grid">
+          <div class="panel case-study metabolic">
+            <span class="sig-tag">Case 1 · Metabolic / aerobic power limiter</span>
+            <h3>Overpaced first half, then fades everywhere</h3>
+            <p class="scenario">
+              Q1 felt easy and fast. From Q2 onward everything gets harder — climbs, flats and descents alike — and the fade never
+              really stops. Nothing terrain-specific stands out; the whole race just slows down together with rising effort.
+            </p>
+            <table class="sig-map">
+              <thead><tr><th>Report signal</th><th>What you'd see</th></tr></thead>
+              <tbody>
+                <tr><td>Aerobic decoupling (GAP:HR)</td><td>High, often <b>&gt;10%</b> — well past the healthy &lt;5% band</td></tr>
+                <tr><td>Quarter averages — GAP/HR vs Q1</td><td>Q2–Q4 all slower by a similar margin, regardless of terrain</td></tr>
+                <tr><td>Terrain-grade bands</td><td>Pace loss spread evenly across climbs, flats <em>and</em> descents</td></tr>
+                <tr><td>Ascending VAM by slope segment</td><td>Drops across <em>all</em> bands together, not just the steepest</td></tr>
+                <tr><td>Stationary clusters</td><td>Usually unremarkable — this is an output problem, not a stopping problem</td></tr>
+              </tbody>
+            </table>
+            <p class="verdict">
+              <strong>Mechanism:</strong> starting above sustainable aerobic pace burns through glycogen and accumulates metabolic
+              fatigue faster than the aerobic system can clear it. Because the whole body is above its sustainable intensity, the
+              slowdown shows up everywhere — it is not a climbing- or descending-specific limiter.
+              <br /><strong>Fix it:</strong> pace the first third to GAP, not raw speed; build aerobic threshold and long-run volume so
+              the sustainable ceiling itself is higher; rehearse even/negative splits in training.
+            </p>
+          </div>
+
+          <div class="panel case-study muscular">
+            <span class="sig-tag">Case 2 · Muscular endurance &amp; eccentric limiter — not aerobic</span>
+            <h3>Even pacing, but the legs give out — up and down</h3>
+            <p class="scenario">
+              Pacing was disciplined and HR never spiked. Yet by the second half, uphills feel like wading through mud and downhills
+              hammer the quads — while heart rate barely moves. The cardiovascular system was never the bottleneck.
+            </p>
+            <table class="sig-map">
+              <thead><tr><th>Report signal</th><th>What you'd see</th></tr></thead>
+              <tbody>
+                <tr><td>Aerobic decoupling (GAP:HR)</td><td>Low, typically <b>&lt;5%</b> — the aerobic engine held up fine</td></tr>
+                <tr><td>Quarter averages — HR</td><td>Nearly flat Q1→Q4; effort (by HR) looks the same all race</td></tr>
+                <tr><td>Ascending VAM by slope segment</td><td>Q4 collapses specifically on 15%+ bands; gentle bands barely change</td></tr>
+                <tr><td>Descending slope vs heart rate</td><td>Q4 points sit at <em>slower</em> pace for the <em>same</em> HR as Q1 — not higher HR</td></tr>
+                <tr><td>Terrain-grade bands</td><td>Efficiency drops specifically on steep climbs and descents, not on flats</td></tr>
+              </tbody>
+            </table>
+            <p class="verdict">
+              <strong>Mechanism:</strong> "the heart doesn't fail first" — the limiter is repeated force output in the climbing
+              muscles and eccentric braking capacity in the quads, not oxygen delivery. HR stays low because the muscles simply
+              cannot generate the force to raise it.
+              <br /><strong>Fix it:</strong> muscular-endurance hill repeats and weighted vert hikes for climbing; progressive downhill
+              volume and eccentric strength (slow-tempo squats, step-downs) to build the repeated-bout effect for descents.
+            </p>
+          </div>
+
+          <div class="panel case-study fueling">
+            <span class="sig-tag">Case 3 · Fuelling / GI distress — proxy signals only</span>
+            <h3>Not enough calories in, or the gut stopped taking them</h3>
+            <p class="scenario">
+              This one is genuinely harder to pin down from GPS and heart-rate data alone — under-fuelling and GI distress often
+              overlap and can partially mask each other. Here is what to look for, and why it is not as clean-cut as Cases 1 and 2.
+            </p>
+            <table class="sig-map">
+              <thead><tr><th>Report signal</th><th>What you'd see</th></tr></thead>
+              <tbody>
+                <tr><td>Stationary clusters</td><td>Several short stops clustered together (bathroom breaks, lingering at aid) rather than one long planned stop</td></tr>
+                <tr><td>Terrain-grade bands</td><td>Pace/GAP slows even on flat, easy-grade bands — not explained by terrain or durability</td></tr>
+                <tr><td>Aerobic decoupling (GAP:HR)</td><td>Inconsistent — may look moderate rather than the sharp rise seen in Case 1</td></tr>
+                <tr><td>Quarter cadence</td><td>Often drops together with pace, out of proportion to the grade</td></tr>
+              </tbody>
+            </table>
+            <p class="caveat">
+              <strong>Why it's messier:</strong> reduced splanchnic (gut) blood flow under high effort or heat is <em>both</em> a cause
+              and an effect of GI distress, and it can blunt the heart-rate response instead of raising it the way Case 1's overpacing
+              does. That means the classic "rising HR, falling pace" decoupling signature can be muted or absent even though something
+              real is going wrong. GI symptoms are also extremely common in ultras — nausea alone is reported by the majority of
+              finishers in some race-day surveys — so the report can only flag a suggestive pattern, not diagnose it.
+            </p>
+            <p class="verdict">
+              <strong>Best current read:</strong> a broad, terrain-independent slowdown combined with clustered short stops is the
+              strongest data-only hint of fuelling/GI trouble. Cross-check it against your own notes (nausea, bloating, missed
+              gels/bottles) — the report cannot see what you ate or how your stomach felt.
+              <br /><strong>Fix it:</strong> start fuelling earlier and in smaller, more frequent doses; train your gut with race-pace,
+              race-nutrition long runs; keep a simple race-day nutrition/GI log so future reports can be cross-referenced against it.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="sources">
+        <div class="section-head">
+          <h2>Sources &amp; further reading</h2>
+          <p>The signatures above are not invented terminology — they come from coaches who train elite mountain/ultra athletes and from peer-reviewed exercise physiology. Every link below is publicly accessible.</p>
+        </div>
+        <div class="sources-grid">
+          <div class="panel">
+            <h3>Practitioners &amp; coaches</h3>
+            <ul class="source-list">
+              <li>
+                <a href="https://uphillathlete.com/aerobic-training/durability-training-efficiency-factor-and-decoupling-for-endurance-athletes/" target="_blank" rel="noopener">Durability Training: Efficiency Factor and Decoupling for Endurance Athletes</a>
+                <span class="cite">Uphill Athlete. Defines durability, efficiency factor and aerobic decoupling — the basis for the report's Aerobic decoupling (GAP:HR) KPI.</span>
+              </li>
+              <li>
+                <a href="https://evokeendurance.com/resources/muscular-endurance-all-you-need-to-know/" target="_blank" rel="noopener">Muscular Endurance: All You Need to Know</a>
+                <span class="cite">Scott Johnston, Evoke Endurance. Why repeated force output — not just aerobic power — decides late-race climbing performance.</span>
+              </li>
+              <li>
+                <a href="https://www.irunfar.com/coaching-the-2025-utmb-champions-scott-johnstons-focus-on-muscular-endurance" target="_blank" rel="noopener">Coaching the 2025 UTMB Champions: Scott Johnston's Focus on Muscular Endurance</a>
+                <span class="cite">iRunFar. Applied case study of durability-focused coaching (Evoke Endurance) at the elite level.</span>
+              </li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>Peer-reviewed research</h3>
+            <ul class="source-list">
+              <li>
+                <a href="https://doi.org/10.1152/japplphysiol.01177.2001" target="_blank" rel="noopener">Energy cost of walking and running at extreme uphill and downhill slopes</a>
+                <span class="cite">Minetti et al., J Appl Physiol (2002). The grade-energy cost model the report's estimated GAP (grade-adjusted pace) is built on.</span>
+              </li>
+              <li>
+                <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7674385/" target="_blank" rel="noopener">Downhill Running: What Are The Effects and How Can We Adapt? A Narrative Review</a>
+                <span class="cite">Sports Medicine (2020), open access via PMC. Mechanisms of eccentric muscle damage and the repeated-bout effect used in the descending-slope signatures.</span>
+              </li>
+              <li>
+                <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC12225290/" target="_blank" rel="noopener">Exertional Rhabdomyolysis and Ultra-Trail Races: A Systematic Review</a>
+                <span class="cite">Muscles, MDPI (2024), open access via PMC. Downhill-heavy elevation profiles cause disproportionate muscle-damage biomarkers vs. uphill/level running.</span>
+              </li>
+              <li>
+                <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC4701764/" target="_blank" rel="noopener">The Impact of Gastrointestinal Symptoms and Dermatological Injuries on Nutritional Intake and Hydration Status</a>
+                <span class="cite">Open access. Evidence for how common GI distress is in multi-stage/24h ultras and how it disrupts fuelling — the basis for Case study 3's caveats.</span>
+              </li>
+            </ul>
+          </div>
+          <div class="panel" style="grid-column: 1 / -1">
+            <h3>Nutrition &amp; gut training</h3>
+            <ul class="source-list">
+              <li>
+                <a href="https://uesca.com/minimizing-the-chance-for-gi-distress-in-ultramarathons/" target="_blank" rel="noopener">Minimizing the Chance for GI Distress in Ultramarathons</a>
+                <span class="cite">UESCA. Practical causes and prevention of exercise-associated GI distress, including reduced gut blood flow at high effort — referenced in Case study 3.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>Benefits for athletes and coaches</h2>
+          <p>Use the report as a post-race debrief template: what failed, where it failed, and what to train next.</p>
+        </div>
+        <div class="insights">
+          <article class="panel insight">
+            <span class="badge">1</span>
+            <div><h3>Find fatigue signatures</h3><p>Compare Q1–Q4 for aerobic decoupling, HR drift, and terrain-specific efficiency loss — the tell-tales of durability breakdown.</p></div>
+          </article>
+          <article class="panel insight">
+            <span class="badge">2</span>
+            <div><h3>Separate terrain from fitness</h3><p>Climbs, flats, and descents are analyzed separately, so a slow final quarter is explained by mechanism (eccentric damage vs. aerobic drift), not guessed.</p></div>
+          </article>
+          <article class="panel insight">
+            <span class="badge">3</span>
+            <div><h3>Design targeted training</h3><p>Late uphill fade → durability &amp; muscular endurance; steep-band VAM loss → climbing force; costly descents → eccentric strength and the repeated-bout effect; long stops → aid-station routines.</p></div>
+          </article>
+          <article class="panel insight">
+            <span class="badge">4</span>
+            <div><h3>Review without cloud lock-in</h3><p>Use existing cached activities or a standalone GPX upload when you just want to inspect one race file.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section privacy">
+        <div>
+          <h2>Your race data stays local.</h2>
+          <p class="lead">
+            Race Analysis runs in your browser. It does not create a server-side race database and does not upload GPX files to this site.
+          </p>
+        </div>
+        <div class="panel privacy-card">
+          <h3>Privacy model</h3>
+          <ul class="privacy-list">
+            <li>GPX uploads are parsed in the browser for the current analysis.</li>
+            <li>Cached activities and stream data live in your browser local storage.</li>
+            <li>No race analysis results are stored on the server side by Trail Data Hub.</li>
+            <li>You can clear local app data using browser tools or the app settings.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="panel final-cta">
+        <h2>Ready to turn your race into a training plan?</h2>
+        <p>Open Trail Data Hub, choose Race Analysis, and start with either a cached activity or a GPX file.</p>
+        <a class="btn primary" href="./index.html">Try Race Analysis now</a>
+      </section>
+    </main>
+
+    <footer class="page footer">
+      <div class="footer-inner">
+        <span>© Oliver Koeth</span>
+        <span>
+          <a href="./impressum.html">Impressum</a> ·
+          <a href="./datenschutz.html">Datenschutz</a> ·
+          <a href="./license.html">Lizenz (GPL)</a>
+        </span>
+      </div>
+    </footer>
+  </body>
+</html>
