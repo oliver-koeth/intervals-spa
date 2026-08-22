@@ -23,6 +23,7 @@ function init() {
   applyGlucoseFilters();
   renderActivities();
   renderIntervals();
+  renderRaceAnalysisActivityOptions();
 
   loadSettingsToForm();
   updateSettingsCallouts();
@@ -251,6 +252,7 @@ function init() {
     state.activitiesFiltered = [];
     clearActivitiesCache();
     renderActivities();
+    renderRaceAnalysisActivityOptions();
   });
   document.getElementById("apply-activities-filters").addEventListener("click", applyActivitiesFilters);
   document.getElementById("clear-activities-filters").addEventListener("click", () => {
@@ -357,6 +359,14 @@ function init() {
     const activity = state.activities.find((a) => String(a.activity_id) === btn.dataset.similarityOpenId);
     if (activity) openActivityTab(activity);
   });
+
+  document.getElementById("race-analyze-activity").addEventListener("click", handleRaceAnalyzeActivity);
+  document.getElementById("race-activity-query").addEventListener("input", renderRaceAnalysisActivityOptions);
+  document.getElementById("race-activity-results").addEventListener("click", handleRaceActivityResultClick);
+  document.getElementById("race-analysis-tables").addEventListener("click", handleRaceTableFilterClick);
+  document.getElementById("race-gpx-input").addEventListener("change", handleRaceGpxFileUpload);
+  document.getElementById("race-download-json").addEventListener("click", downloadRaceAnalysisJson);
+  initRaceAnalysisDropZone();
 
   document.querySelectorAll("[data-screen-target]").forEach((btn) => {
     btn.addEventListener("click", () => {

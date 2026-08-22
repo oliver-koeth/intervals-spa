@@ -6,7 +6,7 @@
     <title>Intervals</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/themes/light.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260804-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260819-4" />
     <script src="https://cdn.jsdelivr.net/npm/echarts@6/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/shoelace-autoloader.js"></script>
@@ -32,6 +32,10 @@
           <button class="nav-btn" data-screen-target="activities" aria-label="Activities">
             <sl-icon name="activity" aria-hidden="true"></sl-icon>
             <span class="nav-label">Activities</span>
+          </button>
+          <button class="nav-btn" data-screen-target="race-analysis" aria-label="Race Analysis">
+            <sl-icon name="graph-up" aria-hidden="true"></sl-icon>
+            <span class="nav-label">Race Analysis</span>
           </button>
           <button class="nav-btn" data-screen-target="similarity" aria-label="Similarity">
             <sl-icon name="intersect" aria-hidden="true"></sl-icon>
@@ -353,6 +357,124 @@
                   <tbody id="activities-body"></tbody>
                 </table>
               </div>
+            </div>
+          </section>
+
+          <!-- ── Race Analysis ─────────────────────────────────────────────────── -->
+          <section id="screen-race-analysis" class="screen shoelace-forms">
+            <div class="card">
+              <div class="row space-between race-analysis-head">
+                <div>
+                  <h1>Race Analysis</h1>
+                  <p class="muted">
+                    Analyze a race from a cached activity stream or upload a GPX file for standalone browser-only analysis.
+                    The report uses equal-distance quarters, elevation smoothing, estimated GAP, terrain bands, and stop detection.
+                  </p>
+                </div>
+                <div class="race-analysis-actions">
+                  <button id="race-download-json" class="btn secondary" type="button" disabled>Download JSON</button>
+                </div>
+              </div>
+
+              <div class="race-source-grid">
+                <div class="race-source-panel">
+                  <h2>Cached activity</h2>
+                  <p class="muted">Pick an activity from the local Activities cache. Stream data is read from the existing HR stream cache or loaded with your saved Intervals.icu/Strava credentials.</p>
+                  <div class="filters race-analysis-picker">
+                    <label>Search activity name
+                      <input id="race-activity-query" class="search-date-input" type="search" placeholder="e.g. UTFS" autocomplete="off" />
+                    </label>
+                    <div class="form-actions">
+                      <button id="race-analyze-activity" class="btn primary" type="button">Analyze activity</button>
+                    </div>
+                  </div>
+                  <p id="race-activity-search-summary" class="muted race-activity-search-summary"></p>
+                  <div id="race-activity-results" class="race-activity-results" aria-label="Cached activity matches"></div>
+                </div>
+
+                <div class="race-source-panel">
+                  <h2>Standalone GPX</h2>
+                  <p class="muted">Upload or drop a GPX file. The file stays in this browser and does not require other app data.</p>
+                  <label class="btn primary race-upload-label" for="race-gpx-input">Upload GPX</label>
+                  <input
+                    id="race-gpx-input"
+                    type="file"
+                    accept=".gpx,application/gpx+xml,application/xml,text/xml"
+                    class="hidden"
+                  />
+                  <div id="race-drop-zone" class="race-drop-zone" tabindex="0">
+                    <strong>Drop GPX file</strong>
+                    <span>GPX analysis remains local to this browser.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="race-analysis-status-row">
+                <span id="race-analysis-spinner" class="race-spinner hidden" aria-hidden="true"></span>
+                <p id="race-analysis-status" class="muted race-analysis-status" role="status" aria-live="polite"></p>
+              </div>
+            </div>
+
+            <div id="race-analysis-report" class="race-analysis-report hidden">
+              <div class="card race-summary-card">
+                <div class="row space-between race-report-title">
+                  <div>
+                    <h1 id="race-report-name">Race</h1>
+                    <p id="race-report-meta" class="muted"></p>
+                  </div>
+                </div>
+                <div id="race-kpis" class="race-kpis"></div>
+              </div>
+
+              <div class="card race-chart-card">
+                <h2>Elevation profile and distance quarters</h2>
+                <div id="chart-race-profile" class="chart race-profile-chart"></div>
+                <div id="race-quarter-legend" class="race-quarter-legend"></div>
+              </div>
+
+              <div class="card race-chart-card">
+                <h2>Graded pace vs heart rate</h2>
+                <div id="chart-race-scatter" class="chart race-scatter-chart"></div>
+              </div>
+
+              <div class="chart-grid race-slope-chart-grid">
+                <div class="card race-chart-card">
+                  <h2>Ascending slope vs heart rate</h2>
+                  <div id="chart-race-uphill-hr" class="chart"></div>
+                </div>
+                <div class="card race-chart-card">
+                  <h2>Descending slope vs heart rate</h2>
+                  <div id="chart-race-downhill-hr" class="chart"></div>
+                </div>
+              </div>
+
+              <div class="chart-grid race-slope-chart-grid">
+                <div class="card race-chart-card">
+                  <h2>Ascending VAM by slope segment</h2>
+                  <div id="chart-race-uphill-vam" class="chart"></div>
+                </div>
+                <div class="card race-chart-card">
+                  <h2>Descending VAM by slope segment</h2>
+                  <div id="chart-race-downhill-vam" class="chart"></div>
+                </div>
+              </div>
+
+              <div class="chart-grid race-chart-grid">
+                <div class="card race-chart-card">
+                  <h2>Quarter-normalized heart rate</h2>
+                  <div id="chart-race-hr" class="chart"></div>
+                </div>
+                <div class="card race-chart-card">
+                  <h2>Quarter-normalized actual pace</h2>
+                  <div id="chart-race-pace" class="chart"></div>
+                </div>
+                <div class="card race-chart-card">
+                  <h2>Quarter-normalized estimated GAP</h2>
+                  <div id="chart-race-gap" class="chart"></div>
+                </div>
+              </div>
+
+              <div id="race-analysis-tables"></div>
             </div>
           </section>
     
@@ -874,7 +996,10 @@
           <!-- ── Manual ─────────────────────────────────────────────────────────── -->
           <section id="screen-manual" class="screen">
             <div class="card manual-content">
-              <h1>Manual</h1>
+              <div class="manual-header">
+                <h1>Manual</h1>
+                <a class="btn primary white manual-brochure-btn" href="./race-analysis.html" target="_blank" rel="noopener">Product Brochure</a>
+              </div>
               <p class="muted">
                 This guide walks through the complete local workflow: configure the external accounts,
                 connect the app, search for activities or intervals, store the results in your browser,
@@ -1066,19 +1191,20 @@
         </footer>
       </div>
     </div>
-    <script src="./src/state.js?v=20260816-1"></script>
+    <script src="./src/state.js?v=20260819-1"></script>
     <script src="./src/utils.js?v=20260816-1"></script>
     <script src="./src/similarity.js?v=20260816-1"></script>
-    <script src="./src/navigation.js?v=20260816-1"></script>
+    <script src="./src/navigation.js?v=20260818-1"></script>
     <script src="./src/settings.js?v=20260816-1"></script>
     <script src="./src/strava.js?v=20260816-1"></script>
     <script src="./src/glucose-data.js?v=20260816-1"></script>
     <script src="./src/glucose-charts.js?v=20260816-1"></script>
     <script src="./src/api-client.js?v=20260816-1"></script>
     <script src="./src/activity-lab.js?v=20260816-1"></script>
-    <script src="./src/filters-charts.js?v=20260816-1"></script>
+    <script src="./src/filters-charts.js?v=20260818-1"></script>
     <script src="./src/hr-stream-compare.js?v=20260816-1"></script>
+    <script src="./src/race-analysis.js?v=20260819-5"></script>
     <script src="./src/theme-search.js?v=20260816-1"></script>
-    <script src="./src/main.js?v=20260816-1"></script>
+    <script src="./src/main.js?v=20260818-3"></script>
   </body>
 </html>

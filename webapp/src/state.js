@@ -56,6 +56,7 @@ const state = {
   screen: "search",
   charts: {},
   activityLabCharts: {},
+  raceAnalysisCharts: {},
   compareSource: [],
   openCompareTabs: [],     // [{id, intervals}]
   activeCompareTabId: null,
@@ -87,6 +88,16 @@ const state = {
       elevation: "dimmed",
       glucose: "on",
     },
+  },
+  raceAnalysis: {
+    source: null,
+    result: null,
+    reportHtml: "",
+    selectedActivityId: "",
+    terrainQuarterFilter: "",
+    terrainTypeFilter: "",
+    extremeQuarterFilter: "",
+    extremeTypeFilter: "",
   },
 };
 

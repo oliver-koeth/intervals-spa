@@ -18,6 +18,8 @@
   --search-accent-text: #ffffff;
   --activities-accent: #d97706;    /* warm orange for light mode */
   --activities-accent-text: #ffffff;
+  --race-accent: #7c3aed;          /* violet for light mode */
+  --race-accent-text: #ffffff;
   --intervals-accent: #dc2626;     /* red for light mode */
   --intervals-accent-text: #ffffff;
   --glucose-accent: #ca8a04;       /* yellow for light mode */
@@ -44,6 +46,8 @@ body.theme-dark {
   --search-accent-text: #081418;
   --activities-accent: #fb923c;  /* warm orange for dark mode */
   --activities-accent-text: #1a0f05;
+  --race-accent: #a78bfa;        /* violet for dark mode */
+  --race-accent-text: #100f1f;
   --intervals-accent: #f87171;   /* soft red for dark mode */
   --intervals-accent-text: #1b0b0b;
   --glucose-accent: #facc15;     /* yellow for dark mode */
@@ -172,6 +176,16 @@ body:not(.theme-dark) .sidebar-nav .nav-btn[data-screen-target="activities"].nav
   background: rgba(217, 119, 6, 0.10);
   box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.32);
 }
+.sidebar-nav .nav-btn[data-screen-target="race-analysis"].nav-btn-active {
+  color: var(--race-accent);
+  background: rgba(167, 139, 250, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.35);
+}
+body:not(.theme-dark) .sidebar-nav .nav-btn[data-screen-target="race-analysis"].nav-btn-active {
+  color: var(--race-accent);
+  background: rgba(124, 58, 237, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.32);
+}
 .sidebar-nav .nav-btn[data-screen-target="intervals"].nav-btn-active {
   color: var(--intervals-accent);
   background: rgba(248, 113, 113, 0.10);
@@ -269,6 +283,10 @@ body:not(.theme-dark) .topbar {
   align-items: start;
   padding-left: 0;
 }
+#screen-activities.screen.active:has(> .activities-sidebar.hidden),
+#screen-intervals.screen.active:has(> .compare-sidebar.hidden) {
+  grid-template-columns: 1fr;
+}
 #screen-activities.screen.active > .activities-sidebar,
 #screen-activity-detail.screen.active > .activities-sidebar,
 #screen-intervals.screen.active > .compare-sidebar,
@@ -310,6 +328,10 @@ h1 {
 #screen-activities h2 {
   color: var(--activities-accent);
   margin: 0 0 0.25rem;
+}
+#screen-race-analysis h1,
+#screen-race-analysis h2 {
+  color: var(--race-accent);
 }
 #screen-intervals h1,
 #screen-intervals h2 {
@@ -355,6 +377,10 @@ h2 {
 }
 .glucose-filter-row {
   grid-template-columns: repeat(2, minmax(170px, 1fr));
+}
+.race-analysis-picker {
+  grid-template-columns: minmax(220px, 1fr) auto;
+  align-items: end;
 }
 .intervals-advanced-filters {
   grid-template-columns: repeat(4, minmax(150px, 1fr));
@@ -1444,6 +1470,228 @@ body:not(.theme-dark) .activity-lab-stream-item.is-focus-activity {
 
 .chart-grid { display: grid; gap: 0.75rem; margin-top: 0.75rem; }
 .chart-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.race-analysis-head {
+  align-items: flex-start;
+}
+.race-analysis-actions {
+  flex: 0 0 auto;
+}
+.race-source-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.race-source-panel {
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  background: rgba(148, 163, 184, 0.06);
+  padding: 0.85rem;
+}
+.race-source-panel h2 {
+  margin-top: 0;
+}
+.race-activity-search-summary {
+  margin: 0.65rem 0 0.45rem;
+}
+.race-activity-results {
+  display: grid;
+  gap: 0.45rem;
+  max-height: 290px;
+  overflow-y: auto;
+}
+.race-activity-result {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: rgba(148, 163, 184, 0.06);
+  color: var(--text);
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  cursor: pointer;
+}
+.race-activity-result:hover,
+.race-activity-result.active {
+  border-color: rgba(167, 139, 250, 0.58);
+  background: rgba(167, 139, 250, 0.14);
+}
+.race-activity-result span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+.race-activity-result-more,
+.race-activity-result-empty {
+  padding: 0.25rem 0.1rem;
+}
+.race-upload-label {
+  display: inline-flex;
+  margin-bottom: 0.75rem;
+}
+.race-upload-label.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.race-drop-zone {
+  display: grid;
+  min-height: 116px;
+  place-items: center;
+  gap: 0.2rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: 0.8rem;
+  background: rgba(148, 163, 184, 0.07);
+  color: var(--text-muted);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.race-drop-zone.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.race-drop-zone strong {
+  color: var(--text);
+}
+.race-drop-zone.active {
+  border-color: var(--race-accent);
+  background: rgba(167, 139, 250, 0.14);
+}
+.race-analysis-status.error {
+  color: var(--accent-rose);
+}
+.race-analysis-status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.race-analysis-status-row .race-analysis-status {
+  margin: 0;
+}
+.race-spinner {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  border: 2px solid rgba(148, 163, 184, 0.35);
+  border-top-color: var(--race-accent);
+  animation: race-spin 0.7s linear infinite;
+}
+.race-spinner.hidden {
+  display: none;
+}
+@keyframes race-spin {
+  to { transform: rotate(360deg); }
+}
+.race-analysis-report {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.race-report-title {
+  align-items: flex-start;
+}
+.race-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+.race-kpi {
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: rgba(148, 163, 184, 0.07);
+  padding: 0.75rem;
+}
+.race-kpi span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.race-kpi strong {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 1.02rem;
+  white-space: nowrap;
+}
+.race-chart-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.race-slope-chart-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.race-chart-card .chart {
+  height: 320px;
+}
+body:not(.theme-dark) #screen-race-analysis .chart {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.08)),
+    rgba(226, 232, 240, 0.64);
+  border-color: rgba(148, 163, 184, 0.42);
+}
+.race-chart-card .race-profile-chart {
+  height: 300px;
+}
+.race-chart-card .race-scatter-chart {
+  height: 380px;
+}
+.race-chart-span {
+  grid-column: 1 / -1;
+}
+.race-quarter-legend {
+  display: flex;
+  justify-content: center;
+  gap: 1.1rem;
+  margin-top: 0.55rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+.race-quarter-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+}
+.race-quarter-swatch {
+  width: 1.5rem;
+  height: 0.22rem;
+  border-radius: 999px;
+}
+.race-section-card h2 {
+  margin-top: 0;
+}
+.race-table-wrap {
+  overflow-x: auto;
+}
+.race-terrain-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  margin: 0.1rem 0 0.75rem;
+}
+.race-terrain-filters > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+.race-filter-chip {
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+}
+.race-filter-chip.active {
+  border-color: rgba(167, 139, 250, 0.58);
+  background: rgba(167, 139, 250, 0.14);
+  color: var(--text);
+}
+.race-table-wrap tr.q1 td:first-child { border-left: 4px solid var(--accent-cyan); }
+.race-table-wrap tr.q2 td:first-child { border-left: 4px solid var(--accent-green); }
+.race-table-wrap tr.q3 td:first-child { border-left: 4px solid var(--accent-amber); }
+.race-table-wrap tr.q4 td:first-child { border-left: 4px solid var(--race-accent); }
 @media (max-width: 900px) {
   .chart-grid-3 { grid-template-columns: 1fr; }
   .chart-span2  { grid-column: span 1 !important; }
@@ -1463,6 +1711,17 @@ body:not(.theme-dark) .activity-lab-stream-item.is-focus-activity {
   }
   .activity-lab-chart-card #chart-glucose-day {
     height: 320px;
+  }
+  .race-source-grid,
+  .race-slope-chart-grid,
+  .race-chart-grid {
+    grid-template-columns: 1fr;
+  }
+  .race-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .race-analysis-picker {
+    grid-template-columns: 1fr;
   }
 }
 .chart {
@@ -1539,6 +1798,25 @@ body:not(.theme-dark) .activity-lab-stream-item.is-focus-activity {
 /* ── Manual ──────────────────────────────────────────────────────────────── */
 .manual-content {
   max-width: 980px;
+}
+.manual-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.manual-header h1 {
+  margin: 0;
+}
+.btn.white {
+  background: #ffffff;
+  color: #101820;
+  border-color: rgba(16, 24, 32, 0.14);
+}
+.btn.white:hover {
+  background: #f1f5f9;
+  border-color: rgba(16, 24, 32, 0.22);
 }
 .manual-content h2 {
   margin-top: 1.55rem;

@@ -66,4 +66,5 @@ function setScreen(name) {
   if (typeof updateCompareSidebars === "function") updateCompareSidebars();
   if (name === "compare") renderCompare();
   if (name === "similarity") renderSimilarityQueryOptions();
+  if (name === "race-analysis") renderRaceAnalysisActivityOptions();
 }
