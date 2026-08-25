@@ -6,7 +6,7 @@
     <title>Intervals</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/themes/light.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260819-4" />
+    <link rel="stylesheet" href="./styles.css?v=20260825-4" />
     <script src="https://cdn.jsdelivr.net/npm/echarts@6/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/shoelace-autoloader.js"></script>
@@ -342,16 +342,16 @@
               </div>
     
               <div class="table-wrap">
-                <table>
+                <table id="activities-table">
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Type</th>
-                      <th>Race</th>
-                      <th>Activity</th>
-                      <th class="right">Time</th>
-                      <th class="right">Distance</th>
-                      <th class="right">Load</th>
+                      <th>Date<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="date" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="date" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th>Type<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="activity_type" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="activity_type" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th>Race<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="is_race" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="is_race" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th>Activity<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="activity_name" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="activity_name" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th class="right">Time<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="moving_time_s" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="moving_time_s" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th class="right">Distance<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="distance_m" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="distance_m" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th class="right">Load<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="training_load" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="training_load" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
                     </tr>
                   </thead>
                   <tbody id="activities-body"></tbody>
@@ -568,6 +568,11 @@
                 <div class="card" id="activity-detail-card">
                   <p class="muted">No activity selected.</p>
                 </div>
+
+                <div class="row space-between activity-lab-tile-actions">
+                  <span id="activity-lab-tile-status" class="muted"></span>
+                  <button id="activity-lab-download-tile" class="btn secondary" type="button">Download Strava tile</button>
+                </div>
     
                 <div class="chart-grid activity-lab-chart-grid">
                   <div class="card activity-lab-chart-card">
@@ -585,6 +590,29 @@
                     </div>
                     <div id="chart-lab-hr" class="chart"></div>
                   </div>
+                </div>
+
+                <div class="card activity-lab-chart-card activity-lab-workout-card hidden" id="activity-lab-workout-card">
+                  <div class="activity-lab-chart-head">
+                    <h2 id="activity-lab-workout-title" style="margin:0">Planned workout</h2>
+                    <div class="activity-lab-workout-kpis">
+                      <div class="activity-lab-workout-kpi">
+                        <span class="activity-lab-workout-kpi-label">Time</span>
+                        <span id="activity-lab-workout-time" class="activity-lab-workout-kpi-value">-</span>
+                      </div>
+                      <div class="activity-lab-workout-kpi">
+                        <span class="activity-lab-workout-kpi-label">Load</span>
+                        <span id="activity-lab-workout-load" class="activity-lab-workout-kpi-value">-</span>
+                      </div>
+                      <div class="activity-lab-workout-kpi">
+                        <span class="activity-lab-workout-kpi-label">Intensity</span>
+                        <span id="activity-lab-workout-intensity" class="activity-lab-workout-kpi-value">-</span>
+                      </div>
+                      <button id="activity-lab-workout-details-toggle" class="btn secondary" type="button">Details</button>
+                    </div>
+                  </div>
+                  <div id="chart-lab-workout" class="chart"></div>
+                  <div id="activity-lab-workout-description" class="activity-lab-workout-description hidden"></div>
                 </div>
     
                 <div class="card">
@@ -760,22 +788,22 @@
               </div>
     
               <div class="table-wrap">
-                <table>
+                <table id="intervals-table">
                   <thead>
                     <tr>
                       <th class="center">Sel</th>
-                      <th class="center">Src</th>
-                      <th>Date</th>
-                      <th>Type</th>
-                      <th>Label</th>
-                      <th class="right">Time</th>
-                      <th class="right">Avg W</th>
-                      <th class="right">W/kg</th>
-                      <th class="right">Avg HR</th>
-                      <th class="right">Max HR</th>
-                      <th class="right">Load</th>
-                      <th class="right">Zone</th>
-                      <th class="right">Dec%</th>
+                      <th class="center">Src<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="source" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="source" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th>Date<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="date" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="date" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th>Type<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="activity_type" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="activity_type" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th>Label<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="label" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="label" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th class="right">Time<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="moving_time_s" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="moving_time_s" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th class="right">Avg W<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="avg_watts" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="avg_watts" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th class="right">W/kg<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="avg_watts_kg" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="avg_watts_kg" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th class="right">Avg HR<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="avg_hr" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="avg_hr" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th class="right">Max HR<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="max_hr" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="max_hr" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th class="right">Load<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="training_load" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="training_load" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th class="right">Zone<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="zone" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="zone" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th class="right">Dec%<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="decoupling" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="decoupling" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
                     </tr>
                   </thead>
                   <tbody id="intervals-body"></tbody>
@@ -1191,20 +1219,21 @@
         </footer>
       </div>
     </div>
-    <script src="./src/state.js?v=20260819-1"></script>
-    <script src="./src/utils.js?v=20260816-1"></script>
+    <script src="./src/state.js?v=20260825-4"></script>
+    <script src="./src/utils.js?v=20260825-1"></script>
     <script src="./src/similarity.js?v=20260816-1"></script>
     <script src="./src/navigation.js?v=20260818-1"></script>
-    <script src="./src/settings.js?v=20260816-1"></script>
+    <script src="./src/settings.js?v=20260825-2"></script>
     <script src="./src/strava.js?v=20260816-1"></script>
     <script src="./src/glucose-data.js?v=20260816-1"></script>
     <script src="./src/glucose-charts.js?v=20260816-1"></script>
-    <script src="./src/api-client.js?v=20260816-1"></script>
-    <script src="./src/activity-lab.js?v=20260816-1"></script>
+    <script src="./src/api-client.js?v=20260825-1"></script>
+    <script src="./src/activity-lab.js?v=20260825-3"></script>
+    <script src="./src/strava-tile.js?v=20260825-1"></script>
     <script src="./src/filters-charts.js?v=20260818-1"></script>
     <script src="./src/hr-stream-compare.js?v=20260816-1"></script>
     <script src="./src/race-analysis.js?v=20260819-5"></script>
     <script src="./src/theme-search.js?v=20260816-1"></script>
-    <script src="./src/main.js?v=20260818-3"></script>
+    <script src="./src/main.js?v=20260825-3"></script>
   </body>
 </html>

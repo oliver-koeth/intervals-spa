@@ -1082,6 +1082,28 @@ th {
 td { color: var(--text-muted); }
 .right { text-align: right; }
 .center { text-align: center; }
+.sort-btns {
+  display: inline-flex;
+  flex-direction: column;
+  vertical-align: middle;
+  margin-left: 0.3rem;
+  gap: 1px;
+}
+.sort-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.5rem;
+  line-height: 0.55rem;
+  padding: 0;
+  width: 0.85rem;
+  opacity: 0.55;
+}
+.sort-btn:hover { opacity: 1; color: var(--text); }
+.sort-btn.is-active { opacity: 1; color: var(--accent-cyan); }
+#screen-activities .sort-btn.is-active { color: var(--activities-accent); }
+#screen-intervals .sort-btn.is-active { color: var(--intervals-accent); }
 tr:hover td { background: rgba(148,163,184,0.08); color: var(--text); }
 .interval-group-row td {
   color: var(--text);
@@ -1246,6 +1268,9 @@ body:not(.theme-dark) #screen-activity-detail .btn.secondary:hover {
   margin-bottom: 0.55rem;
   align-items: flex-end;
 }
+.activity-lab-tile-actions {
+  margin: 0.6rem 0;
+}
 .activity-detail-field {
   background:
     linear-gradient(135deg, rgba(255,255,255,0.045), transparent 65%),
@@ -1376,6 +1401,42 @@ body:not(.theme-dark) .activity-lab-stream-item.is-focus-activity {
 }
 .activity-lab-chart-card #chart-glucose-day {
   height: 380px;
+}
+.activity-lab-chart-card #chart-lab-workout {
+  height: 167px;
+}
+.activity-lab-workout-kpis {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.activity-lab-workout-kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.15;
+}
+.activity-lab-workout-kpi-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.activity-lab-workout-kpi-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.activity-lab-workout-description {
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: rgba(148, 163, 184, 0.06);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  white-space: pre-wrap;
 }
 .activity-lab-chart-head {
   display: flex;
@@ -1705,6 +1766,9 @@ body:not(.theme-dark) #screen-race-analysis .chart {
   .activity-lab-chart-grid { grid-template-columns: 1fr; }
   .activity-lab-chart-card #chart-lab-hr {
     height: 420px;
+  }
+  .activity-lab-chart-card #chart-lab-workout {
+    height: 140px;
   }
   .activity-lab-chart-card #chart-glucose-detail {
     height: 380px;

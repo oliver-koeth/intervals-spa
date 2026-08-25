@@ -123,6 +123,8 @@ function clearSettings() {
   state.activityLab.streamActivities = [];
   state.activityLab.workIntervalsByActivity = {};
   state.activityLab.workIntervals = [];
+  state.activityLab.plannedWorkoutByActivity = {};
+  state.activityLab.lastTileSnapshot = null;
   state.intervals = [];
   state.filtered = [];
   state.selected.clear();

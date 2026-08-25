@@ -143,3 +143,57 @@ function activityMainType(type) {
   return t;
 }
 
+/* ─── Sortable table headers ─────────────────────────────────────────────── */
+function sortValueForField(item, field) {
+  const value = item[field];
+  if (typeof value === "boolean") return value ? 1 : 0;
+  return value;
+}
+
+function compareForSort(a, b, dir) {
+  const aNil = a === null || a === undefined || a === "";
+  const bNil = b === null || b === undefined || b === "";
+  if (aNil || bNil) {
+    if (aNil && bNil) return 0;
+    return aNil ? 1 : -1; // blanks always sort last, regardless of direction
+  }
+  let cmp;
+  if (typeof a === "number" && typeof b === "number") cmp = a - b;
+  else cmp = String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+  return dir === "desc" ? -cmp : cmp;
+}
+
+function sortForDisplay(items, sortState) {
+  if (!sortState || !sortState.field) return items;
+  const { field, dir } = sortState;
+  return [...items].sort((a, b) =>
+    compareForSort(sortValueForField(a, field), sortValueForField(b, field), dir)
+  );
+}
+
+function updateSortIndicators(thead, sortState) {
+  thead.querySelectorAll(".sort-btn").forEach((btn) => {
+    const isActive = !!sortState &&
+      sortState.field === btn.dataset.sortField &&
+      sortState.dir === btn.dataset.sortDir;
+    btn.classList.toggle("is-active", isActive);
+  });
+}
+
+function setupSortableTable(tableId, getSort, setSort) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  const thead = table.querySelector("thead");
+  if (!thead) return;
+  thead.addEventListener("click", (e) => {
+    const btn = e.target.closest(".sort-btn");
+    if (!btn) return;
+    const field = btn.dataset.sortField;
+    const dir = btn.dataset.sortDir;
+    if (!field || !dir) return;
+    setSort({ field, dir });
+    updateSortIndicators(thead, { field, dir });
+  });
+  updateSortIndicators(thead, getSort());
+}
+

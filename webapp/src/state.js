@@ -3,6 +3,12 @@ const ZONE_COLORS = {
   1:"#54e0a1", 2:"#51b8ff", 3:"#ffb85c", 4:"#ff8a58", 5:"#ff647c",
   6:"#a78bfa", 7:"#f472b6",
 };
+/* Fixed zone palette for the planned-workout diagram — intentionally distinct from
+   ZONE_COLORS (which drives HR-stream zone shading elsewhere) per product spec:
+   Z1 blue, Z2 green, Z3 yellow, Z4 orange, Z5 red, regardless of the underlying metric. */
+const WORKOUT_ZONE_COLORS = {
+  1: "#3b82f6", 2: "#22c55e", 3: "#eab308", 4: "#f97316", 5: "#ef4444",
+};
 const TOOLTIP_CSS = "background:#101820;border:1px solid rgba(148,163,184,0.34);border-radius:10px;padding:10px 14px;box-shadow:0 16px 48px rgba(0,0,0,0.48);color:#eef4f8;font-size:12px;max-width:260px";
 
 /* Activity Lab chart toggles switch each value between its colour and grey. */
@@ -37,6 +43,7 @@ const SIMILARITY_INTERVALS_FETCH_CAP = 150;
 const state = {
   activities: [],
   activitiesFiltered: [],
+  activitiesSort: { field: "date", dir: "desc" },
   glucose: [],
   glucoseFiltered: [],
   glucosePage: 1,
@@ -46,6 +53,7 @@ const state = {
   activeActivityTabId: null,
   intervals: [],
   filtered: [],
+  intervalsSort: { field: "date", dir: "desc" },
   selected: new Set(),
   intervalsGrouped: false,
   collapsedIntervalGroups: new Set(),
@@ -79,6 +87,8 @@ const state = {
     streamMinScorePct: 80,
     workIntervalsByActivity: {},
     workIntervals: [],
+    plannedWorkoutByActivity: {},
+    lastTileSnapshot: null,
     visibleSeries: {
       hr: "on",
       pace: "on",

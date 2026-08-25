@@ -156,7 +156,8 @@ async function runProxyActivitySearch(params, athleteId, apiKey) {
 function renderActivities() {
   const body = document.getElementById("activities-body");
   body.innerHTML = "";
-  state.activitiesFiltered.forEach((item) => {
+  const items = sortForDisplay(state.activitiesFiltered, state.activitiesSort);
+  items.forEach((item) => {
     const tr = document.createElement("tr");
     tr.style.cursor = "pointer";
     tr.title = "Open activity";
