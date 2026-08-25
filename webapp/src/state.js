@@ -43,7 +43,7 @@ const SIMILARITY_INTERVALS_FETCH_CAP = 150;
 const state = {
   activities: [],
   activitiesFiltered: [],
-  activitiesSort: { field: null, dir: "asc" },
+  activitiesSort: { field: "date", dir: "desc" },
   glucose: [],
   glucoseFiltered: [],
   glucosePage: 1,
@@ -53,7 +53,7 @@ const state = {
   activeActivityTabId: null,
   intervals: [],
   filtered: [],
-  intervalsSort: { field: null, dir: "asc" },
+  intervalsSort: { field: "date", dir: "desc" },
   selected: new Set(),
   intervalsGrouped: false,
   collapsedIntervalGroups: new Set(),

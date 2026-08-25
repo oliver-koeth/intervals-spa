@@ -1102,6 +1102,8 @@ td { color: var(--text-muted); }
 }
 .sort-btn:hover { opacity: 1; color: var(--text); }
 .sort-btn.is-active { opacity: 1; color: var(--accent-cyan); }
+#screen-activities .sort-btn.is-active { color: var(--activities-accent); }
+#screen-intervals .sort-btn.is-active { color: var(--intervals-accent); }
 tr:hover td { background: rgba(148,163,184,0.08); color: var(--text); }
 .interval-group-row td {
   color: var(--text);
