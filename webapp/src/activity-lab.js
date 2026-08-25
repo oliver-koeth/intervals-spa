@@ -391,6 +391,163 @@ async function loadWorkIntervals(activity) {
   return workIntervals;
 }
 
+/* ─── Planned workout (paired intervals.icu Event) ──────────────────────── */
+/* Default zone-boundary heuristics used only when a workout step's target isn't already
+   an explicit zone number. These mirror intervals.icu's own stock defaults (Coggan power
+   zones by %FTP, analogous %LTHR HR bands, %threshold-pace run bands) and are a best-effort
+   fallback — athlete-specific HR zones (getSelectedZoneModel()) are preferred when usable. */
+const WORKOUT_POWER_PCT_FTP_BOUNDS = [55, 75, 90, 105];        // Z1<55 Z2 55-75 Z3 75-90 Z4 90-105 Z5>105
+const WORKOUT_HR_PCT_LTHR_BOUNDS = [81, 89, 93, 99];           // Z1<81 Z2 81-89 Z3 90-93 Z4 94-99 Z5>=100
+const WORKOUT_PACE_PCT_THRESHOLD_BOUNDS = [129, 114, 106, 100]; // %threshold time; higher % = slower = lower zone
+
+function clampWorkoutZone(z) {
+  return Math.max(1, Math.min(5, Math.round(z)));
+}
+
+function workoutZoneFromAscendingBounds(value, bounds) {
+  for (let i = 0; i < bounds.length; i++) {
+    if (value < bounds[i]) return i + 1;
+  }
+  return bounds.length + 1;
+}
+
+function workoutZoneFromDescendingBounds(value, bounds) {
+  for (let i = 0; i < bounds.length; i++) {
+    if (value > bounds[i]) return i + 1;
+  }
+  return bounds.length + 1;
+}
+
+/** Resolve a single workout step's effort zone (1-5) regardless of whether its target is
+ *  power, HR, or pace based. Returns null when the step carries no usable target. */
+function computeWorkoutStepZone(step, ftpWatts) {
+  const target = step?.power || step?.hr || step?.pace;
+  if (!target) return null;
+  const units = String(target.units || "").toLowerCase();
+  const start = Number(target.start ?? target.value);
+  const end = Number(target.end ?? target.value ?? start);
+  const mid = Number.isFinite(start) && Number.isFinite(end) ? (start + end) / 2 : NaN;
+  if (!Number.isFinite(mid)) return null;
+
+  if (units.includes("zone")) return clampWorkoutZone(mid);
+
+  if (step.power) {
+    if (units.includes("watt") || units === "w") {
+      if (!(ftpWatts > 0)) return null;
+      return clampWorkoutZone(workoutZoneFromAscendingBounds((mid / ftpWatts) * 100, WORKOUT_POWER_PCT_FTP_BOUNDS));
+    }
+    return clampWorkoutZone(workoutZoneFromAscendingBounds(mid, WORKOUT_POWER_PCT_FTP_BOUNDS));
+  }
+
+  if (step.hr) {
+    const model = getSelectedZoneModel();
+    if (units.includes("bpm") || units === "hr") {
+      if (!model) return null;
+      return clampWorkoutZone(workoutZoneFromAscendingBounds(mid, model.hr_zones));
+    }
+    if (model && model.lthr) {
+      const bpm = (mid * model.lthr) / 100;
+      return clampWorkoutZone(workoutZoneFromAscendingBounds(bpm, model.hr_zones));
+    }
+    return clampWorkoutZone(workoutZoneFromAscendingBounds(mid, WORKOUT_HR_PCT_LTHR_BOUNDS));
+  }
+
+  if (step.pace) {
+    if (units.includes("secs") || units.includes("min")) return null; // absolute pace, no threshold reference
+    return clampWorkoutZone(workoutZoneFromDescendingBounds(mid, WORKOUT_PACE_PCT_THRESHOLD_BOUNDS));
+  }
+  return null;
+}
+
+/** Flatten workout_doc steps (expanding repeat blocks) into a chronological list of
+ *  {startSec, durationSec, zone, text} leaf segments covering the full planned duration. */
+function flattenWorkoutSteps(steps, ftpWatts, offsetRef) {
+  const out = [];
+  for (const step of steps || []) {
+    const childSteps = Array.isArray(step?.steps) ? step.steps : null;
+    const reps = Math.max(1, Number(step?.reps) || 1);
+    if (childSteps && childSteps.length) {
+      for (let r = 0; r < reps; r++) {
+        out.push(...flattenWorkoutSteps(childSteps, ftpWatts, offsetRef));
+      }
+      continue;
+    }
+    const durationSec = Number(step?.duration) || 0;
+    if (durationSec > 0) {
+      out.push({
+        startSec: offsetRef.value,
+        durationSec,
+        zone: computeWorkoutStepZone(step, ftpWatts),
+        text: String(step?.text || "").trim(),
+      });
+    }
+    offsetRef.value += durationSec;
+  }
+  return out;
+}
+
+function buildPlannedWorkoutView(event) {
+  const rawSteps = Array.isArray(event?.workout_doc?.steps) ? event.workout_doc.steps : [];
+  const ftpWatts = Number(event?.icu_ftp) || 0;
+  const segments = flattenWorkoutSteps(rawSteps, ftpWatts, { value: 0 });
+  if (!segments.length) return null;
+  const totalDurationSec = segments.reduce((sum, s) => sum + s.durationSec, 0);
+  return {
+    eventId: event.id,
+    name: String(event.name || "Planned workout"),
+    description: String(event.description || ""),
+    timeSec: Number(event.moving_time) || totalDurationSec,
+    load: event.icu_training_load != null ? Number(event.icu_training_load) : null,
+    intensity: event.icu_intensity != null ? Number(event.icu_intensity) : null,
+    segments,
+    totalDurationSec,
+  };
+}
+
+/** Loads (and caches) the planned workout paired with an executed activity, if any.
+ *  Returns null when there is no paired event, no structured workout_doc, or the
+ *  request cannot be made (no credentials, Strava-only activity, network error). */
+async function loadPlannedWorkout(activity) {
+  const key = String(activity?.activity_id || "");
+  if (!key) return null;
+  if (Object.prototype.hasOwnProperty.call(state.activityLab.plannedWorkoutByActivity, key)) {
+    return state.activityLab.plannedWorkoutByActivity[key];
+  }
+  if ((activity.source || "intervals") !== "intervals") {
+    state.activityLab.plannedWorkoutByActivity[key] = null;
+    return null;
+  }
+  const settings = getSettings();
+  if (!settings.apiKey || !settings.athleteId) return null; // don't cache — settings may arrive later
+
+  const auth = `Basic ${btoa(`API_KEY:${settings.apiKey}`)}`;
+  let result = null;
+  try {
+    const activityRes = await fetch(
+      `https://intervals.icu/api/v1/activity/${encodeURIComponent(key)}`,
+      { headers: { Authorization: auth, Accept: "application/json" } }
+    );
+    if (activityRes.ok) {
+      const activityDetail = await activityRes.json();
+      const eventId = activityDetail?.paired_event_id;
+      if (eventId != null) {
+        const eventRes = await fetch(
+          `https://intervals.icu/api/v1/athlete/${encodeURIComponent(settings.athleteId)}/events/${encodeURIComponent(eventId)}?resolve=true`,
+          { headers: { Authorization: auth, Accept: "application/json" } }
+        );
+        if (eventRes.ok) {
+          const event = await eventRes.json();
+          result = buildPlannedWorkoutView(event);
+        }
+      }
+    }
+  } catch {
+    result = null;
+  }
+  state.activityLab.plannedWorkoutByActivity[key] = result;
+  return result;
+}
+
 function renderWorkIntervalsList(workIntervals) {
   const node = document.getElementById("activity-lab-work-intervals");
   if (!workIntervals.length) {
@@ -440,6 +597,73 @@ function renderActivityLabPlaceholder(chartName, title, subtext) {
   });
 }
 
+/** Renders (or hides) the planned-workout diagram directly below the main HR/pace chart.
+ *  sharedXMax/gridLeft/gridRight are taken from the main chart so both x-axes align in
+ *  pixel space even when the planned workout is shorter or longer than the activity. */
+function renderPlannedWorkoutChart(plannedWorkout, sharedXMax, gridLeft, gridRight) {
+  const card = document.getElementById("activity-lab-workout-card");
+  if (!card) return;
+  if (!plannedWorkout || !plannedWorkout.segments.length) {
+    card.classList.add("hidden");
+    if (state.activityLabCharts["lab-workout"]) {
+      state.activityLabCharts["lab-workout"].dispose();
+      delete state.activityLabCharts["lab-workout"];
+    }
+    return;
+  }
+  card.classList.remove("hidden");
+
+  document.getElementById("activity-lab-workout-title").textContent = plannedWorkout.name;
+  document.getElementById("activity-lab-workout-time").textContent = formatSeconds(plannedWorkout.timeSec);
+  document.getElementById("activity-lab-workout-load").textContent =
+    plannedWorkout.load != null ? Math.round(plannedWorkout.load) : "-";
+  document.getElementById("activity-lab-workout-intensity").textContent =
+    plannedWorkout.intensity != null ? `${Math.round(plannedWorkout.intensity * 100)}%` : "-";
+  const descEl = document.getElementById("activity-lab-workout-description");
+  descEl.textContent = plannedWorkout.description || "No description provided.";
+  descEl.classList.add("hidden");
+  const detailsBtn = document.getElementById("activity-lab-workout-details-toggle");
+  if (detailsBtn) detailsBtn.textContent = "Details";
+
+  const workoutDurationMin = plannedWorkout.totalDurationSec / 60;
+  const xMax = Math.max(Number(sharedXMax) || 0, workoutDurationMin, 1);
+
+  const data = plannedWorkout.segments.map((seg) => ({
+    value: [seg.startSec / 60, (seg.startSec + seg.durationSec) / 60, seg.zone || 1],
+    itemStyle: { color: seg.zone ? WORKOUT_ZONE_COLORS[seg.zone] : SERIES_DIMMED_COLOR },
+  }));
+
+  const chart = mkActivityLabChart("lab-workout");
+  chart.setOption({
+    tooltip: {
+      trigger: "item",
+      formatter: (p) => {
+        const seg = plannedWorkout.segments[p.dataIndex];
+        const zoneLabel = seg.zone ? `Z${seg.zone}` : "–";
+        const label = seg.text ? `${seg.text} · ` : "";
+        return `${label}${zoneLabel} · ${formatSeconds(seg.durationSec)}`;
+      },
+    },
+    grid: { left: gridLeft, right: gridRight, top: 8, bottom: 20 },
+    xAxis: { type: "value", name: "min", min: 0, max: xMax },
+    yAxis: { type: "value", show: false, min: 0, max: 5.4 },
+    series: [{
+      type: "custom",
+      renderItem: (params, api) => {
+        const start = api.coord([api.value(0), 0]);
+        const end = api.coord([api.value(1), api.value(2)]);
+        const rectShape = echarts.graphic.clipRectByRect(
+          { x: start[0], y: end[1], width: end[0] - start[0], height: start[1] - end[1] },
+          { x: params.coordSys.x, y: params.coordSys.y, width: params.coordSys.width, height: params.coordSys.height }
+        );
+        return rectShape && { type: "rect", shape: rectShape, style: api.style() };
+      },
+      encode: { x: [0, 1], y: 2 },
+      data,
+    }],
+  });
+}
+
 function computeElevationAxisBounds(points) {
   let values = points
     .map((p) => Number(p?.[1]))
@@ -475,8 +699,10 @@ function computeElevationAxisBounds(points) {
   return { min: Math.floor(min), max: Math.ceil(max) };
 }
 
-function renderActivityLabTimeSeries(stream, focusActivity) {
-  const time = Array.isArray(stream?.time) ? stream.time : [];
+/** Extract the standard set of Activity Lab metric series from a raw stream object.
+ *  Shared by the main chart renderer and the Strava-tile exporter so both draw from
+ *  identical data. */
+function computeActivityLabStreamSeries(stream) {
   const hr = sliceMetricStream(stream, stream?.heartrate, 0, Number.MAX_SAFE_INTEGER, (v) => Number(v));
   const gap = sliceMetricStream(stream, stream?.gap, 0, Number.MAX_SAFE_INTEGER, normalizeExplicitPaceValue);
   const pace = sliceMetricStream(
@@ -500,11 +726,19 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
     return Number.isFinite(rpm) && rpm > 0 ? rpm : null;
   });
   const elevation = sliceMetricStream(stream, stream?.altitude, 0, Number.MAX_SAFE_INTEGER, (v) => Number(v));
+  return { hr, gap, pace, power, cadence, elevation };
+}
+
+function renderActivityLabTimeSeries(stream, focusActivity, plannedWorkout = null) {
+  const time = Array.isArray(stream?.time) ? stream.time : [];
+  const { hr, gap, pace, power, cadence, elevation } = computeActivityLabStreamSeries(stream);
+  state.activityLab.lastTileSnapshot = { focusActivity, hr, pace, cadence, plannedWorkout, hasStream: time.length > 0 };
 
   if (!time.length) {
     setGlucoseToggleVisible(false);
     setExtraStreamTogglesVisible({ gap: false, power: false, cadence: false });
     renderActivityLabPlaceholder("lab-hr", "Heart rate, pace, GAP, power, cadence, elevation", "No stream data available");
+    renderPlannedWorkoutChart(plannedWorkout, 0, 16, 16);
     return;
   }
 
@@ -754,6 +988,7 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
   }
 
   const gridRight = rightAxisCount === 0 ? 16 : 58 + ((rightAxisCount - 1) * 58);
+  const gridLeft = showElevation ? 58 : showHr ? 42 : 16;
   const titleParts = [
     showHr ? "heart rate" : null,
     showPace ? "pace" : null,
@@ -763,6 +998,11 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
     showElevation ? "elevation" : null,
     showGlucose ? "glucose" : null,
   ].filter(Boolean);
+
+  const lastTimeSec = time.length ? Number(time[time.length - 1]) : 0;
+  const streamDurationMin = Number.isFinite(lastTimeSec) ? lastTimeSec / 60 : 0;
+  const workoutDurationMin = plannedWorkout ? plannedWorkout.totalDurationSec / 60 : 0;
+  const sharedXMax = plannedWorkout ? Math.max(streamDurationMin, workoutDurationMin, 1) : null;
 
   const hrChart = mkActivityLabChart("lab-hr");
   hrChart.setOption({
@@ -790,11 +1030,12 @@ function renderActivityLabTimeSeries(stream, focusActivity) {
       },
     },
     ...(visualMapEntries.length ? { visualMap: visualMapEntries } : {}),
-    grid: { left: showElevation ? 58 : showHr ? 42 : 16, right: gridRight, top: 52, bottom: 28 },
-    xAxis: { type: "value", name: "min" },
+    grid: { left: gridLeft, right: gridRight, top: 52, bottom: 28 },
+    xAxis: { type: "value", name: "min", ...(sharedXMax ? { min: 0, max: sharedXMax } : {}) },
     yAxis: yAxisEntries,
     series: seriesEntries,
   });
+  renderPlannedWorkoutChart(plannedWorkout, sharedXMax ?? streamDurationMin, gridLeft, gridRight);
 }
 
 async function renderActivityLabScatter(tabActivity) {
@@ -871,6 +1112,8 @@ async function renderActivityLabFocus(tabActivity, focusActivity, forceRefresh =
   setGlucoseToggleVisible(false);
   setExtraStreamTogglesVisible({ gap: false, power: false, cadence: false });
   renderActivityLabPlaceholder("lab-hr", "Heart rate + pace stream", "Loading streams…");
+  document.getElementById("activity-lab-workout-card")?.classList.add("hidden");
+  const plannedWorkoutPromise = loadPlannedWorkout(focusActivity).catch(() => null);
   try {
     const settings = getSettings();
     let stream = await fetchHrStream(
@@ -889,12 +1132,16 @@ async function renderActivityLabFocus(tabActivity, focusActivity, forceRefresh =
         true
       );
     }
-    renderActivityLabTimeSeries(stream, focusActivity);
+    const plannedWorkout = await plannedWorkoutPromise;
+    renderActivityLabTimeSeries(stream, focusActivity, plannedWorkout);
   } catch (err) {
     const detail = String(err?.message || "Unknown stream error");
     setGlucoseToggleVisible(false);
     setExtraStreamTogglesVisible({ gap: false, power: false, cadence: false });
     renderActivityLabPlaceholder("lab-hr", "Heart rate, pace, GAP, power, cadence, elevation", detail);
+    const plannedWorkout = await plannedWorkoutPromise;
+    renderPlannedWorkoutChart(plannedWorkout, plannedWorkout ? plannedWorkout.totalDurationSec / 60 : 0, 16, 16);
+    state.activityLab.lastTileSnapshot = { focusActivity, hr: [], pace: [], cadence: [], plannedWorkout, hasStream: false };
   }
   try {
     const workIntervals = await loadWorkIntervals(focusActivity);
@@ -976,7 +1223,8 @@ function renderIntervals() {
   if (state.intervalsGrouped) {
     renderGroupedIntervals(body);
   } else {
-    state.filtered.forEach((item) => body.appendChild(renderIntervalRow(item)));
+    const items = sortForDisplay(state.filtered, state.intervalsSort);
+    items.forEach((item) => body.appendChild(renderIntervalRow(item)));
   }
   document.getElementById("result-summary").textContent = `${state.filtered.length} intervals`;
   document.getElementById("selected-count").textContent = `${state.selected.size} selected`;

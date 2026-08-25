@@ -211,8 +211,17 @@ function init() {
       (a) => String(a.activity_id) === String(state.activityLab.focusActivityId || "")
     ) || tabActivity;
     delete state.activityLab.workIntervalsByActivity[String(focusActivity.activity_id || "")];
+    delete state.activityLab.plannedWorkoutByActivity[String(focusActivity.activity_id || "")];
     renderActivityLabFocus(tabActivity, focusActivity, true);
   });
+
+  document.getElementById("activity-lab-workout-details-toggle").addEventListener("click", (e) => {
+    const descEl = document.getElementById("activity-lab-workout-description");
+    const hidden = descEl.classList.toggle("hidden");
+    e.currentTarget.textContent = hidden ? "Details" : "Hide details";
+  });
+
+  document.getElementById("activity-lab-download-tile").addEventListener("click", handleDownloadStravaTile);
 
   document.getElementById("activity-lab-stream-mode").addEventListener("sl-change", (e) => {
     state.activityLab.streamListMode = e.target.value || "recent";
@@ -387,6 +396,17 @@ function init() {
     state.filtered = [...state.intervals];
     renderIntervals();
   });
+
+  setupSortableTable(
+    "activities-table",
+    () => state.activitiesSort,
+    (next) => { state.activitiesSort = next; renderActivities(); }
+  );
+  setupSortableTable(
+    "intervals-table",
+    () => state.intervalsSort,
+    (next) => { state.intervalsSort = next; renderIntervals(); }
+  );
 
   window.addEventListener("resize", resizeAll);
 }
