@@ -609,6 +609,158 @@ function tileFileName(focusActivity) {
   return `${base}-strava-tile.png`;
 }
 
+/** Triggers a browser download of the tile canvas as a PNG. */
+function downloadTileCanvas(canvas, focusActivity) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) { reject(new Error("Failed to render tile image.")); return; }
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = tileFileName(focusActivity);
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+      resolve();
+    }, "image/png");
+  });
+}
+
+/* ── Strava activity matching ─────────────────────────────────────────────
+ * Strava's public API can't attach photos to an activity, so the upload is a
+ * manual step. We help by finding the Strava activity that corresponds to the
+ * (intervals.icu-sourced) focus activity — exact calendar date, closest start
+ * time — and hand the user a deep link to open it. */
+function tileLocalEpochSeconds(isoLocal) {
+  // Treat the naming as wall-clock local time; parse the components directly so
+  // intervals.icu local times and Strava start_date_local compare like-for-like.
+  const m = String(isoLocal || "").match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+  if (!m) return NaN;
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) / 1000;
+}
+
+function tileLocalDateStr(isoLocal) {
+  const m = String(isoLocal || "").match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : "";
+}
+
+/** Finds the Strava activity matching the focus activity by date + close time.
+ *  Returns { id, name, type, start } or null. Throws on auth/network failure. */
+async function findMatchingStravaActivity(focusActivity) {
+  if (typeof getSettings !== "function" || typeof refreshStravaTokenIfNeeded !== "function"
+      || typeof stravaGet !== "function") {
+    throw new Error("Strava integration is unavailable.");
+  }
+  const settings = getSettings();
+  const token = await refreshStravaTokenIfNeeded(settings);
+  if (!token) throw new Error("No Strava access token. Connect Strava in Settings first.");
+
+  const startIso = focusActivity.activity_start_local || `${focusActivity.date}T00:00:00`;
+  const targetDate = tileLocalDateStr(startIso);
+  const targetEpoch = tileLocalEpochSeconds(startIso);
+  if (!targetDate) throw new Error("This activity has no start date to match on.");
+
+  // Query a generous ±36h UTC window around the local day, then filter locally.
+  const dayStartUtc = Date.parse(`${targetDate}T00:00:00Z`) / 1000;
+  const after = Math.floor(dayStartUtc - 36 * 3600);
+  const before = Math.floor(dayStartUtc + 60 * 3600);
+
+  const activities = await stravaGet(
+    `/athlete/activities?after=${after}&before=${before}&per_page=100`,
+    settings, token
+  );
+  if (!Array.isArray(activities) || !activities.length) return null;
+
+  const sameDay = activities.filter((a) => tileLocalDateStr(a.start_date_local) === targetDate);
+  if (!sameDay.length) return null;
+
+  let best = null;
+  let bestDelta = Infinity;
+  for (const a of sameDay) {
+    const epoch = tileLocalEpochSeconds(a.start_date_local);
+    const delta = Number.isFinite(targetEpoch) && Number.isFinite(epoch)
+      ? Math.abs(epoch - targetEpoch) : 0;
+    if (delta < bestDelta) { bestDelta = delta; best = a; }
+  }
+  if (!best) return null;
+  // Exact date is required; accept the closest start time within 30 minutes,
+  // or fall back to a sole same-day match regardless of time.
+  if (bestDelta > 1800 && sameDay.length > 1) return null;
+  return {
+    id: best.id,
+    name: best.name || "(untitled activity)",
+    type: best.sport_type || best.type || "",
+    start: best.start_date_local || "",
+    deltaSec: Number.isFinite(bestDelta) ? bestDelta : null,
+  };
+}
+
+/* ── Upload-assist modal ──────────────────────────────────────────────── */
+function tileModalEl(id) { return document.getElementById(id); }
+
+function closeStravaUploadModal() {
+  const modal = tileModalEl("strava-upload-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function openStravaUploadModal() {
+  const modal = tileModalEl("strava-upload-modal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  // Reset to the searching state.
+  tileModalEl("strava-upload-status").classList.remove("hidden");
+  tileModalEl("strava-upload-status").textContent = "Searching for the matching Strava activity…";
+  tileModalEl("strava-upload-match").classList.add("hidden");
+  tileModalEl("strava-upload-instructions").classList.add("hidden");
+  const openBtn = tileModalEl("strava-upload-open");
+  openBtn.classList.add("hidden");
+  openBtn.removeAttribute("href");
+  openBtn.textContent = "Open in Strava";
+  tileModalEl("strava-upload-cancel").classList.remove("hidden");
+  tileModalEl("strava-upload-done").classList.add("hidden");
+}
+
+function tileFormatModalDateTime(isoLocal) {
+  const m = String(isoLocal || "").match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if (!m) return isoLocal || "";
+  return `${tileFormatDate(`${m[1]}-${m[2]}-${m[3]}`)} · ${m[4]}:${m[5]}`;
+}
+
+function showStravaUploadMatch(match) {
+  tileModalEl("strava-upload-status").textContent =
+    "Tile downloaded. Matched this Strava activity:";
+  const matchBox = tileModalEl("strava-upload-match");
+  tileModalEl("strava-upload-match-name").textContent = match.name;
+  const metaParts = [tileFormatModalDateTime(match.start)];
+  if (match.type) metaParts.push(match.type);
+  if (match.deltaSec != null && match.deltaSec > 60) {
+    metaParts.push(`±${formatSeconds(match.deltaSec)} vs. selected`);
+  }
+  tileModalEl("strava-upload-match-meta").textContent = metaParts.join("  ·  ");
+  matchBox.classList.remove("hidden");
+  tileModalEl("strava-upload-instructions").classList.remove("hidden");
+
+  const openBtn = tileModalEl("strava-upload-open");
+  openBtn.href = `https://www.strava.com/activities/${encodeURIComponent(match.id)}`;
+  openBtn.classList.remove("hidden");
+}
+
+function showStravaUploadNoMatch(message) {
+  tileModalEl("strava-upload-status").textContent = message;
+  tileModalEl("strava-upload-instructions").classList.remove("hidden");
+  // Still let the user jump to their Strava activity feed to do it manually.
+  const openBtn = tileModalEl("strava-upload-open");
+  openBtn.href = "https://www.strava.com/athlete/training";
+  openBtn.textContent = "Open Strava";
+  openBtn.classList.remove("hidden");
+}
+
+function finishStravaUploadModal() {
+  tileModalEl("strava-upload-cancel").classList.add("hidden");
+  tileModalEl("strava-upload-done").classList.remove("hidden");
+}
+
 async function handleDownloadStravaTile() {
   const statusEl = document.getElementById("activity-lab-tile-status");
   const snapshot = state.activityLab.lastTileSnapshot;
@@ -622,21 +774,47 @@ async function handleDownloadStravaTile() {
     if (statusEl) statusEl.textContent = "Nothing to export yet.";
     return;
   }
-  canvas.toBlob((blob) => {
-    if (!blob) {
-      if (statusEl) statusEl.textContent = "Failed to generate tile.";
-      return;
-    }
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = tileFileName(snapshot.focusActivity);
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+
+  try {
+    await downloadTileCanvas(canvas, snapshot.focusActivity);
     if (statusEl) statusEl.textContent = "Tile downloaded.";
-  }, "image/png");
+  } catch (err) {
+    if (statusEl) statusEl.textContent = err.message || "Failed to generate tile.";
+    return;
+  }
+
+  // Open the assist modal and search for the matching Strava activity.
+  openStravaUploadModal();
+  try {
+    const match = await findMatchingStravaActivity(snapshot.focusActivity);
+    if (match) showStravaUploadMatch(match);
+    else showStravaUploadNoMatch("No matching Strava activity found for this date. You can still add the tile manually.");
+  } catch (err) {
+    showStravaUploadNoMatch(`Couldn't search Strava: ${err.message}. You can still add the tile manually.`);
+  } finally {
+    finishStravaUploadModal();
+  }
+}
+
+function bindStravaUploadModal() {
+  const cancel = tileModalEl("strava-upload-cancel");
+  const done = tileModalEl("strava-upload-done");
+  const closeX = tileModalEl("strava-upload-close-x");
+  const modal = tileModalEl("strava-upload-modal");
+  if (cancel) cancel.addEventListener("click", closeStravaUploadModal);
+  if (done) done.addEventListener("click", closeStravaUploadModal);
+  if (closeX) closeX.addEventListener("click", closeStravaUploadModal);
+  if (modal) {
+    modal.addEventListener("click", (e) => { if (e.target === modal) closeStravaUploadModal(); });
+  }
+}
+
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bindStravaUploadModal);
+  } else {
+    bindStravaUploadModal();
+  }
 }
 
 /* Node test harness hook (ignored in the browser). */

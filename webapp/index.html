@@ -571,7 +571,7 @@
 
                 <div class="row space-between activity-lab-tile-actions">
                   <span id="activity-lab-tile-status" class="muted"></span>
-                  <button id="activity-lab-download-tile" class="btn secondary" type="button">Download Strava tile</button>
+                  <button id="activity-lab-download-tile" class="btn secondary" type="button">Upload Strava tile</button>
                 </div>
     
                 <div class="chart-grid activity-lab-chart-grid">
@@ -1208,6 +1208,34 @@
           <img id="manual-lightbox-image" src="" alt="" />
           <p id="manual-lightbox-caption" class="muted"></p>
         </div>
+
+        <div id="strava-upload-modal" class="tile-modal hidden" role="dialog" aria-modal="true" aria-labelledby="strava-upload-title">
+          <div class="tile-modal-card">
+            <button id="strava-upload-close-x" type="button" class="tile-modal-close-x" aria-label="Close">×</button>
+            <h2 id="strava-upload-title" class="tile-modal-title">Upload tile to Strava</h2>
+            <div id="strava-upload-body" class="tile-modal-body">
+              <p class="tile-modal-status muted" id="strava-upload-status">Searching for the matching Strava activity…</p>
+              <div id="strava-upload-match" class="tile-modal-match hidden">
+                <div class="tile-modal-match-name" id="strava-upload-match-name"></div>
+                <div class="tile-modal-match-meta muted" id="strava-upload-match-meta"></div>
+              </div>
+              <div id="strava-upload-instructions" class="tile-modal-instructions hidden">
+                <p>Strava's public API can't attach photos to an activity, so this last step is manual:</p>
+                <ol>
+                  <li>The tile image was just downloaded to your device.</li>
+                  <li>Open the activity on Strava (button below).</li>
+                  <li>Edit the activity → <strong>Add photos/media</strong> → choose the downloaded tile.</li>
+                  <li>Set it as the highlight (cover) photo and save.</li>
+                </ol>
+              </div>
+            </div>
+            <div class="tile-modal-actions">
+              <a id="strava-upload-open" class="btn primary hidden" href="#" target="_blank" rel="noopener noreferrer">Open in Strava</a>
+              <button id="strava-upload-cancel" class="btn secondary" type="button">Cancel</button>
+              <button id="strava-upload-done" class="btn secondary hidden" type="button">Close</button>
+            </div>
+          </div>
+        </div>
         <footer class="footer">
           <div class="footer-inner">
             <span>© Oliver Koeth</span>
@@ -1229,7 +1257,7 @@
     <script src="./src/glucose-charts.js?v=20260816-1"></script>
     <script src="./src/api-client.js?v=20260825-1"></script>
     <script src="./src/activity-lab.js?v=20260825-3"></script>
-    <script src="./src/strava-tile.js?v=20260830-1"></script>
+    <script src="./src/strava-tile.js?v=20260830-2"></script>
     <script src="./src/filters-charts.js?v=20260818-1"></script>
     <script src="./src/hr-stream-compare.js?v=20260816-1"></script>
     <script src="./src/race-analysis.js?v=20260819-5"></script>
