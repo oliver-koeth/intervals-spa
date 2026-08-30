@@ -1,33 +1,154 @@
 /* ─── Strava-style shareable tile export ─────────────────────────────────
- * Renders a static PNG "workout tile" (dark card, Strava branding, HR/cadence/
- * pace chart, and — only when a paired planned workout is available — a
- * workout-profile bar chart plus avg gauges) and triggers a download.
- * Drawn entirely on a plain <canvas>: the exported image has no outer white
- * border and no rounded frame corners (those only appeared in the reference
- * screenshot's editor chrome, not the actual shared image). */
+ * Recreates the reference "workout tile": a square dark card with a Strava
+ * wordmark, an activity-type badge, a five-metric KPI strip, a stepped
+ * WORKOUT STRUCTURE chart (from the paired planned workout), a TIME IN HR
+ * ZONES bar list (from the HR stream + athlete zone model), and a footer.
+ *
+ * Icons are Lucide glyphs (24x24 stroke paths) drawn straight onto the
+ * canvas via Path2D, so the exported PNG is fully self-contained.
+ *
+ * The renderer is split in two so it can be unit-tested off-DOM:
+ *   - renderStravaTile(ctx, model)   pure drawing from a normalized model
+ *   - buildStravaTileModel(snapshot) app data -> normalized model
+ */
 
+/* ── Geometry ─────────────────────────────────────────────────────────── */
 const TILE_W = 1000;
-const TILE_PAD = 40;
-const TILE_HEADER_H = 190;
-const TILE_LEGEND_H = 40;
-const TILE_CHART_H = 420;
-const TILE_PROFILE_H = 300;
-const TILE_FOOTER_H = 64;
+const TILE_H = 1000;
+const TILE_PAD = 44;
+const TILE_SCALE = 2;
 
-const TILE_BG = "#0c0c0c";
-const TILE_TEXT = "#f5f5f5";
-const TILE_MUTED = "#9aa0a6";
-const TILE_GRID = "rgba(255,255,255,0.10)";
+/* ── Palette ──────────────────────────────────────────────────────────── */
+const TILE_BG = "#0d0d0d";
+const TILE_TEXT = "#ffffff";
+const TILE_MUTED = "#8a8f98";
+const TILE_FAINT = "#5c616b";
 const TILE_ORANGE = "#fc4c02";
-const TILE_COLORS = { hr: "#ef4444", cadence: "#c9ced6", pace: "#5b9bf0" };
-const TILE_ZONE_COLORS = { warmup: "#3f4750", threshold: "#bb5847", recovery: "#516272" };
+const TILE_ORANGE_SOFT = "#ff7a3c";
+const TILE_DIVIDER = "rgba(255,255,255,0.08)";
+const TILE_TRACK = "#26292f";
+
+const TILE_FONT_FAMILY = '-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
 function tileFont(weight, size) {
-  return `${weight} ${size}px -apple-system, "Segoe UI", Roboto, Arial, sans-serif`;
+  return `${weight} ${size}px ${TILE_FONT_FAMILY}`;
 }
 
-function tileRoundRectPath(ctx, x, y, w, h, r) {
-  const rr = Math.min(r, w / 2, h / 2);
+/* ── Lucide icons ─────────────────────────────────────────────────────────
+ * Each entry is a list of primitives: a string is an SVG path "d"; an object
+ * {c:[cx,cy,r]} is a circle. All are drawn stroked in a 24x24 view box, the
+ * Lucide convention (stroke-width 2, round caps/joins, no fill). */
+const TILE_ICONS = {
+  "calendar-days": [
+    "M8 2v4", "M16 2v4",
+    "M3 10h18",
+    "M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
+    "M8 14h.01", "M12 14h.01", "M16 14h.01",
+    "M8 18h.01", "M12 18h.01", "M16 18h.01",
+  ],
+  "clock-3": [
+    { c: [12, 12, 10] },
+    "M12 6v6h4.5",
+  ],
+  footprints: [
+    "M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z",
+    "M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z",
+    "M16 17h4", "M4 13h4",
+  ],
+  heart: [
+    "M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z",
+  ],
+  zap: [
+    "M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z",
+  ],
+  weight: [
+    { c: [12, 5, 3] },
+    "M6.5 8a2 2 0 0 0-1.905 1.46L2.1 18.5A2 2 0 0 0 4 21h16a2 2 0 0 0 1.925-2.54L19.4 9.46A2 2 0 0 0 17.48 8Z",
+  ],
+  signal: [
+    "M2 20h.01", "M7 20v-4", "M12 20v-8", "M17 20V8", "M22 4v16",
+  ],
+  activity: [
+    "M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2",
+  ],
+  bike: [
+    { c: [18.5, 17.5, 3.5] }, { c: [5.5, 17.5, 3.5] }, { c: [15, 5, 1] },
+    "M12 17.5V14l-3-3 4-3 2 3h2",
+  ],
+  waves: [
+    "M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
+    "M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
+    "M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
+  ],
+};
+
+/* Activity-type -> badge icon. Falls back to the Lucide "activity" pulse. */
+function tileActivityIconName(type) {
+  const t = String(type || "").toLowerCase();
+  if (/(^|_)(ride|cycl|bike|gravel|mountain|virtualride)/.test(t)) return "bike";
+  if (/swim/.test(t)) return "waves";
+  if (/row|paddle|kayak|canoe/.test(t)) return "waves";
+  if (/run|walk|hike|treadmill|trail/.test(t)) return "footprints";
+  return "activity";
+}
+
+/** Stroke a Lucide icon inside a size x size box whose top-left is (x, y). */
+function tileDrawIcon(ctx, name, x, y, size, color, strokeVisual = 2) {
+  const prims = TILE_ICONS[name];
+  if (!prims) return;
+  const s = size / 24;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = strokeVisual / s;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const prim of prims) {
+    let path;
+    if (typeof prim === "string") {
+      path = new Path2D(prim);
+    } else if (prim && prim.c) {
+      const [cx, cy, r] = prim.c;
+      path = new Path2D(`M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${r * 2} 0 a ${r} ${r} 0 1 0 ${-r * 2} 0`);
+    } else {
+      continue;
+    }
+    ctx.stroke(path);
+  }
+  ctx.restore();
+}
+
+/* ── Small drawing helpers ────────────────────────────────────────────── */
+function tileText(ctx, text, x, y, { font, color, align = "left", baseline = "alphabetic", tracking = 0 } = {}) {
+  ctx.font = font;
+  ctx.fillStyle = color;
+  ctx.textAlign = align;
+  ctx.textBaseline = baseline;
+  if ("letterSpacing" in ctx) {
+    try { ctx.letterSpacing = `${tracking}px`; } catch (_) { /* older canvas */ }
+  }
+  ctx.fillText(text, x, y);
+  if ("letterSpacing" in ctx) {
+    try { ctx.letterSpacing = "0px"; } catch (_) { /* noop */ }
+  }
+}
+
+function tileMeasure(ctx, text, font) {
+  ctx.font = font;
+  return ctx.measureText(text).width;
+}
+
+function tileTruncate(ctx, text, maxWidth, font) {
+  ctx.font = font;
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let s = String(text);
+  while (s.length > 1 && ctx.measureText(`${s}…`).width > maxWidth) s = s.slice(0, -1);
+  return `${s}…`;
+}
+
+function tileRoundRect(ctx, x, y, w, h, r) {
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
   ctx.beginPath();
   ctx.moveTo(x + rr, y);
   ctx.arcTo(x + w, y, x + w, y + h, rr);
@@ -37,531 +158,446 @@ function tileRoundRectPath(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function tileTruncateText(ctx, text, maxWidth) {
-  if (ctx.measureText(text).width <= maxWidth) return text;
-  let s = text;
-  while (s.length > 1 && ctx.measureText(`${s}…`).width > maxWidth) {
-    s = s.slice(0, -1);
-  }
-  return `${s}…`;
+function tileDivider(ctx, y, x0 = TILE_PAD, x1 = TILE_W - TILE_PAD) {
+  ctx.strokeStyle = TILE_DIVIDER;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x0, y + 0.5);
+  ctx.lineTo(x1, y + 0.5);
+  ctx.stroke();
 }
 
-function tileDifficultyLabel(pct) {
-  if (pct >= 95) return "VERY HARD";
-  if (pct >= 85) return "HARD";
-  if (pct >= 70) return "MODERATE";
-  if (pct >= 40) return "EASY";
-  return "VERY EASY";
-}
+/* ── Sections ─────────────────────────────────────────────────────────── */
+function tileDrawHeader(ctx, model) {
+  // Strava wordmark (attribution).
+  tileText(ctx, "STRAVA", TILE_PAD, 78, {
+    font: tileFont(800, 30), color: TILE_ORANGE, tracking: 1.5,
+  });
 
-/** Best-effort "3 x 8 min"-style summary of a planned workout's repeated work blocks. */
-function summarizePlannedWorkout(plannedWorkout) {
-  if (!plannedWorkout) return "";
-  const workSegments = plannedWorkout.segments.filter((s) => (s.zone || 0) >= 4);
-  if (workSegments.length >= 2) {
-    const rounded = workSegments.map((s) => Math.round(s.durationSec / 5) * 5);
-    const counts = new Map();
-    rounded.forEach((d) => counts.set(d, (counts.get(d) || 0) + 1));
-    let bestDuration = null;
-    let bestCount = 0;
-    counts.forEach((count, duration) => {
-      if (count > bestCount) { bestCount = count; bestDuration = duration; }
+  // Title + subtitle.
+  const titleMax = TILE_W - TILE_PAD - 160 - TILE_PAD;
+  tileText(ctx, tileTruncate(ctx, model.title, titleMax, tileFont(700, 44)), TILE_PAD, 150, {
+    font: tileFont(700, 44), color: TILE_TEXT,
+  });
+  if (model.subtitle) {
+    tileText(ctx, tileTruncate(ctx, model.subtitle, titleMax, tileFont(400, 28)), TILE_PAD, 196, {
+      font: tileFont(400, 28), color: TILE_MUTED,
     });
-    if (bestCount >= 2 && bestDuration) {
-      const mm = Math.floor(bestDuration / 60);
-      const ss = bestDuration % 60;
-      const label = ss ? `${mm}:${String(ss).padStart(2, "0")}` : `${mm} min`;
-      return `${bestCount} x ${label}`;
-    }
   }
-  return (plannedWorkout.description || "").split("\n")[0].slice(0, 70);
-}
 
-function tileNiceMinuteStep(maxMin) {
-  const steps = [1, 2, 5, 10, 15, 20, 30, 60];
-  return steps.find((s) => maxMin / s <= 8) || 60;
-}
-
-function tileClassifySegment(seg, index, total) {
-  const zone = seg.zone || 0;
-  if (zone >= 4) return "threshold";
-  if ((index === 0 || index === total - 1) && zone <= 2) return "warmup";
-  return "recovery";
-}
-
-function tileDrawLegendDot(ctx, x, y, color, label) {
+  // Activity-type badge (top-right circle).
+  const r = 50;
+  const cx = TILE_W - TILE_PAD - r;
+  const cy = 118;
+  ctx.strokeStyle = TILE_ORANGE;
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.arc(x, y, 6, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.fillStyle = TILE_MUTED;
-  ctx.font = tileFont(600, 14);
-  ctx.textBaseline = "middle";
-  ctx.textAlign = "left";
-  ctx.fillText(label, x + 14, y + 1);
-  return x + 14 + ctx.measureText(label).width;
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+  const iconSize = 48;
+  tileDrawIcon(ctx, model.typeIcon, cx - iconSize / 2, cy - iconSize / 2, iconSize, TILE_ORANGE, 2.2);
+
+  tileDivider(ctx, 232);
 }
 
-function tileDrawLogo(ctx, x, y, size) {
-  tileRoundRectPath(ctx, x, y, size, size, size * 0.2);
-  ctx.fillStyle = TILE_ORANGE;
-  ctx.fill();
+// Reference-matched column origins (date column is widest to fit "Aug 25, 2026").
+const TILE_KPI_X = [44, 258, 468, 662, 820];
+
+function tileDrawKpis(ctx, model) {
+  const cols = model.kpis;
+  cols.forEach((kpi, i) => {
+    const x = TILE_KPI_X[i] != null ? TILE_KPI_X[i] : TILE_PAD + ((TILE_W - TILE_PAD * 2) / cols.length) * i;
+    tileDrawIcon(ctx, kpi.icon, x, 268, 30, TILE_ORANGE, 2);
+    tileText(ctx, kpi.label, x, 344, { font: tileFont(700, 15), color: TILE_MUTED, tracking: 0.5 });
+    tileText(ctx, kpi.value, x, 384, { font: tileFont(700, 30), color: TILE_TEXT });
+  });
+  tileDivider(ctx, 428);
+}
+
+/** Stepped WORKOUT STRUCTURE profile (left body column). */
+function tileDrawWorkoutStructure(ctx, model, area) {
+  const { x0, x1, headingY, chartTop, chartBottom, labelY, legendY } = area;
+  tileText(ctx, "WORKOUT STRUCTURE", x0, headingY, {
+    font: tileFont(700, 15), color: TILE_MUTED, tracking: 1,
+  });
+
+  const wk = model.workout;
+  if (!wk || !wk.segments.length) {
+    tileText(ctx, "No planned workout", x0, (chartTop + chartBottom) / 2, {
+      font: tileFont(500, 16), color: TILE_FAINT, baseline: "middle",
+    });
+    return;
+  }
+
+  const total = wk.totalDurationSec || wk.segments.reduce((s, seg) => s + seg.durationSec, 0);
+  const mapX = (sec) => x0 + (Math.max(0, Math.min(total, sec)) / total) * (x1 - x0);
+  const levelY = (zone) => {
+    const z = Math.max(1, Math.min(5, zone || 1));
+    const frac = 0.12 + ((z - 1) / 4) * 0.82;
+    return chartBottom - frac * (chartBottom - chartTop);
+  };
+
+  // Top profile polyline (horizontal per segment, vertical steps between).
+  const pts = [];
+  wk.segments.forEach((seg) => {
+    const y = levelY(seg.zone);
+    pts.push([mapX(seg.startSec), y]);
+    pts.push([mapX(seg.startSec + seg.durationSec), y]);
+  });
+
+  // Gradient area fill under the profile.
   ctx.save();
-  ctx.translate(x + size / 2, y + size / 2);
-  ctx.fillStyle = "#ffffff";
   ctx.beginPath();
-  ctx.moveTo(-size * 0.16, size * 0.22);
-  ctx.lineTo(0, -size * 0.24);
-  ctx.lineTo(size * 0.16, size * 0.22);
-  ctx.lineTo(size * 0.06, size * 0.22);
-  ctx.lineTo(0, size * 0.02);
-  ctx.lineTo(-size * 0.06, size * 0.22);
+  ctx.moveTo(pts[0][0], chartBottom);
+  pts.forEach(([px, py]) => ctx.lineTo(px, py));
+  ctx.lineTo(pts[pts.length - 1][0], chartBottom);
   ctx.closePath();
+  const grad = ctx.createLinearGradient(0, chartTop, 0, chartBottom);
+  grad.addColorStop(0, "rgba(252,76,2,0.55)");
+  grad.addColorStop(1, "rgba(252,76,2,0.04)");
+  ctx.fillStyle = grad;
   ctx.fill();
   ctx.restore();
-}
 
-function tileDrawGauge(ctx, cx, cy, r, fraction, color, valueText, unitText, topLabel, bottomLabel) {
-  const start = Math.PI * 0.75;
-  const end = start + Math.PI * 1.5;
-  const clamped = Math.max(0, Math.min(1, fraction));
-
-  ctx.font = tileFont(700, 12);
-  ctx.fillStyle = TILE_MUTED;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillText(topLabel.toUpperCase(), cx, cy - r - 16);
-
-  ctx.lineCap = "round";
-  ctx.lineWidth = 10;
-  ctx.strokeStyle = "rgba(255,255,255,0.14)";
+  // Orange top stroke.
   ctx.beginPath();
-  ctx.arc(cx, cy, r, start, end, false);
+  pts.forEach(([px, py], i) => (i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)));
+  ctx.strokeStyle = TILE_ORANGE;
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = "round";
   ctx.stroke();
 
-  if (clamped > 0) {
-    ctx.strokeStyle = color;
+  // Dashed recovery markers.
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.lineWidth = 1.4;
+  ctx.setLineDash([2, 6]);
+  (wk.recoveries || []).forEach((sec) => {
+    const x = mapX(sec);
     ctx.beginPath();
-    ctx.arc(cx, cy, r, start, start + (end - start) * clamped, false);
+    ctx.moveTo(x, chartTop);
+    ctx.lineTo(x, chartBottom);
     ctx.stroke();
-  }
+  });
+  ctx.setLineDash([]);
 
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = TILE_TEXT;
-  ctx.font = tileFont(700, 26);
-  ctx.fillText(valueText, cx, cy - 6);
-  ctx.fillStyle = TILE_MUTED;
-  ctx.font = tileFont(500, 13);
-  ctx.fillText(unitText, cx, cy + 18);
-
+  // X-axis time labels.
+  const ticks = tileTimeTicks(total);
+  ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  ctx.font = tileFont(600, 12);
+  ctx.font = tileFont(500, 14);
   ctx.fillStyle = TILE_MUTED;
-  ctx.fillText(bottomLabel.toUpperCase(), cx, cy + r + 24);
-}
-
-function tileDrawHeader(ctx, focusActivity, plannedWorkout) {
-  const logoSize = 76;
-  tileDrawLogo(ctx, TILE_PAD, TILE_PAD, logoSize);
-
-  const textX = TILE_PAD + logoSize + 22;
-  const title = plannedWorkout?.name || focusActivity.activity_name || focusActivity.activity_type || "Activity";
-  const subtitle = summarizePlannedWorkout(plannedWorkout);
-
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = TILE_TEXT;
-  ctx.font = tileFont(700, 32);
-  const titleMaxW = 480;
-  ctx.fillText(tileTruncateText(ctx, title, titleMaxW), textX, TILE_PAD + 32);
-
-  if (subtitle) {
-    ctx.fillStyle = TILE_MUTED;
-    ctx.font = tileFont(400, 20);
-    ctx.fillText(tileTruncateText(ctx, subtitle, titleMaxW), textX, TILE_PAD + 62);
-  }
-
-  if (focusActivity.date) {
-    const dateY = TILE_PAD + 96;
-    ctx.strokeStyle = TILE_MUTED;
-    ctx.lineWidth = 1.4;
-    tileRoundRectPath(ctx, textX, dateY - 12, 16, 14, 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(textX + 3, dateY - 8);
-    ctx.lineTo(textX + 13, dateY - 8);
-    ctx.stroke();
-    ctx.fillStyle = TILE_MUTED;
-    ctx.font = tileFont(500, 15);
-    ctx.fillText(focusActivity.date, textX + 24, dateY);
-  }
-
-  const kpiRightEdge = TILE_W - TILE_PAD;
-  const kpis = [
-    { label: "TIME", value: focusActivity.moving_time_s ? formatSeconds(focusActivity.moving_time_s) : "-" },
-    { label: "DISTANCE", value: focusActivity.distance_m ? formatDistance(focusActivity.distance_m) : "-" },
-    { label: "LOAD", value: focusActivity.training_load != null ? String(Math.round(focusActivity.training_load)) : "-" },
-  ];
-  const colW = 150;
-  kpis.forEach((kpi, i) => {
-    const cx = kpiRightEdge - colW * (kpis.length - 1 - i);
-    ctx.textAlign = "right";
-    ctx.fillStyle = TILE_MUTED;
-    ctx.font = tileFont(700, 13);
-    ctx.fillText(kpi.label, cx, TILE_PAD + 12);
-    ctx.fillStyle = TILE_TEXT;
-    ctx.font = tileFont(700, 28);
-    ctx.fillText(kpi.value, cx, TILE_PAD + 46);
+  ticks.forEach((sec) => {
+    let align = "center";
+    if (sec === 0) align = "left";
+    else if (sec >= total - 0.5) align = "right";
+    tileText(ctx, formatSeconds(sec), mapX(sec), labelY, { font: tileFont(500, 14), color: TILE_MUTED, align });
   });
 
-  const intensityPct = focusActivity.intensity != null
-    ? Math.round(focusActivity.intensity * 100)
-    : (plannedWorkout?.intensity != null ? Math.round(plannedWorkout.intensity * 100) : null);
-  if (intensityPct != null) {
-    ctx.textAlign = "left";
-    ctx.fillStyle = TILE_MUTED;
-    ctx.font = tileFont(700, 13);
-    const intensityX = kpiRightEdge - colW * 2;
-    ctx.fillText("INTENSITY", intensityX, TILE_PAD + 92);
-    ctx.fillStyle = TILE_TEXT;
-    ctx.font = tileFont(700, 26);
-    ctx.fillText(`${intensityPct}%`, intensityX, TILE_PAD + 124);
-
-    const badgeText = tileDifficultyLabel(intensityPct);
-    ctx.font = tileFont(700, 13);
-    const badgeTextW = ctx.measureText(badgeText).width;
-    const badgeW = badgeTextW + 32;
-    const badgeH = 34;
-    const badgeX = kpiRightEdge - badgeW;
-    const badgeY = TILE_PAD + 96;
-    tileRoundRectPath(ctx, badgeX, badgeY, badgeW, badgeH, badgeH / 2);
-    ctx.strokeStyle = "rgba(255,255,255,0.35)";
-    ctx.lineWidth = 1.4;
-    ctx.stroke();
-    ctx.textAlign = "center";
-    ctx.fillStyle = TILE_TEXT;
-    ctx.fillText(badgeText, badgeX + badgeW / 2, badgeY + badgeH / 2 + 4);
-  }
-}
-
-function tileDrawLegend(ctx, y, showHr, showCadence, showPace) {
-  let x = TILE_PAD;
-  if (showHr) x = tileDrawLegendDot(ctx, x, y, TILE_COLORS.hr, "HEART RATE (bpm)") + 26;
-  if (showCadence) x = tileDrawLegendDot(ctx, x, y, TILE_COLORS.cadence, "CADENCE (rpm)") + 26;
-  if (showPace) tileDrawLegendDot(ctx, x, y, TILE_COLORS.pace, "PACE (min/km)");
-}
-
-function tileAxisBounds(values, step, minFloor = 0) {
-  if (!values.length) return { min: minFloor, max: minFloor + step * 4 };
-  let min = Math.floor(Math.min(...values) / step) * step;
-  let max = Math.ceil(Math.max(...values) / step) * step;
-  if (min === max) { min -= step; max += step; }
-  return { min: Math.max(minFloor, min), max };
-}
-
-function tileDrawChart(ctx, x0, y0, x1, y1, xMax, hr, cadence, pace) {
-  const hasHr = hr.length > 0;
-  const hasCadence = cadence.length > 0;
-  const hasPace = pace.length > 0;
-
-  const bpmBounds = tileAxisBounds(hr.map((p) => p[1]), 20);
-  const rpmBounds = { min: 0, max: Math.max(100, tileAxisBounds(cadence.map((p) => p[1]), 20).max) };
-  const paceValues = pace.map((p) => p[1]);
-  const paceMin = paceValues.length ? Math.max(0, Math.floor(Math.min(...paceValues) / 5) * 5) : 0;
-  const paceMax = 20;
-
-  const mapX = (tMin) => x0 + (Math.max(0, Math.min(xMax, tMin)) / xMax) * (x1 - x0);
-  const mapYBpm = (v) => y1 - ((v - bpmBounds.min) / (bpmBounds.max - bpmBounds.min)) * (y1 - y0);
-  const mapYRpm = (v) => y1 - ((v - rpmBounds.min) / (rpmBounds.max - rpmBounds.min)) * (y1 - y0);
-  const mapYPace = (v) => y0 + ((v - paceMin) / (paceMax - paceMin)) * (y1 - y0);
-
-  ctx.strokeStyle = TILE_GRID;
-  ctx.lineWidth = 1;
-  const hGridLines = 5;
-  for (let i = 0; i <= hGridLines; i++) {
-    const y = y0 + ((y1 - y0) / hGridLines) * i;
-    ctx.beginPath();
-    ctx.moveTo(x0, y);
-    ctx.lineTo(x1, y);
-    ctx.stroke();
-  }
-  const xStep = tileNiceMinuteStep(xMax);
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  ctx.font = tileFont(500, 13);
-  for (let t = 0; t <= xMax + 0.001; t += xStep) {
-    const x = mapX(t);
-    ctx.strokeStyle = TILE_GRID;
-    ctx.beginPath();
-    ctx.moveTo(x, y0);
-    ctx.lineTo(x, y1);
-    ctx.stroke();
-    ctx.fillStyle = TILE_MUTED;
-    ctx.fillText(String(Math.round(t)), x, y1 + 8);
-  }
-  ctx.textAlign = "left";
-  ctx.fillText("min", x1 + 6, y1 + 8);
-
-  if (hasHr) {
-    ctx.textAlign = "right";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = TILE_COLORS.hr;
-    ctx.font = tileFont(600, 13);
-    for (let v = bpmBounds.min; v <= bpmBounds.max; v += 20) {
-      ctx.fillText(String(v), x0 - 10, mapYBpm(v));
-    }
-    ctx.font = tileFont(700, 12);
-    ctx.textBaseline = "alphabetic";
-    ctx.fillText("bpm", x0 - 10, y0 - 10);
-  }
-  if (hasCadence) {
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = TILE_MUTED;
-    ctx.font = tileFont(600, 13);
-    for (let v = rpmBounds.min; v <= rpmBounds.max; v += 20) {
-      ctx.fillText(String(v), x1 + 10, mapYRpm(v));
-    }
-    ctx.font = tileFont(700, 12);
-    ctx.textBaseline = "alphabetic";
-    ctx.fillText("rpm", x1 + 10, y0 - 10);
-  }
-  if (hasPace) {
-    const paceAxisX = x1 + 70;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = TILE_COLORS.pace;
-    ctx.font = tileFont(600, 13);
-    for (let v = paceMin; v <= paceMax; v += 5) {
-      ctx.fillText(formatPaceMinutes(v), paceAxisX, mapYPace(v));
-    }
-    ctx.font = tileFont(700, 12);
-    ctx.textBaseline = "alphabetic";
-    ctx.fillText("min/km", paceAxisX, y0 - 10);
-  }
-
-  if (hasHr) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x0, y0, x1 - x0, y1 - y0);
-    ctx.clip();
-    const gradient = ctx.createLinearGradient(0, y0, 0, y1);
-    gradient.addColorStop(0, "rgba(239,68,68,0.30)");
-    gradient.addColorStop(1, "rgba(239,68,68,0.02)");
-    ctx.beginPath();
-    hr.forEach(([t, v], i) => {
-      const px = mapX(t);
-      const py = mapYBpm(v);
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    });
-    ctx.lineTo(mapX(hr[hr.length - 1][0]), y1);
-    ctx.lineTo(mapX(hr[0][0]), y1);
-    ctx.closePath();
-    ctx.fillStyle = gradient;
-    ctx.fill();
-    ctx.restore();
-
-    ctx.beginPath();
-    hr.forEach(([t, v], i) => {
-      const px = mapX(t);
-      const py = mapYBpm(v);
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    });
-    ctx.strokeStyle = TILE_COLORS.hr;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
-
-  if (hasCadence) {
-    ctx.beginPath();
-    cadence.forEach(([t, v], i) => {
-      const px = mapX(t);
-      const py = mapYRpm(v);
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    });
-    ctx.strokeStyle = TILE_COLORS.cadence;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
-
-  if (hasPace) {
-    ctx.beginPath();
-    pace.forEach(([t, v], i) => {
-      const px = mapX(t);
-      const py = mapYPace(v);
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    });
-    ctx.strokeStyle = TILE_COLORS.pace;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
-}
-
-function tileDrawWorkoutProfile(ctx, x0, y0, x1, y1, xMax, plannedWorkout, hr, cadence, pace) {
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = TILE_MUTED;
-  ctx.font = tileFont(700, 13);
-  ctx.fillText("WORKOUT PROFILE", x0, y0 - 14);
-
-  const barAreaRight = x0 + (x1 - x0) * 0.62;
-  const baseline = y1 - 60;
-  const barTop = y0 + 10;
-  const mapX = (tMin) => x0 + (Math.max(0, Math.min(xMax, tMin)) / xMax) * (barAreaRight - x0);
-
-  ctx.strokeStyle = TILE_GRID;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(x0, baseline);
-  ctx.lineTo(barAreaRight, baseline);
-  ctx.stroke();
-
-  const xStep = tileNiceMinuteStep(xMax);
-  ctx.textAlign = "center";
-  ctx.fillStyle = TILE_MUTED;
-  ctx.font = tileFont(500, 12);
-  for (let t = 0; t <= xMax + 0.001; t += xStep) {
-    ctx.fillText(String(Math.round(t)), mapX(t), baseline + 18);
-  }
-  ctx.textAlign = "right";
-  ctx.fillText(formatSeconds(plannedWorkout.totalDurationSec), barAreaRight, baseline + 18);
-  ctx.fillText("min", barAreaRight, y0 - 14);
-
-  const classes = new Set();
-  plannedWorkout.segments.forEach((seg, i) => {
-    const cls = tileClassifySegment(seg, i, plannedWorkout.segments.length);
-    classes.add(cls);
-    const zoneFrac = Math.max(0.14, (seg.zone || 1) / 5);
-    const barH = (baseline - barTop) * zoneFrac;
-    const sx = mapX(seg.startSec / 60);
-    const ex = mapX((seg.startSec + seg.durationSec) / 60);
-    const w = Math.max(1, ex - sx);
-    ctx.fillStyle = TILE_ZONE_COLORS[cls];
-    ctx.fillRect(sx, baseline - barH, w, barH);
-  });
-
-  const legendY = baseline + 42;
+  // Legend: work line + dashed recoveries.
   let lx = x0;
-  const legendOrder = ["warmup", "threshold", "recovery"];
-  const legendLabels = { warmup: "WARM UP", threshold: "THRESHOLD", recovery: "RECOVERY" };
-  legendOrder.filter((cls) => classes.has(cls)).forEach((cls) => {
-    ctx.fillStyle = TILE_ZONE_COLORS[cls];
-    ctx.fillRect(lx, legendY - 9, 14, 10);
-    ctx.fillStyle = TILE_MUTED;
-    ctx.font = tileFont(600, 12);
-    ctx.textAlign = "left";
-    ctx.fillText(legendLabels[cls], lx + 20, legendY);
-    lx += 20 + ctx.measureText(legendLabels[cls]).width + 22;
+  ctx.strokeStyle = TILE_ORANGE;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(lx, legendY);
+  ctx.lineTo(lx + 22, legendY);
+  ctx.stroke();
+  lx += 30;
+  const workLabel = wk.workLabel || "Work";
+  tileText(ctx, workLabel, lx, legendY, { font: tileFont(600, 14), color: TILE_MUTED, baseline: "middle" });
+  lx += tileMeasure(ctx, workLabel, tileFont(600, 14)) + 26;
+
+  ctx.strokeStyle = "rgba(255,255,255,0.5)";
+  ctx.lineWidth = 1.6;
+  ctx.setLineDash([2, 4]);
+  ctx.beginPath();
+  ctx.moveTo(lx, legendY);
+  ctx.lineTo(lx + 22, legendY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  lx += 30;
+  tileText(ctx, "Recoveries", lx, legendY, { font: tileFont(600, 14), color: TILE_MUTED, baseline: "middle" });
+}
+
+/** TIME IN HR ZONES bar list (right body column). */
+function tileDrawHrZones(ctx, model, area) {
+  const { x0, x1, headingY, rowsTop, rowsBottom } = area;
+  tileText(ctx, "TIME IN HR ZONES", x0, headingY, {
+    font: tileFont(700, 15), color: TILE_MUTED, tracking: 1,
   });
 
-  const gaugeAreaLeft = barAreaRight + 40;
-  const gaugeAreaW = x1 - gaugeAreaLeft;
-  const gaugeR = 46;
-  const gaugeCy = y0 + (y1 - y0) / 2 - 4;
-  const gaugeXs = [0, 1, 2].map((i) => gaugeAreaLeft + gaugeAreaW * ((i + 0.5) / 3));
+  const zones = model.hrZones;
+  if (!zones || !zones.length) {
+    tileText(ctx, "No HR zone data", x0, (rowsTop + rowsBottom) / 2, {
+      font: tileFont(500, 16), color: TILE_FAINT, baseline: "middle",
+    });
+    return;
+  }
 
-  const hrValues = hr.map((p) => p[1]);
-  const avgHr = hrValues.length ? hrValues.reduce((a, b) => a + b, 0) / hrValues.length : null;
-  const maxHr = hrValues.length ? Math.max(...hrValues) : null;
-  const cadenceValues = cadence.map((p) => p[1]);
-  const avgCadence = cadenceValues.length ? cadenceValues.reduce((a, b) => a + b, 0) / cadenceValues.length : null;
-  const maxCadence = cadenceValues.length ? Math.max(...cadenceValues) : null;
-  const paceValues = pace.map((p) => p[1]);
-  const avgPace = paceValues.length ? paceValues.reduce((a, b) => a + b, 0) / paceValues.length : null;
-  const bestPace = paceValues.length ? Math.min(...paceValues) : null;
+  // Draw Z(n) at top down to Z1 at bottom.
+  const ordered = zones.slice().sort((a, b) => b.zone - a.zone);
+  const rowH = (rowsBottom - rowsTop) / ordered.length;
+  const barX0 = x0 + 100;
+  const pctX = x1;
+  const timeX = x1 - 62;
+  const barX1 = timeX - 74;
 
-  tileDrawGauge(
-    ctx, gaugeXs[0], gaugeCy, gaugeR,
-    avgHr != null && maxHr ? avgHr / maxHr : 0,
-    TILE_COLORS.hr,
-    avgHr != null ? String(Math.round(avgHr)) : "-", "bpm",
-    "Avg HR", maxHr != null ? `Max ${Math.round(maxHr)}` : "Max -"
-  );
-  tileDrawGauge(
-    ctx, gaugeXs[1], gaugeCy, gaugeR,
-    avgCadence != null && maxCadence ? avgCadence / maxCadence : 0,
-    TILE_COLORS.cadence,
-    avgCadence != null ? String(Math.round(avgCadence)) : "-", "rpm",
-    "Avg cadence", maxCadence != null ? `Max ${Math.round(maxCadence)}` : "Max -"
-  );
-  tileDrawGauge(
-    ctx, gaugeXs[2], gaugeCy, gaugeR,
-    avgPace != null && bestPace ? bestPace / avgPace : 0,
-    TILE_COLORS.pace,
-    avgPace != null ? formatPaceMinutes(avgPace) : "-", "min/km",
-    "Avg pace", bestPace != null ? `Best ${formatPaceMinutes(bestPace)}` : "Best -"
-  );
+  ordered.forEach((z, i) => {
+    const cy = rowsTop + rowH * (i + 0.5);
+    // Zone label + bpm range.
+    tileText(ctx, `Z${z.zone}`, x0, cy - 4, { font: tileFont(700, 20), color: TILE_TEXT });
+    tileText(ctx, z.range, x0, cy + 18, { font: tileFont(500, 13), color: TILE_MUTED });
+
+    // Bar track + fill.
+    const barY = cy - 5;
+    const barH = 10;
+    tileRoundRect(ctx, barX0, barY, barX1 - barX0, barH, barH / 2);
+    ctx.fillStyle = TILE_TRACK;
+    ctx.fill();
+    const frac = Math.max(0, Math.min(1, z.pct));
+    const fillW = (barX1 - barX0) * frac;
+    if (fillW > 1) {
+      tileRoundRect(ctx, barX0, barY, fillW, barH, barH / 2);
+      ctx.fillStyle = z.pct > 0 ? TILE_ORANGE : TILE_TRACK;
+      ctx.fill();
+    }
+
+    // Time + percentage.
+    tileText(ctx, formatSeconds(z.seconds), timeX, cy + 6, {
+      font: tileFont(700, 20), color: TILE_TEXT, align: "right",
+    });
+    const pctText = `${Math.round(z.pct * 100)}%`;
+    tileText(ctx, pctText, pctX, cy + 6, {
+      font: tileFont(700, 20), color: z.pct > 0 ? TILE_ORANGE : TILE_FAINT, align: "right",
+    });
+  });
 }
 
-function tileDrawFooter(ctx, y, title) {
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = TILE_MUTED;
-  ctx.font = tileFont(500, 15);
-  const prefix = tileTruncateText(ctx, title, 480);
-  ctx.fillText(prefix, TILE_PAD, y);
-  const prefixW = ctx.measureText(prefix).width;
-  ctx.fillText(" · Powered by ", TILE_PAD + prefixW, y);
-  const sepW = ctx.measureText(" · Powered by ").width;
-  ctx.font = tileFont(700, 15);
-  ctx.fillStyle = TILE_ORANGE;
-  ctx.fillText("STRAVA", TILE_PAD + prefixW + sepW, y);
+function tileDrawFooterItem(ctx, x, cy, icon, label, value, align = "left") {
+  if (align === "left") {
+    tileDrawIcon(ctx, icon, x, cy - 16, 30, TILE_ORANGE, 2);
+    const tx = x + 44;
+    tileText(ctx, label, tx, cy - 6, { font: tileFont(700, 13), color: TILE_MUTED, tracking: 0.5 });
+    tileText(ctx, value, tx, cy + 20, { font: tileFont(700, 24), color: TILE_TEXT });
+    return tx + Math.max(tileMeasure(ctx, label, tileFont(700, 13)), tileMeasure(ctx, value, tileFont(700, 24)));
+  }
+  // Right-aligned: text block ends at x, icon sits to the left of it.
+  const labelW = tileMeasure(ctx, label, tileFont(700, 13));
+  const valueW = tileMeasure(ctx, value, tileFont(700, 24));
+  const blockW = Math.max(labelW, valueW);
+  const tx = x;
+  tileText(ctx, label, tx, cy - 6, { font: tileFont(700, 13), color: TILE_MUTED, align: "right", tracking: 0.5 });
+  tileText(ctx, value, tx, cy + 20, { font: tileFont(700, 24), color: TILE_TEXT, align: "right" });
+  tileDrawIcon(ctx, icon, tx - blockW - 44, cy - 16, 30, TILE_ORANGE, 2);
+  return tx - blockW - 44;
 }
 
-/** Builds the full tile canvas from the currently-displayed activity/stream/planned
- *  workout snapshot. Returns null when there's nothing to render yet. */
-function buildStravaTileCanvas(snapshot) {
-  if (!snapshot || !snapshot.focusActivity) return null;
-  const { focusActivity, hr, pace, cadence, plannedWorkout } = snapshot;
-  const showProfile = !!(plannedWorkout && plannedWorkout.segments && plannedWorkout.segments.length);
+function tileDrawFooter(ctx, model, cy) {
+  const loadRight = tileDrawFooterItem(ctx, TILE_PAD, cy, "weight", "LOAD", model.footer.load, "left");
+  const sepX = loadRight + 34;
+  ctx.strokeStyle = TILE_DIVIDER;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(sepX, cy - 20);
+  ctx.lineTo(sepX, cy + 20);
+  ctx.stroke();
+  tileDrawFooterItem(ctx, sepX + 34, cy, "signal", "SOURCE", model.footer.source, "left");
+  tileDrawFooterItem(ctx, TILE_W - TILE_PAD, cy, "activity", "MAX HR", model.footer.maxHr, "right");
+}
 
-  const height = TILE_HEADER_H + TILE_LEGEND_H + TILE_CHART_H + TILE_FOOTER_H + (showProfile ? TILE_PROFILE_H : 0);
-  const canvas = document.createElement("canvas");
-  const scale = 2;
-  canvas.width = TILE_W * scale;
-  canvas.height = height * scale;
-  const ctx = canvas.getContext("2d");
-  ctx.scale(scale, scale);
+/* ── Axis helpers ─────────────────────────────────────────────────────── */
+function tileTimeTicks(totalSec) {
+  const stepsMin = [1, 2, 5, 10, 15, 20, 30, 60];
+  const totalMin = totalSec / 60;
+  const step = (stepsMin.find((s) => totalMin / s <= 6) || 60) * 60;
+  const ticks = [];
+  for (let t = 0; t < totalSec - step * 0.35; t += step) ticks.push(Math.round(t));
+  ticks.push(Math.round(totalSec));
+  return ticks;
+}
 
+/* ── Pure renderer ────────────────────────────────────────────────────── */
+function renderStravaTile(ctx, model) {
   ctx.fillStyle = TILE_BG;
-  ctx.fillRect(0, 0, TILE_W, height);
+  ctx.fillRect(0, 0, TILE_W, TILE_H);
 
-  tileDrawHeader(ctx, focusActivity, plannedWorkout);
+  tileDrawHeader(ctx, model);
+  tileDrawKpis(ctx, model);
 
-  const legendY = TILE_HEADER_H - 6;
-  tileDrawLegend(ctx, legendY, hr.length > 0, cadence.length > 0, pace.length > 0);
+  const bodyHeadingY = 484;
+  const leftX0 = TILE_PAD;
+  const leftX1 = 488;
+  const rightX0 = 520;
+  const rightX1 = TILE_W - TILE_PAD;
 
-  const chartY0 = TILE_HEADER_H + TILE_LEGEND_H;
-  const chartY1 = chartY0 + TILE_CHART_H;
-  const chartX0 = TILE_PAD + 56;
-  const chartX1 = TILE_W - TILE_PAD - 120;
-  const streamMaxMin = [hr, cadence, pace].reduce((max, series) => (
-    series.length ? Math.max(max, series[series.length - 1][0]) : max
-  ), 0);
-  const workoutMaxMin = showProfile ? plannedWorkout.totalDurationSec / 60 : 0;
-  const xMax = Math.max(streamMaxMin, workoutMaxMin, 1);
+  tileDrawWorkoutStructure(ctx, model, {
+    x0: leftX0, x1: leftX1,
+    headingY: bodyHeadingY,
+    chartTop: 516, chartBottom: 748,
+    labelY: 776, legendY: 812,
+  });
+  tileDrawHrZones(ctx, model, {
+    x0: rightX0, x1: rightX1,
+    headingY: bodyHeadingY,
+    rowsTop: 508, rowsBottom: 812,
+  });
 
-  if (hr.length || cadence.length || pace.length) {
-    tileDrawChart(ctx, chartX0, chartY0, chartX1, chartY1, xMax, hr, cadence, pace);
-  } else {
-    ctx.textAlign = "center";
-    ctx.fillStyle = TILE_MUTED;
-    ctx.font = tileFont(500, 16);
-    ctx.fillText("No stream data available", TILE_W / 2, (chartY0 + chartY1) / 2);
+  tileDivider(ctx, 872);
+  tileDrawFooter(ctx, model, 930);
+}
+
+/* ── App-data adapter ─────────────────────────────────────────────────── */
+const TILE_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function tileFormatDate(dateStr) {
+  const m = String(dateStr || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return String(dateStr || "-");
+  return `${TILE_MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}`;
+}
+
+function tileZoneName(zone) {
+  return { 1: "Recovery", 2: "Endurance", 3: "Tempo", 4: "Threshold", 5: "VO2 Max" }[zone] || "Effort";
+}
+
+/** Best-effort "3 × 8 min" summary of the planned workout's repeated work blocks. */
+function tileSummarizeWorkout(plannedWorkout) {
+  if (!plannedWorkout || !plannedWorkout.segments) return "";
+  const work = plannedWorkout.segments.filter((s) => (s.zone || 0) >= 4);
+  if (work.length >= 2) {
+    const rounded = work.map((s) => Math.round(s.durationSec / 5) * 5);
+    const counts = new Map();
+    rounded.forEach((d) => counts.set(d, (counts.get(d) || 0) + 1));
+    let bestD = null;
+    let bestN = 0;
+    counts.forEach((n, d) => { if (n > bestN) { bestN = n; bestD = d; } });
+    if (bestN >= 2 && bestD) {
+      const mm = Math.floor(bestD / 60);
+      const ss = bestD % 60;
+      const label = ss ? `${mm}:${String(ss).padStart(2, "0")}` : `${mm} min`;
+      return `${bestN} × ${label}`;
+    }
+  }
+  return String(plannedWorkout.description || "").split("\n")[0].slice(0, 60);
+}
+
+function tileBuildWorkoutModel(plannedWorkout) {
+  if (!plannedWorkout || !plannedWorkout.segments || !plannedWorkout.segments.length) return null;
+  const segments = plannedWorkout.segments;
+  const total = plannedWorkout.totalDurationSec || segments.reduce((s, seg) => s + seg.durationSec, 0);
+
+  // Recovery markers: valleys flanked by higher-effort neighbours.
+  const recoveries = [];
+  for (let i = 1; i < segments.length - 1; i++) {
+    const prev = segments[i - 1].zone || 0;
+    const cur = segments[i].zone || 0;
+    const next = segments[i + 1].zone || 0;
+    if (cur < prev && cur <= next && prev >= 4) {
+      recoveries.push(segments[i].startSec + segments[i].durationSec / 2);
+    }
   }
 
-  let cursorY = chartY1;
-  if (showProfile) {
-    const profileY0 = cursorY + 36;
-    const profileY1 = profileY0 + TILE_PROFILE_H - 36;
-    tileDrawWorkoutProfile(ctx, chartX0, profileY0, chartX1, profileY1, xMax, plannedWorkout, hr, cadence, pace);
-    cursorY = profileY1 + 20;
-  } else {
-    cursorY += 16;
+  const workZones = segments.filter((s) => (s.zone || 0) >= 4).map((s) => s.zone);
+  const topWork = workZones.length ? Math.max(...workZones) : null;
+  const summary = tileSummarizeWorkout(plannedWorkout);
+  const workLabel = topWork ? `${summary || "Work"} @ ${tileZoneName(topWork)}` : (summary || "Work");
+
+  return { segments, totalDurationSec: total, recoveries, workLabel };
+}
+
+/** Seconds spent in each HR zone, from the HR stream and athlete zone model. */
+function tileComputeHrZones(hr, zoneModel, fallbackZoneTimes) {
+  const bounds = zoneModel && Array.isArray(zoneModel.hr_zones) ? zoneModel.hr_zones : null;
+  if (!bounds || !bounds.length) return null;
+  const n = bounds.length;
+
+  let seconds = null;
+  if (hr && hr.length > 1) {
+    seconds = new Array(n).fill(0);
+    for (let i = 1; i < hr.length; i++) {
+      const bpm = hr[i][1];
+      let dt = (hr[i][0] - hr[i - 1][0]) * 60;
+      if (!Number.isFinite(dt) || dt < 0) dt = 0;
+      if (dt > 10) dt = 1; // guard large gaps
+      let zi = n - 1;
+      for (let z = 0; z < n; z++) { if (bpm <= bounds[z]) { zi = z; break; } }
+      seconds[zi] += dt;
+    }
+  } else if (Array.isArray(fallbackZoneTimes) && fallbackZoneTimes.length) {
+    seconds = new Array(n).fill(0);
+    for (let z = 0; z < n; z++) seconds[z] = Number(fallbackZoneTimes[z]) || 0;
   }
+  if (!seconds) return null;
 
-  tileDrawFooter(ctx, cursorY + (TILE_FOOTER_H - 20), plannedWorkout?.name || focusActivity.activity_name || "Activity");
+  const total = seconds.reduce((a, b) => a + b, 0) || 1;
+  const rows = [];
+  for (let z = 0; z < n; z++) {
+    let range;
+    if (z === 0) range = `< ${bounds[0] + 1} bpm`;
+    else if (z === n - 1) range = `> ${bounds[n - 2]} bpm`;
+    else range = `${bounds[z - 1] + 1} – ${bounds[z]} bpm`;
+    rows.push({ zone: z + 1, range, seconds: Math.round(seconds[z]), pct: seconds[z] / total });
+  }
+  return rows;
+}
 
+function tileAvgFromStream(series) {
+  if (!series || !series.length) return null;
+  let sum = 0;
+  for (const p of series) sum += p[1];
+  return sum / series.length;
+}
+
+function tileTitleCase(s) {
+  const str = String(s || "");
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/** Convert the Activity Lab snapshot into a normalized tile model. */
+function buildStravaTileModel(snapshot, zoneModel) {
+  if (!snapshot || !snapshot.focusActivity) return null;
+  const a = snapshot.focusActivity;
+  const hr = snapshot.hr || [];
+  const pace = snapshot.pace || [];
+  const cadence = snapshot.cadence || [];
+  const planned = snapshot.plannedWorkout || null;
+
+  const avgHr = a.avg_hr > 0 ? a.avg_hr : tileAvgFromStream(hr);
+  const maxHr = a.max_hr > 0 ? a.max_hr : (hr.length ? Math.max(...hr.map((p) => p[1])) : null);
+
+  const kpis = [
+    { icon: "calendar-days", label: "DATE", value: tileFormatDate(a.date) },
+    { icon: "clock-3", label: "DURATION", value: a.moving_time_s ? formatSeconds(a.moving_time_s) : "-" },
+    { icon: "footprints", label: "DISTANCE", value: a.distance_m ? formatDistance(a.distance_m) : "-" },
+    { icon: "heart", label: "AVG HR", value: avgHr ? `${Math.round(avgHr)} bpm` : "-" },
+    { icon: "zap", label: "AVG PACE", value: formatAvgPace(a.moving_time_s, a.distance_m) },
+  ];
+
+  return {
+    title: planned?.name || a.activity_name || a.activity_type || "Activity",
+    subtitle: tileSummarizeWorkout(planned),
+    typeIcon: tileActivityIconName(a.activity_type),
+    kpis,
+    workout: tileBuildWorkoutModel(planned),
+    hrZones: tileComputeHrZones(hr, zoneModel, a.hr_zone_times),
+    footer: {
+      load: a.training_load != null ? String(Math.round(a.training_load)) : "-",
+      source: tileTitleCase(a.source || "intervals"),
+      maxHr: maxHr ? `${Math.round(maxHr)} bpm` : "-",
+    },
+  };
+}
+
+/* ── Canvas assembly + download ───────────────────────────────────────── */
+function buildStravaTileCanvas(snapshot) {
+  const zoneModel = typeof getSelectedZoneModel === "function" ? getSelectedZoneModel() : null;
+  const model = buildStravaTileModel(snapshot, zoneModel);
+  if (!model) return null;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = TILE_W * TILE_SCALE;
+  canvas.height = TILE_H * TILE_SCALE;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(TILE_SCALE, TILE_SCALE);
+  renderStravaTile(ctx, model);
   return canvas;
 }
 
@@ -580,12 +616,12 @@ async function handleDownloadStravaTile() {
     if (statusEl) statusEl.textContent = "Open an activity and let its stream load first.";
     return;
   }
+  if (statusEl) statusEl.textContent = "Generating tile…";
   const canvas = buildStravaTileCanvas(snapshot);
   if (!canvas) {
     if (statusEl) statusEl.textContent = "Nothing to export yet.";
     return;
   }
-  if (statusEl) statusEl.textContent = "Generating tile…";
   canvas.toBlob((blob) => {
     if (!blob) {
       if (statusEl) statusEl.textContent = "Failed to generate tile.";
@@ -601,4 +637,12 @@ async function handleDownloadStravaTile() {
     setTimeout(() => URL.revokeObjectURL(url), 0);
     if (statusEl) statusEl.textContent = "Tile downloaded.";
   }, "image/png");
+}
+
+/* Node test harness hook (ignored in the browser). */
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    renderStravaTile, buildStravaTileModel, tileComputeHrZones, tileBuildWorkoutModel,
+    tileFormatDate, tileTimeTicks, TILE_W, TILE_H, TILE_SCALE, TILE_ICONS,
+  };
 }
