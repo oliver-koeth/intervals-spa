@@ -460,12 +460,12 @@ function mergeActivities(existing, incoming) {
   return { items: [...byId.values()], added, updated };
 }
 
-function commitActivities(results) {
+async function commitActivities(results) {
   const merged = mergeActivities(state.activities, results);
   state.activities = merged.items.sort(compareActivitiesChronologically);
   state.activitiesFiltered = [...state.activities];
   renderActivities();
-  saveActivitiesCache(state.activities);
+  await saveActivitiesCache(state.activities);
   document.getElementById("activity-search-status").textContent = merged.updated
     ? `Added ${merged.added} activity(s), updated ${merged.updated} duplicate(s).`
     : `Added ${merged.added} activity(s).`;
@@ -475,13 +475,13 @@ function commitActivities(results) {
   setScreen("activities");
 }
 
-function commitIntervals(results, params) {
+async function commitIntervals(results, params) {
   const merged = mergeIntervals(state.intervals, results);
   state.intervals = merged.items.sort(compareIntervalsChronologically);
   state.filtered  = [...state.intervals];
   state.selected.clear();
   renderIntervals();
-  saveIntervalsCache(state.intervals);
+  await saveIntervalsCache(state.intervals);
   setStatus(
     merged.updated
       ? `Added ${merged.added} interval(s), updated ${merged.updated} duplicate(s).`

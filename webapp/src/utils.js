@@ -214,25 +214,38 @@ function estimateLocalStorageUsageBytes() {
   return total;
 }
 
-// Most browsers cap localStorage at 5MB per origin (some allow more); use the
-// conservative common minimum so the percentage reflects the realistic risk of
-// hitting a QuotaExceededError rather than a much larger combined Storage-API quota.
-const LOCAL_STORAGE_QUOTA_BYTES_ESTIMATE = 5 * 1024 * 1024;
+/** Formats a byte count as a human-readable size string (e.g. "482 KB", "12.3 MB"). */
+function formatBytesSize(bytes) {
+  const n = Number(bytes) || 0;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
 
-/** Refreshes the small "Activities / Intervals / Cache" stats block pinned under
+/** Refreshes the small "Activities / Intervals / Storage" stats block pinned under
  *  the Manual nav button in the sidebar. Safe to call often — it's cheap and a
- *  no-op if the DOM nodes aren't present (e.g. during early boot). */
-function updateAppSidebarStats() {
+ *  no-op if the DOM nodes aren't present (e.g. during early boot). "Storage" shows
+ *  the actual size used (IndexedDB, where the bulky activity/interval/stream caches
+ *  now live, plus localStorage) rather than a percentage of some quota. */
+async function updateAppSidebarStats() {
   const activitiesEl = document.getElementById("sidebar-stat-activities");
   const intervalsEl = document.getElementById("sidebar-stat-intervals");
   const cacheEl = document.getElementById("sidebar-stat-cache");
   if (!activitiesEl && !intervalsEl && !cacheEl) return;
   if (activitiesEl) activitiesEl.textContent = String((state.activities || []).length);
   if (intervalsEl) intervalsEl.textContent = String((state.intervals || []).length);
-  if (cacheEl) {
-    const usedBytes = estimateLocalStorageUsageBytes();
-    const pct = Math.min(100, Math.round((usedBytes / LOCAL_STORAGE_QUOTA_BYTES_ESTIMATE) * 100));
-    cacheEl.textContent = `${pct}%`;
-    cacheEl.title = `~${(usedBytes / 1024).toFixed(0)} KB of an estimated ${(LOCAL_STORAGE_QUOTA_BYTES_ESTIMATE / 1024 / 1024).toFixed(0)}MB local storage quota`;
-  }
+  if (!cacheEl) return;
+  try {
+    if (navigator.storage && navigator.storage.estimate) {
+      const { usage = 0, quota = 0 } = await navigator.storage.estimate();
+      cacheEl.textContent = formatBytesSize(usage);
+      cacheEl.title = quota
+        ? `${formatBytesSize(usage)} used of an estimated ${formatBytesSize(quota)} storage quota (IndexedDB + localStorage)`
+        : `${formatBytesSize(usage)} used (IndexedDB + localStorage)`;
+      return;
+    }
+  } catch { /* fall through to the localStorage-only estimate below */ }
+  const usedBytes = estimateLocalStorageUsageBytes();
+  cacheEl.textContent = formatBytesSize(usedBytes);
+  cacheEl.title = `${formatBytesSize(usedBytes)} used in localStorage (IndexedDB size unavailable in this browser)`;
 }

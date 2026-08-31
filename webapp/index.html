@@ -61,7 +61,7 @@
         <div id="sidebar-stats" class="sidebar-stats" title="Locally cached data">
           <div class="sidebar-stats-row"><span class="sidebar-stats-label">Activities</span><span id="sidebar-stat-activities" class="sidebar-stats-value">0</span></div>
           <div class="sidebar-stats-row"><span class="sidebar-stats-label">Intervals</span><span id="sidebar-stat-intervals" class="sidebar-stats-value">0</span></div>
-          <div class="sidebar-stats-row"><span class="sidebar-stats-label">Cache</span><span id="sidebar-stat-cache" class="sidebar-stats-value">0%</span></div>
+          <div class="sidebar-stats-row"><span class="sidebar-stats-label">Storage</span><span id="sidebar-stat-cache" class="sidebar-stats-value">0 MB</span></div>
         </div>
       </aside>
 
@@ -285,9 +285,9 @@
     
           <!-- ── Activities ────────────────────────────────────────────────────── -->
           <section id="screen-activities" class="screen shoelace-forms">
-            <aside id="activities-sidebar" class="activities-sidebar hidden">
+            <div id="activities-sidebar" class="activities-sidebar activities-tabs-bar hidden">
               <div class="activities-sidebar-scroll" id="activities-sidebar-list"></div>
-            </aside>
+            </div>
             <div class="card activities-main">
               <div class="row space-between">
                 <h1>Activities</h1>
@@ -543,7 +543,7 @@
     
           <!-- ── Activity detail ───────────────────────────────────────────────── -->
           <section id="screen-activity-detail" class="screen shoelace-forms">
-            <aside id="activity-detail-sidebar" class="activities-sidebar hidden" aria-label="Activity list">
+            <aside id="activity-detail-sidebar" class="activities-sidebar activities-tabs-bar hidden" aria-label="Activity list">
               <div class="activities-sidebar-scroll" id="activity-detail-sidebar-list"></div>
             </aside>
             <div class="activity-lab-layout activities-main">
@@ -742,7 +742,7 @@
     
           <!-- ── Intervals ─────────────────────────────────────────────────────── -->
           <section id="screen-intervals" class="screen shoelace-forms">
-            <aside id="intervals-compare-sidebar" class="activities-sidebar compare-sidebar hidden" aria-label="Open comparisons">
+            <aside id="intervals-compare-sidebar" class="activities-sidebar compare-sidebar activities-tabs-bar hidden" aria-label="Open comparisons">
               <div class="activities-sidebar-scroll" id="intervals-compare-sidebar-list"></div>
             </aside>
             <div class="card">
@@ -825,7 +825,7 @@
     
           <!-- ── Compare ───────────────────────────────────────────────────────── -->
           <section id="screen-compare" class="screen">
-            <aside id="compare-sidebar" class="activities-sidebar compare-sidebar hidden" aria-label="Open comparisons">
+            <aside id="compare-sidebar" class="activities-sidebar compare-sidebar activities-tabs-bar hidden" aria-label="Open comparisons">
               <div class="activities-sidebar-scroll" id="compare-sidebar-list"></div>
             </aside>
             <div class="card compare-main">
@@ -1280,24 +1280,25 @@
         </footer>
       </div>
     </div>
-    <script src="./src/state.js?v=20260831-2"></script>
-    <script src="./src/utils.js?v=20260831-1"></script>
+    <script src="./src/state.js?v=20260831-3"></script>
+    <script src="./src/idb-store.js?v=20260831-1"></script>
+    <script src="./src/utils.js?v=20260831-3"></script>
     <script src="./src/similarity.js?v=20260816-1"></script>
     <script src="./src/navigation.js?v=20260818-1"></script>
     <script src="./src/settings.js?v=20260825-2"></script>
-    <script src="./src/strava.js?v=20260831-2"></script>
+    <script src="./src/strava.js?v=20260831-3"></script>
     <script src="./src/glucose-data.js?v=20260816-1"></script>
-    <script src="./src/glucose-charts.js?v=20260831-1"></script>
-    <script src="./src/api-client.js?v=20260831-5"></script>
+    <script src="./src/glucose-charts.js?v=20260831-2"></script>
+    <script src="./src/api-client.js?v=20260831-6"></script>
     <script src="./src/activity-lab.js?v=20260825-5"></script>
     <script src="./src/strava-tile.js?v=20260830-4"></script>
     <script src="./src/fit-export.js?v=20260831-2"></script>
     <script src="./src/virtual-route.js?v=20260831-1"></script>
-    <script src="./src/elevation.js?v=20260831-10"></script>
+    <script src="./src/elevation.js?v=20260831-11"></script>
     <script src="./src/filters-charts.js?v=20260818-1"></script>
-    <script src="./src/hr-stream-compare.js?v=20260816-1"></script>
+    <script src="./src/hr-stream-compare.js?v=20260831-1"></script>
     <script src="./src/race-analysis.js?v=20260819-5"></script>
     <script src="./src/theme-search.js?v=20260816-1"></script>
-    <script src="./src/main.js?v=20260831-4"></script>
+    <script src="./src/main.js?v=20260831-5"></script>
   </body>
 </html>

@@ -430,45 +430,29 @@ async function runStravaSegmentSearch(params, settings, onProgress = () => {}) {
     .sort(compareIntervalsChronologically);
 }
 
-function saveIntervalsCache(intervals) {
-  try {
-    localStorage.setItem(INTERVALS_CACHE_KEY, JSON.stringify(intervals));
-  } catch { /* quota or private-mode — ignore, in-memory state still holds the data */ }
+async function saveIntervalsCache(intervals) {
+  await idbSetValue(IDB_KV_STORE, INTERVALS_CACHE_KEY, intervals);
 }
 
-function saveActivitiesCache(activities) {
-  try {
-    localStorage.setItem(ACTIVITIES_CACHE_KEY, JSON.stringify(activities));
-  } catch { /* quota or private-mode — ignore, in-memory state still holds the data */ }
+async function saveActivitiesCache(activities) {
+  await idbSetValue(IDB_KV_STORE, ACTIVITIES_CACHE_KEY, activities);
 }
 
-function loadActivitiesCache() {
-  try {
-    const raw = localStorage.getItem(ACTIVITIES_CACHE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+async function loadActivitiesCache() {
+  const parsed = await idbGetValue(IDB_KV_STORE, ACTIVITIES_CACHE_KEY, []);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
-function loadIntervalsCache() {
-  try {
-    const raw = localStorage.getItem(INTERVALS_CACHE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+async function loadIntervalsCache() {
+  const parsed = await idbGetValue(IDB_KV_STORE, INTERVALS_CACHE_KEY, []);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
-function clearIntervalsCache() {
-  localStorage.removeItem(INTERVALS_CACHE_KEY);
+async function clearIntervalsCache() {
+  await idbDeleteValue(IDB_KV_STORE, INTERVALS_CACHE_KEY);
 }
 
-function clearActivitiesCache() {
-  localStorage.removeItem(ACTIVITIES_CACHE_KEY);
+async function clearActivitiesCache() {
+  await idbDeleteValue(IDB_KV_STORE, ACTIVITIES_CACHE_KEY);
 }
 

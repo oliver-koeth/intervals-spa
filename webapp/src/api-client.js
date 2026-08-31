@@ -232,7 +232,7 @@ async function refreshCachedActivities() {
     const cleaned = merged.items.filter((item) => !isZombieActivity(item));
     const removedZombies = beforeCount - cleaned.length;
     state.activities = cleaned.sort(compareActivitiesChronologically);
-    saveActivitiesCache(state.activities);
+    await saveActivitiesCache(state.activities);
     applyActivitiesFilters();
     document.getElementById("activities-summary").textContent =
       `${state.activitiesFiltered.length} activities (refreshed ${merged.updated}${removedZombies ? `, removed ${removedZombies} empty` : ""})`;

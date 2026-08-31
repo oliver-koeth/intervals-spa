@@ -294,26 +294,6 @@ body:not(.theme-dark) .topbar {
 }
 .screen { display: none; }
 .screen.active { display: block; }
-#screen-activities.screen.active,
-#screen-activity-detail.screen.active,
-#screen-intervals.screen.active,
-#screen-compare.screen.active {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 1rem;
-  align-items: start;
-  padding-left: 0;
-}
-#screen-activities.screen.active:has(> .activities-sidebar.hidden),
-#screen-intervals.screen.active:has(> .compare-sidebar.hidden) {
-  grid-template-columns: 1fr;
-}
-#screen-activities.screen.active > .activities-sidebar,
-#screen-activity-detail.screen.active > .activities-sidebar,
-#screen-intervals.screen.active > .compare-sidebar,
-#screen-compare.screen.active > .compare-sidebar {
-  margin-left: 0;
-}
 body.activities-layout .container {
   max-width: none;
   width: 100%;
@@ -322,7 +302,6 @@ body.activities-layout .container {
 #screen-activity-detail.screen.active > .activities-main,
 #screen-intervals.screen.active > .card,
 #screen-compare.screen.active > .compare-main {
-  min-width: 0;
   width: 100%;
 }
 
@@ -543,6 +522,33 @@ body:not(.theme-dark) .compare-sidebar .activities-sidebar-item.active {
 }
 .activities-sidebar.collapsed .activities-sidebar-close {
   display: none;
+}
+
+/* ── Activities tab bar (horizontal, under the Activities header) ───────── */
+.activities-tabs-bar {
+  width: auto;
+  max-height: none;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+  margin-bottom: 0.85rem;
+}
+.activities-tabs-bar .activities-sidebar-scroll {
+  flex-direction: row;
+  flex-wrap: wrap;
+  padding: 0;
+  overflow: visible;
+}
+.activities-tabs-bar.collapsed {
+  width: auto;
+}
+.activities-tabs-bar.collapsed .activities-sidebar-scroll {
+  padding: 0;
+  align-items: center;
+}
+.activities-tabs-bar .activities-sidebar-item {
+  width: auto;
 }
 .activities-advanced-toggle,
 .advanced-toggle {

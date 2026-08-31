@@ -1,5 +1,9 @@
 /* ─── Init ───────────────────────────────────────────────────────────────── */
-function init() {
+async function init() {
+  // One-time move of the old localStorage-backed caches into IndexedDB, which
+  // isn't bound by localStorage's ~5-10MB per-origin quota.
+  await migrateLocalStorageCachesToIndexedDb();
+
   const storedTheme = localStorage.getItem("webapp-theme") || localStorage.getItem("mockup-theme");
   if (storedTheme === "light") {
     document.body.classList.remove("theme-dark");
@@ -14,9 +18,9 @@ function init() {
   document.getElementById("strava-search-from").value = range.from;
   document.getElementById("strava-search-to").value = range.to;
 
-  state.activities = loadActivitiesCache().sort(compareActivitiesChronologically);
+  state.activities = (await loadActivitiesCache()).sort(compareActivitiesChronologically);
   state.activitiesFiltered = [...state.activities];
-  const cached = loadIntervalsCache().sort(compareIntervalsChronologically);
+  const cached = (await loadIntervalsCache()).sort(compareIntervalsChronologically);
   state.intervals = cached;
   state.filtered = [...cached];
   state.glucose = loadGlucoseCache();
@@ -50,7 +54,7 @@ function init() {
   });
   document.getElementById("activity-search-preview-add").addEventListener("click", () => {
     if (!state.pendingActivityResults.length) return;
-    commitActivities(state.pendingActivityResults);
+    void commitActivities(state.pendingActivityResults);
   });
   document.getElementById("search-form").addEventListener("submit", handleSearchSubmit);
   document.getElementById("search-form").addEventListener("reset", () => {
@@ -66,7 +70,7 @@ function init() {
   });
   document.getElementById("search-preview-add").addEventListener("click", () => {
     if (!state.pendingIntervalsResults.length) return;
-    commitIntervals(state.pendingIntervalsResults, state.pendingIntervalsParams);
+    void commitIntervals(state.pendingIntervalsResults, state.pendingIntervalsParams);
   });
   document.getElementById("strava-search-form").addEventListener("submit", handleStravaSearchSubmit);
   document.getElementById("strava-search-form").addEventListener("reset", () => {
@@ -92,7 +96,7 @@ function init() {
   });
   document.getElementById("strava-search-preview-add").addEventListener("click", () => {
     if (!state.pendingStravaResults.length) return;
-    commitIntervals(state.pendingStravaResults, null);
+    void commitIntervals(state.pendingStravaResults, null);
     document.getElementById("strava-search-status").textContent = "Added Strava results to intervals.";
   });
   document.getElementById("settings-form").addEventListener("submit", saveSettings);
@@ -102,8 +106,8 @@ function init() {
   document.getElementById("settings-save-strava").addEventListener("click", saveStravaSettings);
   document.getElementById("settings-strava-connect").addEventListener("click", startStravaOAuth);
   document.getElementById("settings-reset").addEventListener("click", clearSettings);
-  document.getElementById("settings-clear-interval-cache").addEventListener("click", () => {
-    clearIntervalsCache();
+  document.getElementById("settings-clear-interval-cache").addEventListener("click", async () => {
+    await clearIntervalsCache();
     state.intervals = [];
     state.filtered = [];
     state.selected.clear();
@@ -113,8 +117,8 @@ function init() {
     document.getElementById("settings-status").textContent = "Intervals cache deleted.";
   });
 
-  document.getElementById("settings-clear-hr-cache").addEventListener("click", () => {
-    clearHrStreamCache();
+  document.getElementById("settings-clear-hr-cache").addEventListener("click", async () => {
+    await clearHrStreamCache();
     document.getElementById("settings-status").textContent = "HR stream cache deleted.";
     updateAppSidebarStats();
   });
@@ -260,16 +264,16 @@ function init() {
     state.filtered.forEach((x) => state.selected.add(String(x.interval_id)));
     renderIntervals();
   });
-  document.getElementById("clear-activities").addEventListener("click", () => {
+  document.getElementById("clear-activities").addEventListener("click", async () => {
     state.activities = [];
     state.activitiesFiltered = [];
-    clearActivitiesCache();
+    await clearActivitiesCache();
     renderActivities();
     renderRaceAnalysisActivityOptions();
   });
   document.getElementById("refresh-activities").addEventListener("click", refreshCachedActivities);
-  document.getElementById("clear-streams-activities").addEventListener("click", () => {
-    clearHrStreamCache();
+  document.getElementById("clear-streams-activities").addEventListener("click", async () => {
+    await clearHrStreamCache();
     document.getElementById("activities-summary").textContent =
       `${state.activitiesFiltered.length} activities (stream cache cleared)`;
     updateAppSidebarStats();

@@ -139,24 +139,22 @@ const ACTIVITY_SEARCH_FIELDS = [
   "icu_hr_zone_times", "race", "paired_event_id",
 ].join(",");
 
-/** Persist a stream object to localStorage (silently skips on quota errors). */
-function saveHrStreamToStorage(cacheKey, stream) {
-  try {
-    localStorage.setItem(HR_STREAM_LS_PREFIX + cacheKey, JSON.stringify(stream));
-  } catch { /* quota or private-mode — ignore */ }
+/** Persist a stream object to IndexedDB (silently skips on quota/unsupported errors). */
+async function saveHrStreamToStorage(cacheKey, stream) {
+  await idbSetValue(IDB_STREAM_STORE, cacheKey, stream);
 }
 
-/** Load a stream object from localStorage; returns null if not found. */
-function loadHrStreamFromStorage(cacheKey) {
-  try {
-    const raw = localStorage.getItem(HR_STREAM_LS_PREFIX + cacheKey);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+/** Load a stream object from IndexedDB; returns null if not found. */
+async function loadHrStreamFromStorage(cacheKey) {
+  return await idbGetValue(IDB_STREAM_STORE, cacheKey, null);
 }
 
-/** Remove all HR stream entries from both in-memory and localStorage caches. */
-function clearHrStreamCache() {
+/** Remove all HR stream entries from both in-memory and IndexedDB caches (also
+ *  sweeps any pre-migration localStorage leftovers, just in case). */
+async function clearHrStreamCache() {
   for (const k of Object.keys(hrStreamCache)) delete hrStreamCache[k];
+  const idbKeys = await idbGetAllKeys(IDB_STREAM_STORE);
+  for (const k of idbKeys) await idbDeleteValue(IDB_STREAM_STORE, k);
   const toRemove = [];
   const prefixes = [HR_STREAM_LS_PREFIX, "intervals_hr_stream:", "intervals_hr_stream_v2:", "intervals_hr_stream_v3:", "intervals_hr_stream_v4:"];
   for (let i = 0; i < localStorage.length; i++) {

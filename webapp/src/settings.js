@@ -99,16 +99,18 @@ function saveStravaSettings() {
   updateSettingsCallouts();
 }
 
-function clearSettings() {
+async function clearSettings() {
   [
     "intervals_athlete_id", "intervals_api_key", "intervals_api_mode", "intervals_developer_mode",
-    "intervals_zone_model_id", "intervals_zone_models", ACTIVITIES_CACHE_KEY, INTERVALS_CACHE_KEY,
+    "intervals_zone_model_id", "intervals_zone_models",
     GLUCOSE_CACHE_KEY,
     "intervals_strava_client_id", "intervals_strava_client_secret",
     "intervals_strava_access_token", "intervals_strava_redirect_uri", "intervals_strava_scope",
     "intervals_strava_refresh_token", "intervals_strava_expires_at_epoch",
     "intervals_strava_granted_scope", "intervals_strava_oauth_state", "intervals_strava_oauth_redirect_uri",
   ].forEach((k) => localStorage.removeItem(k));
+  await clearActivitiesCache();
+  await clearIntervalsCache();
   state.activities = [];
   state.activitiesFiltered = [];
   state.glucose = [];

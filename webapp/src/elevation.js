@@ -452,7 +452,7 @@ async function applyElevation() {
     const row = state.activities.find((a) => String(a.activity_id) === String(activityId));
     if (row) {
       row.elevation_gain_m = totalGain;
-      if (typeof saveActivitiesCache === "function") saveActivitiesCache(state.activities);
+      if (typeof saveActivitiesCache === "function") await saveActivitiesCache(state.activities);
       if (typeof applyActivitiesFilters === "function") applyActivitiesFilters();
     }
   }

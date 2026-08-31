@@ -121,12 +121,12 @@ async function fetchHrStream(
   if (forceRefresh) {
     for (const key of cacheCandidates) {
       delete hrStreamCache[key];
-      localStorage.removeItem(HR_STREAM_LS_PREFIX + key);
+      await idbDeleteValue(IDB_STREAM_STORE, key);
     }
   } else {
     for (const key of cacheCandidates) {
       if (hrStreamCache[key]) return hrStreamCache[key];
-      const stored = loadHrStreamFromStorage(key);
+      const stored = await loadHrStreamFromStorage(key);
       if (stored && Array.isArray(stored.time) && Array.isArray(stored.heartrate)) {
         hrStreamCache[key] = stored;
         return stored;
@@ -236,7 +236,7 @@ async function fetchHrStream(
     ? effortCacheKey
     : activityCacheKey;
   hrStreamCache[writeKey] = result;
-  saveHrStreamToStorage(writeKey, result);
+  await saveHrStreamToStorage(writeKey, result);
   return result;
 }
 
