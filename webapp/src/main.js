@@ -116,6 +116,7 @@ function init() {
   document.getElementById("settings-clear-hr-cache").addEventListener("click", () => {
     clearHrStreamCache();
     document.getElementById("settings-status").textContent = "HR stream cache deleted.";
+    updateAppSidebarStats();
   });
   document.getElementById("load-zone-models").addEventListener("click", handleLoadZoneModels);
   // Callout dismiss buttons
@@ -222,6 +223,7 @@ function init() {
   });
 
   document.getElementById("activity-lab-download-tile").addEventListener("click", handleDownloadStravaTile);
+  document.getElementById("activity-lab-add-elevation").addEventListener("click", openElevationModal);
 
   document.getElementById("activity-lab-stream-mode").addEventListener("sl-change", (e) => {
     state.activityLab.streamListMode = e.target.value || "recent";
@@ -264,6 +266,13 @@ function init() {
     clearActivitiesCache();
     renderActivities();
     renderRaceAnalysisActivityOptions();
+  });
+  document.getElementById("refresh-activities").addEventListener("click", refreshCachedActivities);
+  document.getElementById("clear-streams-activities").addEventListener("click", () => {
+    clearHrStreamCache();
+    document.getElementById("activities-summary").textContent =
+      `${state.activitiesFiltered.length} activities (stream cache cleared)`;
+    updateAppSidebarStats();
   });
   document.getElementById("apply-activities-filters").addEventListener("click", applyActivitiesFilters);
   document.getElementById("clear-activities-filters").addEventListener("click", () => {

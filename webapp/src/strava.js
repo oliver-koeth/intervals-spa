@@ -113,7 +113,7 @@ function startStravaOAuth() {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("approval_prompt", "auto");
-  url.searchParams.set("scope", "read,activity:read_all");
+  url.searchParams.set("scope", "read,activity:read_all,activity:write");
   url.searchParams.set("state", stateToken);
   window.location.assign(url.toString());
 }
@@ -183,6 +183,47 @@ async function stravaGet(path, settings, token) {
     }
   }
   throw new Error("Unsupported Strava API mode.");
+}
+
+/** Upload an activity file (FIT/TCX/GPX) to Strava. Returns the raw upload
+ *  object ({ id, status, activity_id, error }). Requires activity:write scope. */
+async function stravaUploadActivity(fileBytes, fields, settings, token) {
+  if (settings.apiMode === "proxy") {
+    throw new Error("Strava upload isn't available in proxy mode. Switch API mode to direct/auto.");
+  }
+  const form = new FormData();
+  form.append("file", new Blob([fileBytes], { type: "application/octet-stream" }),
+    fields.filename || "activity.fit");
+  form.append("data_type", fields.dataType || "fit");
+  if (fields.name) form.append("name", fields.name);
+  if (fields.description) form.append("description", fields.description);
+  if (fields.externalId) form.append("external_id", fields.externalId);
+  if (fields.trainer) form.append("trainer", "1");
+  const res = await fetch("https://www.strava.com/api/v3/uploads", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token },
+    body: form,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error("Strava token missing scope activity:write. Reconnect Strava in Settings.");
+    }
+    throw new Error(data.message || data.error || `Strava upload failed (${res.status})`);
+  }
+  return data;
+}
+
+/** Poll GET /uploads/{id} until Strava finishes processing (activity_id set) or
+ *  reports an error. */
+async function stravaPollUpload(uploadId, settings, token, { attempts = 20, delayMs = 1500 } = {}) {
+  for (let i = 0; i < attempts; i++) {
+    const upload = await stravaGet(`/uploads/${encodeURIComponent(uploadId)}`, settings, token);
+    if (upload.error) throw new Error(upload.error);
+    if (upload.activity_id) return upload;
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  throw new Error("Strava upload still processing — check your Strava activities in a moment.");
 }
 
 function mapSegmentEffortToInterval(effort) {
@@ -390,11 +431,15 @@ async function runStravaSegmentSearch(params, settings, onProgress = () => {}) {
 }
 
 function saveIntervalsCache(intervals) {
-  localStorage.setItem(INTERVALS_CACHE_KEY, JSON.stringify(intervals));
+  try {
+    localStorage.setItem(INTERVALS_CACHE_KEY, JSON.stringify(intervals));
+  } catch { /* quota or private-mode — ignore, in-memory state still holds the data */ }
 }
 
 function saveActivitiesCache(activities) {
-  localStorage.setItem(ACTIVITIES_CACHE_KEY, JSON.stringify(activities));
+  try {
+    localStorage.setItem(ACTIVITIES_CACHE_KEY, JSON.stringify(activities));
+  } catch { /* quota or private-mode — ignore, in-memory state still holds the data */ }
 }
 
 function loadActivitiesCache() {

@@ -6,7 +6,7 @@
     <title>Intervals</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/themes/light.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260825-4" />
+    <link rel="stylesheet" href="./styles.css?v=20260831-4" />
     <script src="https://cdn.jsdelivr.net/npm/echarts@6/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/shoelace-autoloader.js"></script>
@@ -58,6 +58,11 @@
             <span class="nav-label">Manual</span>
           </button>
         </nav>
+        <div id="sidebar-stats" class="sidebar-stats" title="Locally cached data">
+          <div class="sidebar-stats-row"><span class="sidebar-stats-label">Activities</span><span id="sidebar-stat-activities" class="sidebar-stats-value">0</span></div>
+          <div class="sidebar-stats-row"><span class="sidebar-stats-label">Intervals</span><span id="sidebar-stat-intervals" class="sidebar-stats-value">0</span></div>
+          <div class="sidebar-stats-row"><span class="sidebar-stats-label">Cache</span><span id="sidebar-stat-cache" class="sidebar-stats-value">0%</span></div>
+        </div>
       </aside>
 
       <div class="app-content">
@@ -288,6 +293,8 @@
                 <h1>Activities</h1>
                 <div class="selection-bar" style="margin:0">
                   <div id="activities-summary" class="muted"></div>
+                  <button id="refresh-activities" class="btn secondary" type="button" title="Re-fetch all cached activities from intervals.icu to pick up new/updated fields (e.g. Tag, Elevation)">Refresh</button>
+                  <button id="clear-streams-activities" class="btn secondary" type="button" title="Delete cached HR/altitude stream data to free up browser storage quota">Clear streams</button>
                   <button id="clear-activities" class="btn secondary" type="button">Clear list</button>
                 </div>
               </div>
@@ -347,10 +354,11 @@
                     <tr>
                       <th>Date<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="date" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="date" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
                       <th>Type<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="activity_type" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="activity_type" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
-                      <th>Race<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="is_race" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="is_race" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th>Tag<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="tag_rank" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="tag_rank" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
                       <th>Activity<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="activity_name" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="activity_name" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
                       <th class="right">Time<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="moving_time_s" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="moving_time_s" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
                       <th class="right">Distance<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="distance_m" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="distance_m" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
+                      <th class="right">Elevation<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="elevation_gain_m" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="elevation_gain_m" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
                       <th class="right">Load<span class="sort-btns"><button type="button" class="sort-btn" data-sort-field="training_load" data-sort-dir="asc" title="Sort ascending">▲</button><button type="button" class="sort-btn" data-sort-field="training_load" data-sort-dir="desc" title="Sort descending">▼</button></span></th>
                     </tr>
                   </thead>
@@ -571,7 +579,10 @@
 
                 <div class="row space-between activity-lab-tile-actions">
                   <span id="activity-lab-tile-status" class="muted"></span>
-                  <button id="activity-lab-download-tile" class="btn secondary" type="button">Download Strava tile</button>
+                  <div class="activity-lab-tile-buttons">
+                    <button id="activity-lab-add-elevation" class="btn secondary" type="button">Add elevation</button>
+                    <button id="activity-lab-download-tile" class="btn secondary" type="button">Upload Strava tile</button>
+                  </div>
                 </div>
     
                 <div class="chart-grid activity-lab-chart-grid">
@@ -1208,6 +1219,56 @@
           <img id="manual-lightbox-image" src="" alt="" />
           <p id="manual-lightbox-caption" class="muted"></p>
         </div>
+
+        <div id="strava-upload-modal" class="tile-modal hidden" role="dialog" aria-modal="true" aria-labelledby="strava-upload-title">
+          <div class="tile-modal-card">
+            <button id="strava-upload-close-x" type="button" class="tile-modal-close-x" aria-label="Close">×</button>
+            <h2 id="strava-upload-title" class="tile-modal-title">Upload tile to Strava</h2>
+            <div id="strava-upload-body" class="tile-modal-body">
+              <p class="tile-modal-status muted" id="strava-upload-status">Searching for the matching Strava activity…</p>
+              <div id="strava-upload-match" class="tile-modal-match hidden">
+                <div class="tile-modal-match-name" id="strava-upload-match-name"></div>
+                <div class="tile-modal-match-meta muted" id="strava-upload-match-meta"></div>
+              </div>
+              <div id="strava-upload-instructions" class="tile-modal-instructions hidden">
+                <p>Strava's public API can't attach photos to an activity, so this last step is manual:</p>
+                <ol>
+                  <li>The tile image was just downloaded to your device.</li>
+                  <li>Open the activity on Strava (button below).</li>
+                  <li>Edit the activity → <strong>Add photos/media</strong> → choose the downloaded tile.</li>
+                  <li>Set it as the highlight (cover) photo and save.</li>
+                </ol>
+              </div>
+            </div>
+            <div class="tile-modal-actions">
+              <a id="strava-upload-open" class="btn primary hidden" href="#" target="_blank" rel="noopener noreferrer">Open in Strava</a>
+              <button id="strava-upload-cancel" class="btn secondary" type="button">Cancel</button>
+              <button id="strava-upload-done" class="btn secondary hidden" type="button">Close</button>
+            </div>
+          </div>
+        </div>
+        <div id="elevation-modal" class="tile-modal hidden" role="dialog" aria-modal="true" aria-labelledby="elevation-title">
+          <div class="tile-modal-card">
+            <button id="elevation-close-x" type="button" class="tile-modal-close-x" aria-label="Close">×</button>
+            <h2 id="elevation-title" class="tile-modal-title">Add elevation</h2>
+            <div class="tile-modal-body">
+              <p class="tile-modal-status muted" id="elevation-status">Loading…</p>
+              <div id="elevation-intervals" class="elevation-intervals hidden"></div>
+              <label id="elevation-virtual-route-row" class="elevation-virtual-route hidden">
+                <input type="checkbox" id="elevation-virtual-route" checked />
+                Add virtual GPS loop route (marks upload as "Virtual Run" so Strava shows elevation)
+              </label>
+              <ul id="elevation-progress" class="elevation-progress hidden"></ul>
+            </div>
+            <div class="tile-modal-actions">
+              <button id="elevation-apply" class="btn primary hidden" type="button">Add elevation</button>
+              <button id="elevation-upload-strava" class="btn secondary hidden" type="button">Upload to Strava</button>
+              <button id="elevation-download-fit" class="btn secondary hidden" type="button">Download FIT</button>
+              <button id="elevation-cancel" class="btn secondary" type="button">Cancel</button>
+              <button id="elevation-done" class="btn secondary hidden" type="button">Close</button>
+            </div>
+          </div>
+        </div>
         <footer class="footer">
           <div class="footer-inner">
             <span>© Oliver Koeth</span>
@@ -1219,21 +1280,24 @@
         </footer>
       </div>
     </div>
-    <script src="./src/state.js?v=20260825-4"></script>
-    <script src="./src/utils.js?v=20260825-1"></script>
+    <script src="./src/state.js?v=20260831-2"></script>
+    <script src="./src/utils.js?v=20260831-1"></script>
     <script src="./src/similarity.js?v=20260816-1"></script>
     <script src="./src/navigation.js?v=20260818-1"></script>
     <script src="./src/settings.js?v=20260825-2"></script>
-    <script src="./src/strava.js?v=20260816-1"></script>
+    <script src="./src/strava.js?v=20260831-2"></script>
     <script src="./src/glucose-data.js?v=20260816-1"></script>
-    <script src="./src/glucose-charts.js?v=20260816-1"></script>
-    <script src="./src/api-client.js?v=20260825-1"></script>
-    <script src="./src/activity-lab.js?v=20260825-3"></script>
-    <script src="./src/strava-tile.js?v=20260825-1"></script>
+    <script src="./src/glucose-charts.js?v=20260831-1"></script>
+    <script src="./src/api-client.js?v=20260831-5"></script>
+    <script src="./src/activity-lab.js?v=20260825-5"></script>
+    <script src="./src/strava-tile.js?v=20260830-4"></script>
+    <script src="./src/fit-export.js?v=20260831-2"></script>
+    <script src="./src/virtual-route.js?v=20260831-1"></script>
+    <script src="./src/elevation.js?v=20260831-10"></script>
     <script src="./src/filters-charts.js?v=20260818-1"></script>
     <script src="./src/hr-stream-compare.js?v=20260816-1"></script>
     <script src="./src/race-analysis.js?v=20260819-5"></script>
     <script src="./src/theme-search.js?v=20260816-1"></script>
-    <script src="./src/main.js?v=20260825-3"></script>
+    <script src="./src/main.js?v=20260831-4"></script>
   </body>
 </html>

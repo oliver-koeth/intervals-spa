@@ -32,7 +32,7 @@ ACTIVITY_SEARCH_FIELDS = ",".join(
         "moving_time", "distance", "average_heartrate", "max_heartrate",
         "total_elevation_gain", "icu_training_load", "icu_intensity",
         "icu_average_watts", "icu_weighted_avg_watts", "average_speed",
-        "icu_hr_zone_times", "race",
+        "icu_hr_zone_times", "race", "paired_event_id",
     ]
 )
 
@@ -287,6 +287,11 @@ def run_activity_search(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "activity_name": name,
                 "activity_type": activity.get("type", ""),
                 "is_race": bool(activity.get("race")),
+                "has_workout": activity.get("paired_event_id") is not None,
+                "tag_rank": (
+                    2 if activity.get("race")
+                    else (1 if activity.get("paired_event_id") is not None else 0)
+                ),
                 "source": "intervals",
                 "moving_time_s": int(activity.get("moving_time") or 0),
                 "distance_m": float(activity.get("distance") or 0),

@@ -7,6 +7,9 @@ function mapActivity(activity) {
     activity_name: activity.name || "",
     activity_type: activity.type || "",
     is_race: activity.race === true,
+    has_workout: activity.paired_event_id != null,
+    // Single "Tag" shown in the activities table: Race takes priority over Workout.
+    tag_rank: activity.race === true ? 2 : (activity.paired_event_id != null ? 1 : 0),
     source: "intervals",
     moving_time_s: Number(activity.moving_time || 0),
     distance_m: Number(activity.distance || 0),
@@ -164,10 +167,15 @@ function renderActivities() {
     tr.innerHTML = `
       <td>${item.date || ""}</td>
       <td>${item.activity_type || ""}</td>
-      <td>${item.is_race ? '<span class="activity-race-flag" title="Race">Race</span>' : ""}</td>
+      <td>${item.is_race
+        ? '<span class="activity-race-flag" title="Race">Race</span>'
+        : item.has_workout
+          ? '<span class="activity-workout-flag" title="Structured workout">Workout</span>'
+          : ""}</td>
       <td title="${item.activity_name || ""}">${(item.activity_name || "").slice(0, 48)}</td>
       <td class="right">${formatSeconds(item.moving_time_s)}</td>
       <td class="right">${formatDistance(item.distance_m)}</td>
+      <td class="right">${formatElevation(item.elevation_gain_m)}</td>
       <td class="right">${item.training_load != null ? Math.round(item.training_load) : "-"}</td>
     `;
     tr.addEventListener("click", () => openActivityTab(item));
@@ -175,6 +183,64 @@ function renderActivities() {
   });
   document.getElementById("activities-summary").textContent = `${state.activitiesFiltered.length} activities`;
   if (typeof updateActivitiesSidebars === "function") updateActivitiesSidebars();
+  if (typeof updateAppSidebarStats === "function") updateAppSidebarStats();
+}
+
+/** An "empty"/placeholder row with no real activity data (e.g. intervals.icu returning a
+ *  bare rest-day marker for a date). These have no type/name and no measurable metrics —
+ *  strip them out so they don't clutter the Activities table as blank "zombie" rows. */
+function isZombieActivity(item) {
+  return !item.activity_type && !item.activity_name &&
+    !item.moving_time_s && !item.distance_m && !item.training_load;
+}
+
+/** Re-fetches summary fields for every already-loaded (cached) intervals.icu activity and
+ *  overwrites the local cache/table in place. Needed because some fields (e.g. the Tag/
+ *  has_workout flag, or elevation_gain_m after a manual "Add elevation" upload) can change
+ *  on intervals.icu's side, or were added to this app after an activity was first cached —
+ *  the cached copy in localStorage never updates itself otherwise. */
+async function refreshCachedActivities() {
+  const btn = document.getElementById("refresh-activities");
+  const intervalsItems = state.activities.filter((item) => (item.source || "intervals") === "intervals");
+  if (!intervalsItems.length) {
+    document.getElementById("activities-summary").textContent = `${state.activitiesFiltered.length} activities (nothing to refresh)`;
+    return;
+  }
+  const settings = getSettings();
+  if (!settings.athleteId || !settings.apiKey) {
+    document.getElementById("activities-summary").textContent = "Set athlete ID and API key in Settings first.";
+    return;
+  }
+  const dates = intervalsItems.map((item) => item.date).filter(Boolean).sort();
+  const params = { label: "", activityType: "", startDate: dates[0], endDate: dates[dates.length - 1] };
+  if (btn) { btn.disabled = true; btn.textContent = "Refreshing…"; }
+  try {
+    const mode = resolveApiMode(settings.apiMode);
+    let results;
+    if (mode === "proxy") {
+      try {
+        results = await runProxyActivitySearch(params, settings.athleteId, settings.apiKey);
+      } catch (err) {
+        if (!isAutoProxyMode(settings.apiMode)) throw err;
+        results = await runDirectActivitySearch(params, settings.athleteId, settings.apiKey);
+      }
+    } else {
+      results = await runDirectActivitySearch(params, settings.athleteId, settings.apiKey);
+    }
+    const merged = mergeActivities(state.activities, results);
+    const beforeCount = merged.items.length;
+    const cleaned = merged.items.filter((item) => !isZombieActivity(item));
+    const removedZombies = beforeCount - cleaned.length;
+    state.activities = cleaned.sort(compareActivitiesChronologically);
+    saveActivitiesCache(state.activities);
+    applyActivitiesFilters();
+    document.getElementById("activities-summary").textContent =
+      `${state.activitiesFiltered.length} activities (refreshed ${merged.updated}${removedZombies ? `, removed ${removedZombies} empty` : ""})`;
+  } catch (err) {
+    document.getElementById("activities-summary").textContent = `Refresh failed: ${err.message}`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Refresh"; }
+  }
 }
 
 function applyActivitiesFilters() {
