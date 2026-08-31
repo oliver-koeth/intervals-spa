@@ -351,7 +351,11 @@ function renderActivitySearchPreview(results) {
     tr.innerHTML = `
       <td>${item.date || ""}</td>
       <td>${item.activity_type || ""}</td>
-      <td>${item.is_race ? '<span class="activity-race-flag" title="Race">Race</span>' : ""}</td>
+      <td>${item.is_race
+        ? '<span class="activity-race-flag" title="Race">Race</span>'
+        : item.has_workout
+          ? '<span class="activity-workout-flag" title="Structured workout">Workout</span>'
+          : ""}</td>
       <td title="${item.activity_name || ""}">${(item.activity_name || "").slice(0, 42)}</td>
       <td class="right">${formatSeconds(item.moving_time_s)}</td>
     `;

@@ -169,9 +169,9 @@ function tileDivider(ctx, y, x0 = TILE_PAD, x1 = TILE_W - TILE_PAD) {
 
 /* ── Sections ─────────────────────────────────────────────────────────── */
 function tileDrawHeader(ctx, model) {
-  // Strava wordmark (attribution).
-  tileText(ctx, "STRAVA", TILE_PAD, 78, {
-    font: tileFont(800, 30), color: TILE_ORANGE, tracking: 1.5,
+  // Brand wordmark.
+  tileText(ctx, "Trail Data Hub", TILE_PAD, 78, {
+    font: tileFont(800, 30), color: TILE_ORANGE, tracking: 1,
   });
 
   // Title + subtitle.

@@ -5,9 +5,11 @@ const ZONE_COLORS = {
 };
 /* Fixed zone palette for the planned-workout diagram — intentionally distinct from
    ZONE_COLORS (which drives HR-stream zone shading elsewhere) per product spec:
-   Z1 blue, Z2 green, Z3 yellow, Z4 orange, Z5 red, regardless of the underlying metric. */
+   Z1 blue, Z2 green, Z3 yellow, Z4 orange, Z5 red, regardless of the underlying metric.
+   Muted/dimmed pastel spread (darkened ~30%) so it harmonizes with the app's dark theme
+   instead of the previous saturated Tailwind primaries. */
 const WORKOUT_ZONE_COLORS = {
-  1: "#3b82f6", 2: "#22c55e", 3: "#eab308", 4: "#f97316", 5: "#ef4444",
+  1: "#4b678d", 2: "#4e7a59", 3: "#927840", 4: "#966140", 5: "#8d4b54",
 };
 const TOOLTIP_CSS = "background:#101820;border:1px solid rgba(148,163,184,0.34);border-radius:10px;padding:10px 14px;box-shadow:0 16px 48px rgba(0,0,0,0.48);color:#eef4f8;font-size:12px;max-width:260px";
 
@@ -134,7 +136,7 @@ const ACTIVITY_SEARCH_FIELDS = [
   "moving_time", "distance", "average_heartrate", "max_heartrate",
   "total_elevation_gain", "icu_training_load", "icu_intensity",
   "icu_average_watts", "icu_weighted_avg_watts", "average_speed",
-  "icu_hr_zone_times", "race",
+  "icu_hr_zone_times", "race", "paired_event_id",
 ].join(",");
 
 /** Persist a stream object to localStorage (silently skips on quota errors). */

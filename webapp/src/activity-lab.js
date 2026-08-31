@@ -14,6 +14,11 @@ function formatDistance(meters) {
   return (meters / 1000).toFixed(2) + " km";
 }
 
+function formatElevation(meters) {
+  if (!meters) return "-";
+  return `${Math.round(meters)} m`;
+}
+
 function formatAvgPace(movingTimeS, distanceM) {
   const secs = Number(movingTimeS || 0);
   const meters = Number(distanceM || 0);
@@ -618,7 +623,9 @@ function renderPlannedWorkoutChart(plannedWorkout, sharedXMax, gridLeft, gridRig
   document.getElementById("activity-lab-workout-load").textContent =
     plannedWorkout.load != null ? Math.round(plannedWorkout.load) : "-";
   document.getElementById("activity-lab-workout-intensity").textContent =
-    plannedWorkout.intensity != null ? `${Math.round(plannedWorkout.intensity * 100)}%` : "-";
+    // icu_intensity from intervals.icu is already a percentage (e.g. 74.69 => "75%"),
+    // not a 0-1 fraction — do not multiply by 100 again.
+    plannedWorkout.intensity != null ? `${Math.round(plannedWorkout.intensity)}%` : "-";
   const descEl = document.getElementById("activity-lab-workout-description");
   descEl.textContent = plannedWorkout.description || "No description provided.";
   descEl.classList.add("hidden");
@@ -645,7 +652,12 @@ function renderPlannedWorkoutChart(plannedWorkout, sharedXMax, gridLeft, gridRig
       },
     },
     grid: { left: gridLeft, right: gridRight, top: 8, bottom: 20 },
-    xAxis: { type: "value", name: "min", min: 0, max: xMax },
+    xAxis: {
+      type: "value", name: "min", min: 0, max: xMax,
+      // Suppress the auto-injected label at the exact (often non-round) max value,
+      // e.g. "57.4166666666664" — keep only the nice interval-based tick labels.
+      axisLabel: { showMaxLabel: false },
+    },
     yAxis: { type: "value", show: false, min: 0, max: 5.4 },
     series: [{
       type: "custom",
@@ -1031,7 +1043,11 @@ function renderActivityLabTimeSeries(stream, focusActivity, plannedWorkout = nul
     },
     ...(visualMapEntries.length ? { visualMap: visualMapEntries } : {}),
     grid: { left: gridLeft, right: gridRight, top: 52, bottom: 28 },
-    xAxis: { type: "value", name: "min", ...(sharedXMax ? { min: 0, max: sharedXMax } : {}) },
+    xAxis: {
+      type: "value", name: "min", ...(sharedXMax ? { min: 0, max: sharedXMax } : {}),
+      // Same fix as renderPlannedWorkoutChart: hide the ugly non-round max-value label.
+      axisLabel: { showMaxLabel: false },
+    },
     yAxis: yAxisEntries,
     series: seriesEntries,
   });
@@ -1228,6 +1244,7 @@ function renderIntervals() {
   }
   document.getElementById("result-summary").textContent = `${state.filtered.length} intervals`;
   document.getElementById("selected-count").textContent = `${state.selected.size} selected`;
+  if (typeof updateAppSidebarStats === "function") updateAppSidebarStats();
   const groupBtn = document.getElementById("group-intervals");
   if (groupBtn) {
     groupBtn.classList.toggle("is-active", state.intervalsGrouped);
