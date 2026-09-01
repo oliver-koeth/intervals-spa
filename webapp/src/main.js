@@ -41,8 +41,13 @@ async function init() {
   initSidebar();
 
   document.getElementById("activity-search-form").addEventListener("submit", handleActivitySearchSubmit);
+  document.getElementById("activity-search-loadall").addEventListener("sl-change", syncActivitySearchLoadAll);
   document.getElementById("activity-search-form").addEventListener("reset", () => {
     const resetRange = defaultDateRange();
+    const loadAll = document.getElementById("activity-search-loadall");
+    if (loadAll) loadAll.checked = false;
+    document.getElementById("activity-search-from").removeAttribute("disabled");
+    document.getElementById("activity-search-to").removeAttribute("disabled");
     document.getElementById("activity-search-from").value = resetRange.from;
     document.getElementById("activity-search-to").value = resetRange.to;
     hideActivitySearchPreview();
@@ -228,6 +233,7 @@ async function init() {
 
   document.getElementById("activity-lab-download-tile").addEventListener("click", handleDownloadStravaTile);
   document.getElementById("activity-lab-add-elevation").addEventListener("click", openElevationModal);
+  document.getElementById("activity-lab-add-motion").addEventListener("click", openMotionModal);
 
   document.getElementById("activity-lab-stream-mode").addEventListener("sl-change", (e) => {
     state.activityLab.streamListMode = e.target.value || "recent";
@@ -264,13 +270,6 @@ async function init() {
     state.filtered.forEach((x) => state.selected.add(String(x.interval_id)));
     renderIntervals();
   });
-  document.getElementById("clear-activities").addEventListener("click", async () => {
-    state.activities = [];
-    state.activitiesFiltered = [];
-    await clearActivitiesCache();
-    renderActivities();
-    renderRaceAnalysisActivityOptions();
-  });
   document.getElementById("refresh-activities").addEventListener("click", refreshCachedActivities);
   document.getElementById("clear-streams-activities").addEventListener("click", async () => {
     await clearHrStreamCache();
@@ -296,6 +295,25 @@ async function init() {
     state.activitiesFiltered = [...state.activities];
     renderActivities();
   });
+
+  /* Activities: List / Calendar view toggle (persisted across reloads). */
+  const activitiesViewButtons = {
+    list: document.getElementById("activities-view-list"),
+    calendar: document.getElementById("activities-view-calendar"),
+  };
+  const activitiesListView = document.getElementById("activities-list-view");
+  const activitiesCalendarView = document.getElementById("activities-calendar-view");
+  function setActivitiesView(mode) {
+    localStorage.setItem("activities_view_mode", mode);
+    activitiesListView.classList.toggle("hidden", mode !== "list");
+    activitiesCalendarView.classList.toggle("hidden", mode !== "calendar");
+    activitiesViewButtons.list.classList.toggle("is-active", mode === "list");
+    activitiesViewButtons.calendar.classList.toggle("is-active", mode === "calendar");
+    if (mode === "calendar") renderActivitiesCalendar();
+  }
+  activitiesViewButtons.list.addEventListener("click", () => setActivitiesView("list"));
+  activitiesViewButtons.calendar.addEventListener("click", () => setActivitiesView("calendar"));
+  setActivitiesView(localStorage.getItem("activities_view_mode") === "calendar" ? "calendar" : "list");
 
   const advancedToggle = document.getElementById("activities-advanced-toggle");
   const advancedFilters = document.getElementById("activities-advanced-filters");

@@ -66,32 +66,37 @@ async function fetchIntervalsStreamPart(activityId, auth, types) {
 }
 
 async function fetchIntervalsStreamRaw(activityId, auth) {
-  let raw;
+  // Fast path: ask for everything in one request. intervals.icu returns a
+  // 400/422 for the whole request if ANY requested type doesn't exist for the
+  // activity (e.g. an indoor VirtualRide has no GPS pace/gap/grade/distance),
+  // which used to collapse to a minimal fallback that silently dropped watts.
   try {
-    raw = await fetchIntervalsStreamPart(
+    return await fetchIntervalsStreamPart(
       activityId,
       auth,
       "heartrate,time,velocity_smooth,watts,distance,altitude,grade,pace,gap,cadence"
     );
   } catch (err) {
     if (!isStreamFallbackStatus(err?.status)) throw err;
-    try {
-      raw = await fetchIntervalsStreamPart(
-        activityId,
-        auth,
-        "heartrate,time,velocity_smooth,watts,distance,altitude,grade"
-      );
-    } catch (fallbackErr) {
-      if (!isStreamFallbackStatus(fallbackErr?.status)) throw fallbackErr;
-      raw = await fetchIntervalsStreamPart(
-        activityId,
-        auth,
-        "heartrate,time,velocity_smooth,altitude"
-      );
-    }
+  }
+
+  // Recovery path: fetch a reliable base, then merge every other stream type
+  // independently so a single missing type (like grade on a trainer ride)
+  // never knocks out an available one (like watts).
+  let raw;
+  try {
+    raw = await fetchIntervalsStreamPart(activityId, auth, "heartrate,time");
+  } catch (baseErr) {
+    if (!isStreamFallbackStatus(baseErr?.status)) throw baseErr;
+    raw = await fetchIntervalsStreamPart(activityId, auth, "time");
   }
 
   const optionalTypes = [
+    "watts",
+    "velocity_smooth",
+    "distance",
+    "altitude",
+    "grade",
     "pace",
     "gap",
     "grade_adjusted_pace",

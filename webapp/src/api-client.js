@@ -184,6 +184,10 @@ function renderActivities() {
   document.getElementById("activities-summary").textContent = `${state.activitiesFiltered.length} activities`;
   if (typeof updateActivitiesSidebars === "function") updateActivitiesSidebars();
   if (typeof updateAppSidebarStats === "function") updateAppSidebarStats();
+  const calendarView = document.getElementById("activities-calendar-view");
+  if (calendarView && !calendarView.classList.contains("hidden") && typeof renderActivitiesCalendar === "function") {
+    renderActivitiesCalendar();
+  }
 }
 
 /** An "empty"/placeholder row with no real activity data (e.g. intervals.icu returning a

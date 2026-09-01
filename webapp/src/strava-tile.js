@@ -563,12 +563,15 @@ function buildStravaTileModel(snapshot, zoneModel) {
   const avgHr = a.avg_hr > 0 ? a.avg_hr : tileAvgFromStream(hr);
   const maxHr = a.max_hr > 0 ? a.max_hr : (hr.length ? Math.max(...hr.map((p) => p[1])) : null);
 
+  const isBike = isBikeActivityType(a.activity_type);
   const kpis = [
     { icon: "calendar-days", label: "DATE", value: tileFormatDate(a.date) },
     { icon: "clock-3", label: "DURATION", value: a.moving_time_s ? formatSeconds(a.moving_time_s) : "-" },
     { icon: "footprints", label: "DISTANCE", value: a.distance_m ? formatDistance(a.distance_m) : "-" },
     { icon: "heart", label: "AVG HR", value: avgHr ? `${Math.round(avgHr)} bpm` : "-" },
-    { icon: "zap", label: "AVG PACE", value: formatAvgPace(a.moving_time_s, a.distance_m) },
+    isBike
+      ? { icon: "zap", label: "AVG SPEED", value: formatAvgSpeed(a.moving_time_s, a.distance_m) }
+      : { icon: "zap", label: "AVG PACE", value: formatAvgPace(a.moving_time_s, a.distance_m) },
   ];
 
   return {

@@ -118,6 +118,9 @@
                 <label>Date to
                   <input id="activity-search-to" class="search-date-input" type="text" placeholder="YYYY-MM-DD" readonly />
                 </label>
+                <label class="search-loadall-check" title="Set 'Date from' to the day of your newest loaded activity and 'Date to' to today, to fetch everything new since.">
+                  <sl-checkbox id="activity-search-loadall">Load all new activities</sl-checkbox>
+                </label>
                 <div class="form-actions search-actions">
                   <sl-button type="submit" id="activity-search-submit" variant="primary">Search</sl-button>
                   <sl-button type="reset" variant="default">Reset</sl-button>
@@ -295,7 +298,10 @@
                   <div id="activities-summary" class="muted"></div>
                   <button id="refresh-activities" class="btn secondary" type="button" title="Re-fetch all cached activities from intervals.icu to pick up new/updated fields (e.g. Tag, Elevation)">Refresh</button>
                   <button id="clear-streams-activities" class="btn secondary" type="button" title="Delete cached HR/altitude stream data to free up browser storage quota">Clear streams</button>
-                  <button id="clear-activities" class="btn secondary" type="button">Clear list</button>
+                  <div class="view-toggle" role="group" aria-label="Activities view">
+                    <button id="activities-view-list" class="view-toggle-btn is-active" type="button" data-view="list">List</button>
+                    <button id="activities-view-calendar" class="view-toggle-btn" type="button" data-view="calendar">Calendar</button>
+                  </div>
                 </div>
               </div>
 
@@ -348,7 +354,7 @@
                 <button id="clear-activities-filters" class="btn secondary" type="button">Clear</button>
               </div>
     
-              <div class="table-wrap">
+              <div class="table-wrap" id="activities-list-view">
                 <table id="activities-table">
                   <thead>
                     <tr>
@@ -364,6 +370,9 @@
                   </thead>
                   <tbody id="activities-body"></tbody>
                 </table>
+              </div>
+              <div id="activities-calendar-view" class="hidden">
+                <div id="activities-calendar" class="activities-calendar"></div>
               </div>
             </div>
           </section>
@@ -580,6 +589,7 @@
                 <div class="row space-between activity-lab-tile-actions">
                   <span id="activity-lab-tile-status" class="muted"></span>
                   <div class="activity-lab-tile-buttons">
+                    <button id="activity-lab-add-motion" class="btn secondary" type="button">Add motion</button>
                     <button id="activity-lab-add-elevation" class="btn secondary" type="button">Add elevation</button>
                     <button id="activity-lab-download-tile" class="btn secondary" type="button">Upload Strava tile</button>
                   </div>
@@ -1247,6 +1257,21 @@
             </div>
           </div>
         </div>
+        <div id="motion-modal" class="tile-modal hidden" role="dialog" aria-modal="true" aria-labelledby="motion-title">
+          <div class="tile-modal-card">
+            <button id="motion-close-x" type="button" class="tile-modal-close-x" aria-label="Close">×</button>
+            <h2 id="motion-title" class="tile-modal-title">Add motion</h2>
+            <div class="tile-modal-body">
+              <p class="tile-modal-status muted" id="motion-status">Loading…</p>
+              <ul id="motion-progress" class="elevation-progress hidden"></ul>
+            </div>
+            <div class="tile-modal-actions">
+              <button id="motion-apply" class="btn primary hidden" type="button">Add motion</button>
+              <button id="motion-cancel" class="btn secondary" type="button">Cancel</button>
+              <button id="motion-done" class="btn secondary hidden" type="button">Close</button>
+            </div>
+          </div>
+        </div>
         <div id="elevation-modal" class="tile-modal hidden" role="dialog" aria-modal="true" aria-labelledby="elevation-title">
           <div class="tile-modal-card">
             <button id="elevation-close-x" type="button" class="tile-modal-close-x" aria-label="Close">×</button>
@@ -1289,16 +1314,18 @@
     <script src="./src/strava.js?v=20260831-3"></script>
     <script src="./src/glucose-data.js?v=20260816-1"></script>
     <script src="./src/glucose-charts.js?v=20260831-2"></script>
-    <script src="./src/api-client.js?v=20260831-6"></script>
-    <script src="./src/activity-lab.js?v=20260825-5"></script>
-    <script src="./src/strava-tile.js?v=20260830-4"></script>
+    <script src="./src/api-client.js?v=20260831-7"></script>
+    <script src="./src/activity-lab.js?v=20260901-1"></script>
+    <script src="./src/activities-calendar.js?v=20260901-1"></script>
+    <script src="./src/strava-tile.js?v=20260901-1"></script>
     <script src="./src/fit-export.js?v=20260831-2"></script>
     <script src="./src/virtual-route.js?v=20260831-1"></script>
     <script src="./src/elevation.js?v=20260831-11"></script>
+    <script src="./src/motion.js?v=20260901-2"></script>
     <script src="./src/filters-charts.js?v=20260818-1"></script>
-    <script src="./src/hr-stream-compare.js?v=20260831-1"></script>
+    <script src="./src/hr-stream-compare.js?v=20260901-1"></script>
     <script src="./src/race-analysis.js?v=20260819-5"></script>
-    <script src="./src/theme-search.js?v=20260816-1"></script>
-    <script src="./src/main.js?v=20260831-5"></script>
+    <script src="./src/theme-search.js?v=20260901-1"></script>
+    <script src="./src/main.js?v=20260901-2"></script>
   </body>
 </html>

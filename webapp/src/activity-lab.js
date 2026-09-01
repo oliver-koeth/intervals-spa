@@ -27,6 +27,30 @@ function formatAvgPace(movingTimeS, distanceM) {
   return `${formatPaceMinutes(minPerKm)} /km`;
 }
 
+/* Cycling activities are conventionally measured in speed (km/h), not pace
+ * (min/km). Used to switch the pace label/value for Ride-type activities. */
+function isBikeActivityType(type) {
+  const t = String(type || "").toLowerCase();
+  return /(^|_)(ride|cycl|bike|gravel|mountain|virtualride|ebike|handcycle)/.test(t);
+}
+
+function formatAvgSpeed(movingTimeS, distanceM) {
+  const secs = Number(movingTimeS || 0);
+  const meters = Number(distanceM || 0);
+  if (secs <= 0 || meters <= 0) return "-";
+  const kmh = (meters / 1000) / (secs / 3600);
+  return `${kmh.toFixed(1)} km/h`;
+}
+
+/* Label + value for the "average speed/pace" metric, picking speed (km/h) for
+ * bike activities and pace (min/km) for everything else. */
+function avgPaceOrSpeedField(activity) {
+  if (isBikeActivityType(activity.activity_type)) {
+    return { label: "Avg Speed", value: formatAvgSpeed(activity.moving_time_s, activity.distance_m) };
+  }
+  return { label: "Avg Pace", value: formatAvgPace(activity.moving_time_s, activity.distance_m) };
+}
+
 function getActivityIndexLabel(index) {
   if (index < 9) return String(index + 1);
   return String.fromCharCode(65 + (index - 9));
@@ -73,7 +97,7 @@ function renderActivityDetail(tabActivity, focusActivity) {
     { label: "Type", value: activity.activity_type || "-" },
     { label: "Duration", value: formatDuration(activity.moving_time_s) },
     { label: "Distance", value: formatDistance(activity.distance_m) },
-    { label: "Avg Pace", value: formatAvgPace(activity.moving_time_s, activity.distance_m) },
+    avgPaceOrSpeedField(activity),
     { label: "Avg HR", value: activity.avg_hr ? `${Math.round(activity.avg_hr)} bpm` : "-" },
     { label: "Load", value: activity.training_load != null ? Math.round(activity.training_load) : "-" },
     { label: "Race", value: activity.is_race ? "Yes" : "-" },

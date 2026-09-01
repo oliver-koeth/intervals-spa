@@ -21,6 +21,36 @@ function defaultDateRange() {
   return { from: from.toISOString().slice(0,10), to: to.toISOString().slice(0,10) };
 }
 
+/* Date range for the "Load all new activities" shortcut: from = the day of the
+ * newest activity already in the local cache, to = today. Falls back to the
+ * default 6-month window when nothing is cached yet. */
+function loadAllNewDateRange() {
+  const dates = (state.activities || []).map((a) => a.date).filter(Boolean);
+  const to = new Date().toISOString().slice(0, 10);
+  if (!dates.length) return defaultDateRange();
+  return { from: dates.sort()[dates.length - 1], to };
+}
+
+/* Reflects the current "Load all new activities" checkbox state onto the two
+ * date inputs: when checked, fill them with the newest-cached→today range and
+ * disable manual editing; when unchecked, re-enable them. */
+function syncActivitySearchLoadAll() {
+  const check = document.getElementById("activity-search-loadall");
+  const fromEl = document.getElementById("activity-search-from");
+  const toEl = document.getElementById("activity-search-to");
+  if (!check || !fromEl || !toEl) return;
+  if (check.checked) {
+    const range = loadAllNewDateRange();
+    fromEl.value = range.from;
+    toEl.value = range.to;
+    fromEl.setAttribute("disabled", "");
+    toEl.setAttribute("disabled", "");
+  } else {
+    fromEl.removeAttribute("disabled");
+    toEl.removeAttribute("disabled");
+  }
+}
+
 async function handleSearchSubmit(e) {
   e.preventDefault();
   const settings = getSettings();
@@ -87,8 +117,10 @@ async function handleActivitySearchSubmit(e) {
     return;
   }
   const defaultRange = defaultDateRange();
-  const resolvedStartDate = document.getElementById("activity-search-from").value || defaultRange.from;
-  const resolvedEndDate = document.getElementById("activity-search-to").value || defaultRange.to;
+  const loadAll = document.getElementById("activity-search-loadall")?.checked;
+  const range = loadAll ? loadAllNewDateRange() : null;
+  const resolvedStartDate = range ? range.from : (document.getElementById("activity-search-from").value || defaultRange.from);
+  const resolvedEndDate = range ? range.to : (document.getElementById("activity-search-to").value || defaultRange.to);
   document.getElementById("activity-search-from").value = resolvedStartDate;
   document.getElementById("activity-search-to").value = resolvedEndDate;
   const params = {
