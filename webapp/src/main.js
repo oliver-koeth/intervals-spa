@@ -39,6 +39,7 @@ async function init() {
   const validInitialScreens = ["search", "activities", "race-analysis", "similarity", "intervals", "glucose", "settings", "manual"];
   setScreen(validInitialScreens.includes(initialScreen) ? initialScreen : "search");
   initSidebar();
+  initActivityLabStreamToggle();
 
   document.getElementById("activity-search-form").addEventListener("submit", handleActivitySearchSubmit);
   document.getElementById("activity-search-loadall").addEventListener("sl-change", syncActivitySearchLoadAll);
@@ -408,6 +409,7 @@ async function init() {
   document.getElementById("race-analysis-tables").addEventListener("click", handleRaceTableFilterClick);
   document.getElementById("race-gpx-input").addEventListener("change", handleRaceGpxFileUpload);
   document.getElementById("race-download-json").addEventListener("click", downloadRaceAnalysisJson);
+  document.getElementById("race-mode-toggle").addEventListener("click", handleRaceModeToggleClick);
   initRaceAnalysisDropZone();
 
   document.querySelectorAll("[data-screen-target]").forEach((btn) => {

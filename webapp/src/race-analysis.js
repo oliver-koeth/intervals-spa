@@ -595,8 +595,7 @@ function raceSlopeVamSegments(ctx, direction, bins = 80) {
   return quarters;
 }
 
-function analyzeRaceParsed(parsed) {
-  const ctx = prepareRacePoints(parsed.points);
+function buildRaceResult(ctx, parsed) {
   const quarterLength = ctx.totalM / 4;
   const quarters = Array.from({ length: 4 }, (_, index) => raceSegmentMetrics(ctx, index * quarterLength, (index + 1) * quarterLength));
   const flatSections = Array.from({ length: 4 }, (_, index) => raceFlattestWindow(ctx, index * quarterLength, (index + 1) * quarterLength));
@@ -650,6 +649,136 @@ function analyzeRaceParsed(parsed) {
       downhillVam: raceSlopeVamSegments(ctx, -1),
     },
   };
+}
+
+/* ── Quarter suitability check ──────────────────────────────────────────────
+ * Quarter analysis only makes sense when every quarter mixes climbing and
+ * descending. On a single climb-then-descent ("un puerto") profile the halves
+ * sit in opposite terrain regimes and the GAP:HR decoupling is a terrain
+ * artifact. A quarter is "suitable" only if it contains both a contiguous
+ * climb and a contiguous descent of at least RACE_MEANINGFUL_VERT_M. */
+const RACE_MEANINGFUL_VERT_M = 50;
+
+function raceQuarterSuitability(ctx) {
+  const quarterLength = ctx.totalM / 4;
+  const failing = [];
+  for (let quarter = 0; quarter < 4; quarter++) {
+    const start = quarter * quarterLength;
+    const end = (quarter + 1) * quarterLength;
+    const hasClimb = !!raceSteepestNetWindow(ctx, start, end, RACE_MEANINGFUL_VERT_M, 1);
+    const hasDescent = !!raceSteepestNetWindow(ctx, start, end, RACE_MEANINGFUL_VERT_M, -1);
+    if (!hasClimb || !hasDescent) {
+      failing.push({ quarter: quarter + 1, hasClimb, hasDescent });
+    }
+  }
+  return { suitable: failing.length === 0, failing };
+}
+
+/* ── Segment analysis (mode 2) ──────────────────────────────────────────────*/
+
+/** Classify a selected distance range as a climb, a descent, or ambiguous.
+ *  Small dips/hops are tolerated because classification is driven by the net
+ *  vertical relative to the total vertical travel (ratio), not by requiring a
+ *  monotonic profile. */
+function raceClassifySegment(ctx, startM, endM) {
+  const lo = Math.max(0, Math.min(startM, endM));
+  const hi = Math.min(ctx.totalM, Math.max(startM, endM));
+  if (hi - lo < 200) {
+    return { type: null, message: "Selection is too short — drag across at least 200 m of a climb or descent." };
+  }
+  const iStart = raceLowerBound(ctx.profileDistances, lo);
+  const iEnd = raceUpperBound(ctx.profileDistances, hi);
+  let gainM = 0;
+  let lossM = 0;
+  for (let i = iStart + 1; i < iEnd; i++) {
+    const delta = ctx.profileElevations[i] - ctx.profileElevations[i - 1];
+    if (delta > 0) gainM += delta;
+    else lossM -= delta;
+  }
+  const netM = raceInterpolate(ctx.profileDistances, ctx.profileElevations, hi)
+    - raceInterpolate(ctx.profileDistances, ctx.profileElevations, lo);
+  const totalVert = gainM + lossM;
+  const ratio = totalVert > 0 ? Math.abs(netM) / totalVert : 0;
+  const base = { startM: lo, endM: hi, netM, gainM, lossM, ratio };
+  if (Math.abs(netM) < RACE_MEANINGFUL_VERT_M) {
+    return { ...base, type: null, message: `Selection has only ${Math.abs(netM).toFixed(0)} m net change — not a meaningful climb or descent (need ≥ ${RACE_MEANINGFUL_VERT_M} m).` };
+  }
+  if (ratio < 0.5) {
+    return { ...base, type: null, message: `Selection is rolling/mixed terrain (${gainM.toFixed(0)} m up, ${lossM.toFixed(0)} m down, only ${Math.abs(netM).toFixed(0)} m net). Select a cleaner single climb or descent.` };
+  }
+  return { ...base, type: netM > 0 ? "climb" : "descent" };
+}
+
+/** Scatter buckets over an arbitrary range, split into `groups` equal-distance
+ *  sub-ranges (halves for segments). metric "gap" → GAP pace, "slope" → grade%.
+ *  direction filters ascending (>0) / descending (<0) / all (0) samples. */
+function raceRangeScatter(ctx, startM, endM, groups, metric, direction = 0, bins = 60) {
+  const output = [];
+  const groupLength = (endM - startM) / groups;
+  for (let group = 0; group < groups; group++) {
+    const start = startM + group * groupLength;
+    const end = startM + (group + 1) * groupLength;
+    const buckets = Array.from({ length: bins }, () => ({ movingS: 0, equivM: 0, distanceM: 0, gradeWeighted: 0, hrW: 0, hrWeight: 0 }));
+    for (const point of ctx.points) {
+      if (!point.moving || point.cum < start || point.cum > end) continue;
+      if (direction > 0 && point.grade <= 0) continue;
+      if (direction < 0 && point.grade >= 0) continue;
+      const progress = groupLength > 0 ? (point.cum - start) / groupLength : 0;
+      const bucket = buckets[Math.min(bins - 1, Math.max(0, Math.floor(progress * bins)))];
+      bucket.movingS += point.movingS;
+      bucket.equivM += point.equivStep;
+      bucket.distanceM += point.step;
+      bucket.gradeWeighted += point.grade * point.step;
+      if (raceFinite(point.hr)) {
+        bucket.hrW += point.hr * point.movingS;
+        bucket.hrWeight += point.movingS;
+      }
+    }
+    output.push(buckets
+      .filter((bucket) => bucket.hrWeight > 0 && bucket.distanceM >= 50)
+      .map((bucket) => {
+        const y = bucket.hrW / bucket.hrWeight;
+        const x = metric === "gap"
+          ? (bucket.equivM ? bucket.movingS / (bucket.equivM / 1000) : NaN)
+          : 100 * bucket.gradeWeighted / bucket.distanceM;
+        return { x, y };
+      })
+      .filter((pt) => raceFinite(pt.x) && raceFinite(pt.y)));
+  }
+  return output;
+}
+
+/** VAM (m/h) by slope segment over a range, split into `groups` sub-ranges. */
+function raceRangeVam(ctx, startM, endM, direction, groups, bins = 60) {
+  const output = [];
+  const groupLength = (endM - startM) / groups;
+  for (let group = 0; group < groups; group++) {
+    const start = startM + group * groupLength;
+    const end = startM + (group + 1) * groupLength;
+    const buckets = Array.from({ length: bins }, () => ({ distanceM: 0, gradeWeighted: 0, verticalM: 0, movingS: 0 }));
+    for (const point of ctx.points) {
+      if (!point.moving || point.cum < start || point.cum > end) continue;
+      if (direction > 0 && point.grade <= 0) continue;
+      if (direction < 0 && point.grade >= 0) continue;
+      const progress = groupLength > 0 ? (point.cum - start) / groupLength : 0;
+      const bucket = buckets[Math.min(bins - 1, Math.max(0, Math.floor(progress * bins)))];
+      bucket.distanceM += point.step;
+      bucket.gradeWeighted += point.grade * point.step;
+      bucket.verticalM += point.grade * point.step;
+      bucket.movingS += point.movingS;
+    }
+    const segAcc = RACE_SLOPE_SEGMENTS.map(() => ({ verticalM: 0, movingS: 0 }));
+    for (const bucket of buckets) {
+      if (bucket.distanceM < 50 || bucket.movingS <= 0) continue;
+      const absSlope = Math.abs(100 * bucket.gradeWeighted / bucket.distanceM);
+      const index = RACE_SLOPE_SEGMENTS.findIndex((seg) => absSlope >= seg.min && absSlope < seg.max);
+      if (index < 0) continue;
+      segAcc[index].verticalM += bucket.verticalM;
+      segAcc[index].movingS += bucket.movingS;
+    }
+    output.push(segAcc.map((acc) => acc.movingS > 0 ? Math.abs(acc.verticalM) / (acc.movingS / 3600) : NaN));
+  }
+  return output;
 }
 
 function setRaceAnalysisStatus(message, isError = false) {
@@ -1111,7 +1240,266 @@ function renderRaceAnalysisResult(result) {
   renderRaceVamBars("race-uphill-vam", result.chart.uphillVam);
   renderRaceVamBars("race-downhill-vam", result.chart.downhillVam);
   renderRaceTables(result);
+  renderRaceQuarterSuitability();
   setRaceAnalysisStatus(`Complete: ${result.overall.distanceKm.toFixed(2)} km, ${raceFormatNumber(result.overall.gainM)} m ascent, ${raceFormatDuration(result.overall.recordedElapsedS)} elapsed.`);
+}
+
+function renderRaceQuarterSuitability() {
+  const banner = document.getElementById("race-quarters-suitability");
+  const ctx = state.raceAnalysis.ctx;
+  if (!banner || !ctx) return;
+  const { suitable, failing } = raceQuarterSuitability(ctx);
+  if (suitable) {
+    banner.classList.add("hidden");
+    banner.innerHTML = "";
+    return;
+  }
+  const list = failing.map((f) => {
+    const missing = [!f.hasClimb ? "climb" : null, !f.hasDescent ? "descent" : null].filter(Boolean).join(" & ");
+    return `Q${f.quarter} (no ${missing})`;
+  }).join(", ");
+  banner.classList.remove("hidden");
+  banner.innerHTML = `<strong>⚠ This race may not suit quarter analysis.</strong> `
+    + `Quarter GAP:HR comparisons assume every quarter mixes climbing and descending, but these quarters do not have both a meaningful (≥ ${RACE_MEANINGFUL_VERT_M} m) climb and descent: <strong>${raceEscapeHtml(list)}</strong>. `
+    + `On a single climb-then-descent profile the numbers are dominated by terrain, not fatigue — use <em>Analyse Segments</em> to compare halves within one climb or descent instead.`;
+}
+
+/* ── Mode switching ─────────────────────────────────────────────────────────*/
+
+function raceSetHeader(ctx, parsed) {
+  document.getElementById("race-report-name").textContent = parsed.title;
+  const startTime = new Date(ctx.points[0].time).toISOString();
+  document.getElementById("race-report-meta").textContent =
+    `${parsed.sourceName} · ${startTime} · ${raceFormatNumber(ctx.points.length)} track points`;
+}
+
+function renderRaceActiveMode() {
+  const ctx = state.raceAnalysis.ctx;
+  const parsed = state.raceAnalysis.parsed;
+  if (!ctx || !parsed) return;
+  const mode = state.raceAnalysis.mode === "segments" ? "segments" : "quarters";
+  document.getElementById("race-analysis-report").classList.remove("hidden");
+  raceSetHeader(ctx, parsed);
+  document.querySelectorAll("#race-mode-toggle [data-race-mode]").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.raceMode === mode);
+  });
+  const quartersEl = document.getElementById("race-quarters-report");
+  const segmentsEl = document.getElementById("race-segments-report");
+  quartersEl.classList.toggle("hidden", mode !== "quarters");
+  segmentsEl.classList.toggle("hidden", mode !== "segments");
+
+  if (mode === "quarters") {
+    if (!state.raceAnalysis.result) state.raceAnalysis.result = buildRaceResult(ctx, parsed);
+    document.getElementById("race-download-json").disabled = false;
+    renderRaceAnalysisResult(state.raceAnalysis.result);
+  } else {
+    document.getElementById("race-download-json").disabled = true;
+    renderRaceSegmentsMode(ctx);
+  }
+}
+
+function setRaceMode(mode) {
+  const next = mode === "segments" ? "segments" : "quarters";
+  if (state.raceAnalysis.mode === next) return;
+  state.raceAnalysis.mode = next;
+  try { localStorage.setItem("race_analysis_mode", next); } catch (_) { /* ignore */ }
+  renderRaceActiveMode();
+}
+
+function handleRaceModeToggleClick(event) {
+  const btn = event.target.closest("[data-race-mode]");
+  if (!btn) return;
+  setRaceMode(btn.dataset.raceMode);
+}
+
+/* ── Segment mode rendering ─────────────────────────────────────────────────*/
+
+const RACE_HALF_COLORS = [SERIES_COLORS.pace, SERIES_COLORS.gap];
+const RACE_HALF_LABELS = ["First half", "Second half"];
+
+function setRaceSegStatus(message, isError = false) {
+  const el = document.getElementById("race-seg-status");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle("error", isError);
+}
+
+function renderRaceSegmentsMode(ctx) {
+  document.getElementById("race-seg-charts").classList.add("hidden");
+  state.raceAnalysis.segment = null;
+  setRaceSegStatus("Drag across a single climb or descent on the profile. Small dips or hops within it are ignored; mixed rolling terrain is rejected.");
+  setRaceAnalysisStatus(`Loaded ${(ctx.totalM / 1000).toFixed(2)} km. Select a single climb or descent on the profile below.`);
+  renderRaceSegmentProfile(ctx);
+}
+
+function renderRaceSegmentProfile(ctx) {
+  const chart = mkRaceChart("race-seg-profile");
+  const minEle = Math.min(...ctx.profileElevations);
+  const maxEle = Math.max(...ctx.profileElevations);
+  chart.setOption({
+    tooltip: {
+      trigger: "axis",
+      formatter: (params) => {
+        const value = params[0]?.value || [0, 0];
+        return `${Number(value[0]).toFixed(2)} km · ${Math.round(value[1])} m`;
+      },
+    },
+    grid: { left: 48, right: 18, top: 24, bottom: 34 },
+    xAxis: { type: "value", name: "km", max: ctx.totalM / 1000 },
+    yAxis: { type: "value", name: "m", min: Math.floor(minEle), max: Math.ceil(maxEle) },
+    brush: {
+      xAxisIndex: 0,
+      brushType: "lineX",
+      brushMode: "single",
+      throttleType: "debounce",
+      throttleDelay: 200,
+      brushStyle: { borderWidth: 1, color: "rgba(129,140,248,0.18)", borderColor: "rgba(129,140,248,0.7)" },
+    },
+    series: [{
+      type: "line",
+      name: "Elevation",
+      smooth: true,
+      showSymbol: false,
+      lineStyle: { color: SERIES_COLORS.elevation, width: 1.5 },
+      areaStyle: { color: SERIES_COLORS.elevation, opacity: 0.12 },
+      data: ctx.profile.map((row) => [row.distance / 1000, row.ele]),
+    }],
+  });
+  chart.off("brushEnd");
+  chart.on("brushEnd", (event) => {
+    const area = event.areas && event.areas[0];
+    if (!area || !area.coordRange) return;
+    const [x0, x1] = area.coordRange;
+    handleRaceSegmentSelection(Math.min(x0, x1) * 1000, Math.max(x0, x1) * 1000);
+  });
+  // Activate the brush cursor by default so the user can drag immediately.
+  chart.dispatchAction({ type: "takeGlobalCursor", key: "brush", brushOption: { brushType: "lineX", brushMode: "single" } });
+}
+
+function handleRaceSegmentSelection(startM, endM) {
+  const ctx = state.raceAnalysis.ctx;
+  if (!ctx) return;
+  const seg = raceClassifySegment(ctx, startM, endM);
+  if (!seg.type) {
+    state.raceAnalysis.segment = null;
+    document.getElementById("race-seg-charts").classList.add("hidden");
+    setRaceSegStatus(seg.message, true);
+    return;
+  }
+  state.raceAnalysis.segment = seg;
+  const km = ((seg.endM - seg.startM) / 1000).toFixed(2);
+  setRaceSegStatus(
+    `${seg.type === "climb" ? "Climb" : "Descent"} selected: ${(seg.startM / 1000).toFixed(2)}–${(seg.endM / 1000).toFixed(2)} km `
+    + `(${km} km, ${seg.netM >= 0 ? "+" : ""}${seg.netM.toFixed(0)} m net; ${seg.gainM.toFixed(0)} m up / ${seg.lossM.toFixed(0)} m down). Split into halves below.`
+  );
+  renderRaceSegmentCharts(ctx, seg);
+}
+
+function renderRaceSegmentCharts(ctx, seg) {
+  document.getElementById("race-seg-charts").classList.remove("hidden");
+  const direction = seg.type === "climb" ? 1 : -1;
+  const slopeWord = seg.type === "climb" ? "Ascending" : "Descending";
+  document.getElementById("race-seg-slope-title").textContent = `${slopeWord} slope vs heart rate`;
+  document.getElementById("race-seg-vam-title").textContent = `${slopeWord} VAM by slope segment`;
+
+  const gapHr = raceRangeScatter(ctx, seg.startM, seg.endM, 2, "gap", 0);
+  const slopeHr = raceRangeScatter(ctx, seg.startM, seg.endM, 2, "slope", direction);
+  const vam = raceRangeVam(ctx, seg.startM, seg.endM, direction, 2);
+
+  renderRaceHalfScatter("race-seg-gap-hr", gapHr, "gap");
+  renderRaceHalfScatter("race-seg-slope-hr", slopeHr, "slope", direction);
+  renderRaceHalfVamBars("race-seg-vam", vam);
+}
+
+function renderRaceHalfScatter(name, data, metric, direction = 0) {
+  const chart = mkRaceChart(name);
+  const points = data.flat();
+  const xValues = points.map((point) => point.x).filter(raceFinite);
+  const yValues = points.map((point) => point.y).filter(raceFinite);
+  const isPace = metric === "gap";
+  const positive = direction > 0;
+  let xAxis;
+  if (isPace) {
+    xAxis = {
+      type: "value",
+      name: "GAP /km",
+      min: xValues.length ? Math.max(180, racePercentile(xValues, 2) - 15) : 180,
+      max: xValues.length ? Math.min(900, racePercentile(xValues, 98) + 15) : 900,
+      axisLabel: { formatter: (v) => raceFormatPace(v) },
+    };
+  } else {
+    xAxis = {
+      type: "value",
+      name: "slope %",
+      min: xValues.length ? (positive ? Math.max(0, racePercentile(xValues, 2) - 0.5) : racePercentile(xValues, 2) - 0.5) : (positive ? 0 : -20),
+      max: xValues.length ? (positive ? racePercentile(xValues, 98) + 0.5 : Math.min(0, racePercentile(xValues, 98) + 0.5)) : (positive ? 20 : 0),
+      axisLabel: { formatter: (v) => `${Number(v).toFixed(0)}%` },
+    };
+  }
+  chart.setOption({
+    tooltip: {
+      formatter: (p) => isPace
+        ? `${p.seriesName}<br>GAP ${raceFormatPace(p.value[0])} /km<br>HR ${Math.round(p.value[1])} bpm`
+        : `${p.seriesName}<br>Slope ${Number(p.value[0]).toFixed(1)}%<br>HR ${Math.round(p.value[1])} bpm`,
+    },
+    legend: { top: 4, textStyle: { fontSize: 11 } },
+    grid: { left: 54, right: 18, top: 42, bottom: 42 },
+    xAxis,
+    yAxis: {
+      type: "value",
+      name: "bpm",
+      min: yValues.length ? Math.max(80, racePercentile(yValues, 2) - 3) : 80,
+      max: yValues.length ? Math.min(220, racePercentile(yValues, 98) + 3) : 200,
+    },
+    series: data.map((group, index) => ({
+      type: "scatter",
+      name: RACE_HALF_LABELS[index],
+      symbolSize: 8,
+      itemStyle: { color: RACE_HALF_COLORS[index], opacity: 0.56 },
+      data: group.map((point) => [point.x, point.y]),
+    })),
+  });
+}
+
+function renderRaceHalfVamBars(name, data) {
+  const chart = mkRaceChart(name);
+  const categories = RACE_SLOPE_SEGMENTS.map((seg) => seg.label);
+  chart.setOption({
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      formatter: (params) => {
+        const lines = [`${params[0]?.axisValue} slope`];
+        for (const p of params) {
+          if (raceFinite(p.value)) lines.push(`${p.marker}${p.seriesName}: ${Math.round(p.value)} m/h`);
+        }
+        return lines.join("<br>");
+      },
+    },
+    legend: { top: 4, textStyle: { fontSize: 11 } },
+    grid: { left: 54, right: 18, top: 42, bottom: 34 },
+    xAxis: { type: "category", name: "slope", data: categories },
+    yAxis: { type: "value", name: "VAM m/h" },
+    series: data.map((group, index) => ({
+      type: "bar",
+      name: RACE_HALF_LABELS[index],
+      itemStyle: { color: RACE_HALF_COLORS[index], opacity: 0.78 },
+      data: group.map((value) => raceFinite(value) ? Math.round(value) : null),
+    })),
+  });
+}
+
+function prepareRaceAndRender(parsed) {
+  const ctx = prepareRacePoints(parsed.points);
+  state.raceAnalysis.ctx = ctx;
+  state.raceAnalysis.parsed = parsed;
+  state.raceAnalysis.result = null;
+  state.raceAnalysis.segment = null;
+  try {
+    const saved = localStorage.getItem("race_analysis_mode");
+    if (saved === "segments" || saved === "quarters") state.raceAnalysis.mode = saved;
+  } catch (_) { /* ignore */ }
+  renderRaceActiveMode();
 }
 
 function serializableRaceResult(result) {
@@ -1149,10 +1537,9 @@ async function handleRaceAnalyzeActivity() {
     const parsed = raceStreamToParsed(activity, stream);
     setRaceAnalysisStatus(`Analyzing ${raceFormatNumber(parsed.points.length)} stream points…`);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    const result = analyzeRaceParsed(parsed);
     setRaceAnalysisStatus("Rendering charts…");
     await new Promise((resolve) => setTimeout(resolve, 0));
-    renderRaceAnalysisResult(result);
+    prepareRaceAndRender(parsed);
   } catch (err) {
     console.error(err);
     setRaceAnalysisStatus(err instanceof Error ? err.message : String(err), true);
@@ -1170,10 +1557,9 @@ async function analyzeRaceGpxFile(file) {
     const parsed = parseRaceGpx(await file.text(), file.name);
     setRaceAnalysisStatus(`Analyzing ${raceFormatNumber(parsed.points.length)} track points…`);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    const result = analyzeRaceParsed(parsed);
     setRaceAnalysisStatus("Rendering charts…");
     await new Promise((resolve) => setTimeout(resolve, 0));
-    renderRaceAnalysisResult(result);
+    prepareRaceAndRender(parsed);
   } catch (err) {
     console.error(err);
     setRaceAnalysisStatus(err instanceof Error ? err.message : String(err), true);

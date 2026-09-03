@@ -56,6 +56,35 @@ function getActivityIndexLabel(index) {
   return String.fromCharCode(65 + (index - 9));
 }
 
+/* Collapsible "Activity Stream" panel on the activity-detail screen. Defaults
+ * to collapsed so the chart/detail area gets the most width; state persists
+ * across visits via localStorage. */
+function initActivityLabStreamToggle() {
+  const card = document.getElementById("activity-lab-stream-card");
+  const toggle = document.getElementById("activity-lab-stream-toggle");
+  const layout = document.querySelector(".activity-lab-layout");
+  if (!card || !toggle || !layout) return;
+
+  const applyCollapsed = (collapsed) => {
+    card.classList.toggle("collapsed", collapsed);
+    layout.classList.toggle("stream-collapsed", collapsed);
+    toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    toggle.setAttribute("aria-label", collapsed ? "Expand activity stream" : "Collapse activity stream");
+    const icon = toggle.querySelector("sl-icon");
+    if (icon) icon.name = collapsed ? "chevron-right" : "chevron-left";
+  };
+
+  const stored = localStorage.getItem("activity-lab-stream-collapsed");
+  // Default to collapsed unless the user has explicitly expanded it before.
+  applyCollapsed(stored !== "false");
+
+  toggle.addEventListener("click", () => {
+    const collapsed = card.classList.toggle("collapsed");
+    applyCollapsed(collapsed);
+    localStorage.setItem("activity-lab-stream-collapsed", collapsed ? "true" : "false");
+  });
+}
+
 function renderActivitiesSidebar(hostId) {
   const list = document.getElementById(hostId);
   if (!list) return;
@@ -100,7 +129,11 @@ function renderActivityDetail(tabActivity, focusActivity) {
     avgPaceOrSpeedField(activity),
     { label: "Avg HR", value: activity.avg_hr ? `${Math.round(activity.avg_hr)} bpm` : "-" },
     { label: "Load", value: activity.training_load != null ? Math.round(activity.training_load) : "-" },
-    { label: "Race", value: activity.is_race ? "Yes" : "-" },
+    { label: "Tag", value: activity.is_race
+      ? '<span class="activity-race-flag" title="Race">Race</span>'
+      : activity.has_workout
+        ? '<span class="activity-workout-flag" title="Structured workout">Workout</span>'
+        : "-" },
     { label: "Source", value: activity.source || "intervals.icu" },
   ];
   card.innerHTML = `

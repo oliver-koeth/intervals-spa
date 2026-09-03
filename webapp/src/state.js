@@ -110,6 +110,10 @@ const state = {
     terrainTypeFilter: "",
     extremeQuarterFilter: "",
     extremeTypeFilter: "",
+    mode: "quarters",
+    ctx: null,
+    parsed: null,
+    segment: null,
   },
 };
 

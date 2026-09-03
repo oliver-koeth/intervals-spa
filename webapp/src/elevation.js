@@ -9,6 +9,7 @@ const STAIRMASTER_STEP_GAIN_M = 0.20;        // 20 cm/step (treadmill/stair with
 const STAIRMASTER_NODIST_STEP_GAIN_M = 0.30; // 30 cm/step for a pure stair machine (no distance/pace).
 const STAIRMASTER_STRIDE_M = 0.70;           // Assumed forward stride (m/step) for the synthetic GPS route
                                               // when a Stairmaster interval records no real distance/pace.
+const FLOOR_HEIGHT_M = 3;                     // 1 floor == 3 m of climb (used when the user enters floors).
 
 /* ── DOM helpers ──────────────────────────────────────────────────────── */
 function elevEl(id) { return document.getElementById(id); }
@@ -38,6 +39,11 @@ function elevMarkProgress(li, state, text) {
   if (!li) return;
   li.className = `elevation-step is-${state}`;
   if (text) li.textContent = text;
+}
+
+/** Promise-based delay used by the upload retry flow. */
+function elevDelay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function closeElevationModal() {
@@ -90,20 +96,49 @@ function elevBuildAltitudeSeries(stream, rows) {
       // Elevation from steps: cadence (steps/min) × minutes × step-gain.
       // A pure stair machine (no forward distance/pace in this interval) climbs
       // more per step, so use 30 cm; a treadmill/stair with distance uses 20 cm.
+      // If the user entered a floor count, the interval total is pinned to
+      // floors × 3 m and distributed across the samples by step effort instead.
+      const stepWeight = new Array(n).fill(0);
+      let totalSteps = 0;
       let intervalDist = 0;
       for (let i = start + 1; i < end; i++) {
         const dd = Number(distance[i]) - Number(distance[i - 1]);
         if (Number.isFinite(dd) && dd > 0) intervalDist += dd;
-      }
-      const stepGain = intervalDist > 0
-        ? STAIRMASTER_STEP_GAIN_M
-        : STAIRMASTER_NODIST_STEP_GAIN_M;
-      for (let i = start + 1; i < end; i++) {
         const dt = Number(time[i]) - Number(time[i - 1]);
         const spm = Number(cadence[i]);
-        if (!Number.isFinite(dt) || dt <= 0 || !Number.isFinite(spm) || spm <= 0) continue;
-        const steps = spm * (dt / 60);
-        gainPerSample[i] += steps * stepGain;
+        if (Number.isFinite(dt) && dt > 0 && Number.isFinite(spm) && spm > 0) {
+          stepWeight[i] = spm * (dt / 60);
+          totalSteps += stepWeight[i];
+        }
+      }
+      const floors = Number(row.floors);
+      if (Number.isFinite(floors) && floors > 0) {
+        // Pin the interval's total climb to floors × 3 m. Distribute it by step
+        // effort so the profile follows cadence; if there is no cadence, fall
+        // back to distributing by elapsed time.
+        const target = floors * FLOOR_HEIGHT_M;
+        let weights = stepWeight;
+        let totalW = totalSteps;
+        if (totalW <= 0) {
+          weights = new Array(n).fill(0);
+          totalW = 0;
+          for (let i = start + 1; i < end; i++) {
+            const dt = Number(time[i]) - Number(time[i - 1]);
+            if (Number.isFinite(dt) && dt > 0) { weights[i] = dt; totalW += dt; }
+          }
+        }
+        if (totalW > 0) {
+          for (let i = start + 1; i < end; i++) {
+            if (weights[i] > 0) gainPerSample[i] += target * (weights[i] / totalW);
+          }
+        }
+      } else {
+        const stepGain = intervalDist > 0
+          ? STAIRMASTER_STEP_GAIN_M
+          : STAIRMASTER_NODIST_STEP_GAIN_M;
+        for (let i = start + 1; i < end; i++) {
+          if (stepWeight[i] > 0) gainPerSample[i] += stepWeight[i] * stepGain;
+        }
       }
     } else if (row.pct) {
       // Elevation from gradient: horizontal distance × grade, distributed over
@@ -230,21 +265,37 @@ function elevRenderRows(intervals) {
   if (!host) return;
   host.innerHTML = "";
 
-  // Bulk control: set a % or Stairmaster for every interval in one go.
+  // Bulk control: set a % or Stairmaster for every interval in one go. The
+  // floors value is treated as the workout total and prorated across
+  // intervals by duration (so the parts sum back to the entered total).
   const bulk = document.createElement("div");
   bulk.className = "elevation-row elevation-bulk";
   bulk.innerHTML = `
     <div class="elevation-row-label">
       <span class="elevation-row-name">All intervals</span>
+      <span class="elevation-row-dur muted">% / Stairmaster apply to all; floors prorate by duration</span>
     </div>
-    <label class="elevation-row-pct">
-      <input type="number" min="0" max="100" step="0.5" value="0"
-             id="elevation-bulk-pct" /> %
-    </label>
-    <label class="elevation-row-stair">
-      <input type="checkbox" id="elevation-bulk-stair" /> Stairmaster
-    </label>
-    <button type="button" id="elevation-bulk-apply" class="btn secondary">Apply to all</button>
+    <div class="elevation-row-controls">
+      <div class="elevation-field">
+        <span class="elevation-field-cap">Incline</span>
+        <div class="elevation-input-wrap">
+          <input type="number" min="0" max="100" step="0.5" value="0" id="elevation-bulk-pct" />
+          <span class="elevation-unit">%</span>
+        </div>
+      </div>
+      <label class="elevation-field elevation-field-check">
+        <span class="elevation-field-cap">Stairmaster</span>
+        <input type="checkbox" id="elevation-bulk-stair" />
+      </label>
+      <div class="elevation-field">
+        <span class="elevation-field-cap">Total floors</span>
+        <div class="elevation-input-wrap">
+          <input type="number" min="0" step="0.1" placeholder="auto" id="elevation-bulk-floors" class="elevation-floors-input" disabled />
+          <span class="elevation-unit">×3 m</span>
+        </div>
+      </div>
+      <button type="button" id="elevation-bulk-apply" class="btn secondary">Apply to all</button>
+    </div>
   `;
   host.appendChild(bulk);
 
@@ -254,16 +305,29 @@ function elevRenderRows(intervals) {
     rowEl.className = "elevation-row";
     rowEl.innerHTML = `
       <div class="elevation-row-label">
-        <span class="elevation-row-name">${it.label}</span>
+        <span class="elevation-row-name" title="${it.label}">${it.label}</span>
         <span class="elevation-row-dur muted">${dur}</span>
       </div>
-      <label class="elevation-row-pct">
-        <input type="number" min="0" max="100" step="0.5" value="0"
-               data-idx="${i}" class="elevation-pct-input" /> %
-      </label>
-      <label class="elevation-row-stair">
-        <input type="checkbox" data-idx="${i}" class="elevation-stair-input" /> Stairmaster
-      </label>
+      <div class="elevation-row-controls">
+        <div class="elevation-field">
+          <span class="elevation-field-cap">Incline</span>
+          <div class="elevation-input-wrap">
+            <input type="number" min="0" max="100" step="0.5" value="0" data-idx="${i}" class="elevation-pct-input" />
+            <span class="elevation-unit">%</span>
+          </div>
+        </div>
+        <label class="elevation-field elevation-field-check">
+          <span class="elevation-field-cap">Stairmaster</span>
+          <input type="checkbox" data-idx="${i}" class="elevation-stair-input" />
+        </label>
+        <div class="elevation-field">
+          <span class="elevation-field-cap">Floors</span>
+          <div class="elevation-input-wrap">
+            <input type="number" min="0" step="0.1" placeholder="auto" data-idx="${i}" class="elevation-floors-input" disabled />
+            <span class="elevation-unit">×3 m</span>
+          </div>
+        </div>
+      </div>
     `;
     host.appendChild(rowEl);
   });
@@ -273,9 +337,14 @@ function elevRenderRows(intervals) {
     cb.addEventListener("change", (e) => {
       const idx = e.target.getAttribute("data-idx");
       const pctInput = host.querySelector(`.elevation-pct-input[data-idx="${idx}"]`);
+      const floorsInput = host.querySelector(`.elevation-floors-input[data-idx="${idx}"]`);
       if (pctInput) {
         pctInput.disabled = e.target.checked;
         if (e.target.checked) pctInput.value = "0";
+      }
+      if (floorsInput) {
+        floorsInput.disabled = !e.target.checked;
+        if (!e.target.checked) floorsInput.value = "";
       }
     });
   });
@@ -283,17 +352,24 @@ function elevRenderRows(intervals) {
   // Bulk control wiring: mirror the xor rule, and copy the value to every row.
   const bulkStair = host.querySelector("#elevation-bulk-stair");
   const bulkPct = host.querySelector("#elevation-bulk-pct");
+  const bulkFloors = host.querySelector("#elevation-bulk-floors");
   const bulkApply = host.querySelector("#elevation-bulk-apply");
   if (bulkStair && bulkPct) {
     bulkStair.addEventListener("change", () => {
       bulkPct.disabled = bulkStair.checked;
       if (bulkStair.checked) bulkPct.value = "0";
+      if (bulkFloors) {
+        bulkFloors.disabled = !bulkStair.checked;
+        if (!bulkStair.checked) bulkFloors.value = "";
+      }
     });
   }
   if (bulkApply) {
     bulkApply.addEventListener("click", () => {
       const stair = !!(bulkStair && bulkStair.checked);
       const pct = stair ? 0 : (Number(bulkPct && bulkPct.value) || 0);
+      const totalFloors = stair && bulkFloors ? Number(bulkFloors.value) || 0 : 0;
+      const totalDuration = intervals.reduce((sum, it) => sum + Math.max(0, Number(it.duration) || 0), 0);
       host.querySelectorAll(".elevation-stair-input").forEach((cb) => {
         cb.checked = stair;
         cb.dispatchEvent(new Event("change"));
@@ -301,6 +377,15 @@ function elevRenderRows(intervals) {
       host.querySelectorAll(".elevation-pct-input").forEach((inp) => {
         if (!stair) inp.value = String(pct);
       });
+      if (stair && totalFloors > 0 && totalDuration > 0) {
+        // Prorate the entered total by each interval's duration, so the
+        // per-interval floors sum back to the entered total.
+        intervals.forEach((it, i) => {
+          const share = Math.max(0, Number(it.duration) || 0) / totalDuration;
+          const floorsInput = host.querySelector(`.elevation-floors-input[data-idx="${i}"]`);
+          if (floorsInput) floorsInput.value = (totalFloors * share).toFixed(2);
+        });
+      }
     });
   }
 }
@@ -310,9 +395,11 @@ function elevCollectRows(intervals) {
   return intervals.map((it, i) => {
     const pctInput = host.querySelector(`.elevation-pct-input[data-idx="${i}"]`);
     const stairInput = host.querySelector(`.elevation-stair-input[data-idx="${i}"]`);
+    const floorsInput = host.querySelector(`.elevation-floors-input[data-idx="${i}"]`);
     const stairmaster = !!(stairInput && stairInput.checked);
     const pct = stairmaster ? 0 : (Number(pctInput && pctInput.value) || 0);
-    return { startIndex: it.startIndex, endIndex: it.endIndex, pct, stairmaster };
+    const floors = stairmaster ? (Number(floorsInput && floorsInput.value) || 0) : 0;
+    return { startIndex: it.startIndex, endIndex: it.endIndex, pct, stairmaster, floors };
   });
 }
 
@@ -638,12 +725,44 @@ function elevShowDeletePause(deleteUrl) {
   }
 }
 
-/** Resume after the delete-pause: upload the built FIT and poll for the result. */
+/** Resume after the delete-pause: wait for the delete to propagate on Strava's
+ * side, then upload the built FIT and poll for the result. Retries on
+ * failure with a longer backoff, up to a fixed number of attempts. */
 async function continueElevationStravaUpload() {
   if (!elevContext || !elevContext.fitBytes) return;
   const { focus, fitBytes: bytes, stravaToken: token, stravaSettings: settings } = elevContext;
 
-  const sUp = elevAddProgress("Uploading FIT to Strava…");
+  const MAX_RETRIES = 2; // total attempts = 1 initial + MAX_RETRIES retries
+  const INITIAL_WAIT_MS = 15000;
+  const RETRY_WAIT_MS = 30000;
+
+  const sWait = elevAddProgress("Waiting 15s before uploading (letting the delete propagate on Strava)…");
+  await elevDelay(INITIAL_WAIT_MS);
+  elevMarkProgress(sWait, "done", "Waited 15s.");
+
+  for (let attempt = 0; ; attempt++) {
+    const ok = await elevAttemptStravaUploadOnce(focus, bytes, token, settings, attempt);
+    if (ok) return;
+    if (attempt >= MAX_RETRIES) {
+      elevAddProgress(
+        `Gave up after ${MAX_RETRIES + 1} attempts. Delete the original activity on Strava, then try again.`,
+        "error"
+      );
+      elevEl("elevation-download-fit").disabled = false;
+      finishElevation();
+      return;
+    }
+    const sRetryWait = elevAddProgress(`Waiting 30s before retry ${attempt + 1} of ${MAX_RETRIES}…`);
+    await elevDelay(RETRY_WAIT_MS);
+    elevMarkProgress(sRetryWait, "done", "Waited 30s.");
+  }
+}
+
+/** Single upload+poll attempt. Returns true on success, false on failure
+ * (leaving progress-list error entries in place for the caller to react to). */
+async function elevAttemptStravaUploadOnce(focus, bytes, token, settings, attempt) {
+  const label = attempt > 0 ? ` (retry ${attempt})` : "";
+  const sUp = elevAddProgress(`Uploading FIT to Strava${label}…`);
   let upload;
   try {
     upload = await stravaUploadActivity(bytes, {
@@ -661,9 +780,7 @@ async function continueElevationStravaUpload() {
     elevMarkProgress(sUp, "error", dup
       ? "Strava rejected this as a duplicate. Delete the original activity on Strava, then upload again."
       : err.message);
-    elevEl("elevation-upload-strava").disabled = false;
-    elevEl("elevation-download-fit").disabled = false;
-    return;
+    return false;
   }
 
   const sPoll = elevAddProgress("Waiting for Strava to finish processing…");
@@ -675,14 +792,15 @@ async function continueElevationStravaUpload() {
     const status = elevEl("elevation-status");
     status.innerHTML =
       `Uploaded to Strava with elevation. <a href="${link}" target="_blank" rel="noopener noreferrer">Open activity ↗</a>`;
+    elevEl("elevation-download-fit").disabled = false;
+    finishElevation();
+    return true;
   } catch (err) {
     const dup = /duplicate/i.test(err.message);
     elevMarkProgress(sPoll, "error", dup
       ? "Strava flagged a duplicate. Delete the original activity on Strava, then upload again."
       : err.message);
-  } finally {
-    elevEl("elevation-download-fit").disabled = false;
-    finishElevation();
+    return false;
   }
 }
 
@@ -716,5 +834,6 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     elevBuildAltitudeSeries, elevBuildStreamsCsv, elevBuildVirtualDistanceSeries,
     STAIRMASTER_STEP_GAIN_M, STAIRMASTER_NODIST_STEP_GAIN_M, STAIRMASTER_STRIDE_M,
+    FLOOR_HEIGHT_M,
   };
 }

@@ -6,7 +6,7 @@
     <title>Intervals</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/themes/light.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260831-4" />
+    <link rel="stylesheet" href="./styles.css?v=20260903-6" />
     <script src="https://cdn.jsdelivr.net/npm/echarts@6/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.1/cdn/shoelace-autoloader.js"></script>
@@ -439,59 +439,93 @@
                     <h1 id="race-report-name">Race</h1>
                     <p id="race-report-meta" class="muted"></p>
                   </div>
-                </div>
-                <div id="race-kpis" class="race-kpis"></div>
-              </div>
-
-              <div class="card race-chart-card">
-                <h2>Elevation profile and distance quarters</h2>
-                <div id="chart-race-profile" class="chart race-profile-chart"></div>
-                <div id="race-quarter-legend" class="race-quarter-legend"></div>
-              </div>
-
-              <div class="card race-chart-card">
-                <h2>Graded pace vs heart rate</h2>
-                <div id="chart-race-scatter" class="chart race-scatter-chart"></div>
-              </div>
-
-              <div class="chart-grid race-slope-chart-grid">
-                <div class="card race-chart-card">
-                  <h2>Ascending slope vs heart rate</h2>
-                  <div id="chart-race-uphill-hr" class="chart"></div>
-                </div>
-                <div class="card race-chart-card">
-                  <h2>Descending slope vs heart rate</h2>
-                  <div id="chart-race-downhill-hr" class="chart"></div>
+                  <div class="view-toggle" id="race-mode-toggle" role="tablist" aria-label="Analysis mode">
+                    <button type="button" class="view-toggle-btn is-active" data-race-mode="quarters" role="tab">Analyse Race Quarters</button>
+                    <button type="button" class="view-toggle-btn" data-race-mode="segments" role="tab">Analyse Segments</button>
+                  </div>
                 </div>
               </div>
 
-              <div class="chart-grid race-slope-chart-grid">
-                <div class="card race-chart-card">
-                  <h2>Ascending VAM by slope segment</h2>
-                  <div id="chart-race-uphill-vam" class="chart"></div>
+              <div id="race-quarters-report">
+                <div id="race-quarters-suitability" class="race-suitability hidden"></div>
+
+                <div class="card race-summary-card">
+                  <div id="race-kpis" class="race-kpis"></div>
                 </div>
+
                 <div class="card race-chart-card">
-                  <h2>Descending VAM by slope segment</h2>
-                  <div id="chart-race-downhill-vam" class="chart"></div>
+                  <h2>Elevation profile and distance quarters</h2>
+                  <div id="chart-race-profile" class="chart race-profile-chart"></div>
+                  <div id="race-quarter-legend" class="race-quarter-legend"></div>
                 </div>
+
+                <div class="card race-chart-card">
+                  <h2>Graded pace vs heart rate</h2>
+                  <div id="chart-race-scatter" class="chart race-scatter-chart"></div>
+                </div>
+
+                <div class="chart-grid race-slope-chart-grid">
+                  <div class="card race-chart-card">
+                    <h2>Ascending slope vs heart rate</h2>
+                    <div id="chart-race-uphill-hr" class="chart"></div>
+                  </div>
+                  <div class="card race-chart-card">
+                    <h2>Descending slope vs heart rate</h2>
+                    <div id="chart-race-downhill-hr" class="chart"></div>
+                  </div>
+                </div>
+
+                <div class="chart-grid race-slope-chart-grid">
+                  <div class="card race-chart-card">
+                    <h2>Ascending VAM by slope segment</h2>
+                    <div id="chart-race-uphill-vam" class="chart"></div>
+                  </div>
+                  <div class="card race-chart-card">
+                    <h2>Descending VAM by slope segment</h2>
+                    <div id="chart-race-downhill-vam" class="chart"></div>
+                  </div>
+                </div>
+
+                <div class="chart-grid race-chart-grid">
+                  <div class="card race-chart-card">
+                    <h2>Quarter-normalized heart rate</h2>
+                    <div id="chart-race-hr" class="chart"></div>
+                  </div>
+                  <div class="card race-chart-card">
+                    <h2>Quarter-normalized actual pace</h2>
+                    <div id="chart-race-pace" class="chart"></div>
+                  </div>
+                  <div class="card race-chart-card">
+                    <h2>Quarter-normalized estimated GAP</h2>
+                    <div id="chart-race-gap" class="chart"></div>
+                  </div>
+                </div>
+
+                <div id="race-analysis-tables"></div>
               </div>
 
-              <div class="chart-grid race-chart-grid">
+              <div id="race-segments-report" class="hidden">
                 <div class="card race-chart-card">
-                  <h2>Quarter-normalized heart rate</h2>
-                  <div id="chart-race-hr" class="chart"></div>
+                  <h2>Elevation profile — drag to select a climb or descent</h2>
+                  <div id="chart-race-seg-profile" class="chart race-profile-chart"></div>
+                  <p id="race-seg-status" class="muted race-seg-status" role="status" aria-live="polite">Drag across a single climb or descent on the profile. Small dips or hops within it are ignored; mixed rolling terrain is rejected.</p>
                 </div>
-                <div class="card race-chart-card">
-                  <h2>Quarter-normalized actual pace</h2>
-                  <div id="chart-race-pace" class="chart"></div>
-                </div>
-                <div class="card race-chart-card">
-                  <h2>Quarter-normalized estimated GAP</h2>
-                  <div id="chart-race-gap" class="chart"></div>
+
+                <div id="race-seg-charts" class="hidden">
+                  <div class="card race-chart-card">
+                    <h2 id="race-seg-gap-title">Graded pace vs heart rate</h2>
+                    <div id="chart-race-seg-gap-hr" class="chart race-scatter-chart"></div>
+                  </div>
+                  <div class="card race-chart-card">
+                    <h2 id="race-seg-slope-title">Slope vs heart rate</h2>
+                    <div id="chart-race-seg-slope-hr" class="chart race-scatter-chart"></div>
+                  </div>
+                  <div class="card race-chart-card">
+                    <h2 id="race-seg-vam-title">VAM by slope segment</h2>
+                    <div id="chart-race-seg-vam" class="chart"></div>
+                  </div>
                 </div>
               </div>
-
-              <div id="race-analysis-tables"></div>
             </div>
           </section>
     
@@ -556,29 +590,41 @@
               <div class="activities-sidebar-scroll" id="activity-detail-sidebar-list"></div>
             </aside>
             <div class="activity-lab-layout activities-main">
-              <aside class="card activity-lab-stream-card">
-                <div class="row space-between">
-                  <h1 style="margin:0">Activity Stream</h1>
-                  <span id="activity-lab-stream-summary" class="muted"></span>
+              <aside class="card activity-lab-stream-card" id="activity-lab-stream-card">
+                <button
+                  id="activity-lab-stream-toggle"
+                  class="sidebar-toggle activity-lab-stream-toggle"
+                  type="button"
+                  aria-label="Expand activity stream"
+                  aria-expanded="false"
+                  aria-controls="activity-lab-stream-card"
+                >
+                  <sl-icon name="chevron-right" aria-hidden="true"></sl-icon>
+                </button>
+                <div class="activity-lab-stream-body">
+                  <div class="row space-between">
+                    <h1 style="margin:0">Activity Stream</h1>
+                    <span id="activity-lab-stream-summary" class="muted"></span>
+                  </div>
+                  <div class="activity-lab-stream-controls">
+                    <label>Show
+                      <sl-select id="activity-lab-stream-mode" value="duration">
+                        <sl-option value="recent">Recent (same type, 14 days)</sl-option>
+                        <sl-option value="duration">Similar duration</sl-option>
+                        <sl-option value="intervals">Similar work intervals</sl-option>
+                        <sl-option value="load">Similar load</sl-option>
+                      </sl-select>
+                    </label>
+                    <label id="activity-lab-stream-threshold-wrap">
+                      <span>Accuracy: <span id="activity-lab-stream-threshold-value">80%</span></span>
+                      <input id="activity-lab-stream-threshold" type="range" min="0" max="100" step="5" value="80" />
+                    </label>
+                  </div>
+                  <p id="activity-lab-stream-desc" class="muted" style="margin:.35rem 0 .75rem">
+                    Ranked by "Duration" similarity to the tab activity. The tab activity stays highlighted.
+                  </p>
+                  <div id="activity-lab-stream-list" class="activity-lab-stream-list"></div>
                 </div>
-                <p id="activity-lab-stream-desc" class="muted" style="margin:.35rem 0 .75rem">
-                  Ranked by "Duration" similarity to the tab activity. The tab activity stays highlighted.
-                </p>
-                <div class="activity-lab-stream-controls">
-                  <label>Show
-                    <sl-select id="activity-lab-stream-mode" value="duration">
-                      <sl-option value="recent">Recent (same type, 14 days)</sl-option>
-                      <sl-option value="duration">Similar duration</sl-option>
-                      <sl-option value="intervals">Similar work intervals</sl-option>
-                      <sl-option value="load">Similar load</sl-option>
-                    </sl-select>
-                  </label>
-                  <label id="activity-lab-stream-threshold-wrap">
-                    <span>Accuracy: <span id="activity-lab-stream-threshold-value">80%</span></span>
-                    <input id="activity-lab-stream-threshold" type="range" min="0" max="100" step="5" value="80" />
-                  </label>
-                </div>
-                <div id="activity-lab-stream-list" class="activity-lab-stream-list"></div>
               </aside>
     
               <div class="activity-lab-main">
@@ -1281,7 +1327,7 @@
               <div id="elevation-intervals" class="elevation-intervals hidden"></div>
               <label id="elevation-virtual-route-row" class="elevation-virtual-route hidden">
                 <input type="checkbox" id="elevation-virtual-route" checked />
-                Add virtual GPS loop route (marks upload as "Virtual Run" so Strava shows elevation)
+                Add virtual GPS loop route
               </label>
               <ul id="elevation-progress" class="elevation-progress hidden"></ul>
             </div>
@@ -1305,7 +1351,7 @@
         </footer>
       </div>
     </div>
-    <script src="./src/state.js?v=20260831-3"></script>
+    <script src="./src/state.js?v=20260902-1"></script>
     <script src="./src/idb-store.js?v=20260831-1"></script>
     <script src="./src/utils.js?v=20260831-3"></script>
     <script src="./src/similarity.js?v=20260816-1"></script>
@@ -1315,17 +1361,17 @@
     <script src="./src/glucose-data.js?v=20260816-1"></script>
     <script src="./src/glucose-charts.js?v=20260831-2"></script>
     <script src="./src/api-client.js?v=20260831-7"></script>
-    <script src="./src/activity-lab.js?v=20260901-1"></script>
+    <script src="./src/activity-lab.js?v=20260903-1"></script>
     <script src="./src/activities-calendar.js?v=20260901-1"></script>
     <script src="./src/strava-tile.js?v=20260901-1"></script>
     <script src="./src/fit-export.js?v=20260831-2"></script>
     <script src="./src/virtual-route.js?v=20260831-1"></script>
-    <script src="./src/elevation.js?v=20260831-11"></script>
+    <script src="./src/elevation.js?v=20260903-5"></script>
     <script src="./src/motion.js?v=20260901-2"></script>
     <script src="./src/filters-charts.js?v=20260818-1"></script>
     <script src="./src/hr-stream-compare.js?v=20260901-1"></script>
-    <script src="./src/race-analysis.js?v=20260819-5"></script>
+    <script src="./src/race-analysis.js?v=20260902-1"></script>
     <script src="./src/theme-search.js?v=20260901-1"></script>
-    <script src="./src/main.js?v=20260901-2"></script>
+    <script src="./src/main.js?v=20260903-1"></script>
   </body>
 </html>
